@@ -1,14 +1,17 @@
-# [Name of the Project] : [Team Number]
+# [3D PFT Digital Twin] : [Team 16]
 # Members
 Project Manager: [Name] ([GitHub Name])\
 Communications Lead: [Name] ([GitHub Name])\
 Git Master: [Name] ([GitHub Name])\
 Design Lead: [Name] ([GitHub Name])\
-Quality Assurance Tester: [Name] ([GitHub Name])
+Quality Assurance Tester: [Laila Holland] ([lailaholland])
 
 # About Our Software
 
 Describe a little about what the project is about here.
+
+Our idea is to make the PFT Digital Twin more student-facing. We already have permission to use the existing digital twin as our foundation,  so instead of rebuilding that, we're adding a layer that helps students actually use it. The Digital Twin will have four main steps. First, Explore, students can look around the PFT in 3D. Second, search-they can search for a specific room, professor, or destination. Third, route, the system gives them directions on where they need to go. Finally, there's walk, they can switch to a first person view and follow the route through the building.
+
 ## Platforms Tested on
 - MacOS
 - Android
