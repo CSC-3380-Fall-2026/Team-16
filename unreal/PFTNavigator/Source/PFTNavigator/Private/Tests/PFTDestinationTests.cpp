@@ -1,5 +1,6 @@
 #include "PFTDestinations.h"
 #include "PFTRoomMarker.h"
+#include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "Misc/AutomationTest.h"
 #include "Misc/FileHelper.h"
@@ -12,6 +13,7 @@ bool FPFTDestinationTest::RunTest(const FString& Parameters)
 {
     auto* Package = CreatePackage(*FString::Printf(TEXT("/Game/Automation/PFT_%s"), *FGuid::NewGuid().ToString(EGuidFormats::Digits)));
     UWorld* World = UWorld::CreateWorld(EWorldType::Game, false, FName(TEXT("TestWorld")), Package);
+    GEngine->CreateNewWorldContext(EWorldType::Game).SetCurrentWorld(World);
     UPFTDestinations* Destinations = World->GetSubsystem<UPFTDestinations>();
     auto* First = World->SpawnActor<APFTRoomMarker>();
     auto* Second = World->SpawnActor<APFTRoomMarker>();
@@ -37,6 +39,7 @@ bool FPFTDestinationTest::RunTest(const FString& Parameters)
     TestFalse(TEXT("Reload removes obsolete generated markers"), Destinations->SelectRoom(TEXT("PFT_1120")));
     IFileManager::Get().Delete(*Path);
     World->DestroyWorld(false);
+    GEngine->DestroyWorldContext(World);
     return true;
 }
 #endif

@@ -14,7 +14,7 @@ class TestRoomBindings(unittest.TestCase):
     def test_missing_and_ambiguous_rooms_are_not_guessed(self):
         actor = {"Label": "Room_1200", "Min": [0, 0, 0], "Max": [100, 100, 100]}
         room = [{"Name": "PFT_1200", "RoomNumber": "1200"}]
-        for actors in [[], [actor, actor], [dict(actor, Label="Room_12000")]]:
+        for actors in [[], [actor, actor], [dict(actor, Label="Room_12000")], [dict(actor, Label="Room1200A1")], [dict(actor, Label="Room1200A")]]:
             bindings, missing = build_bindings(room, actors, "/Game/Test")
             self.assertEqual(bindings, [])
             self.assertEqual(missing, ["PFT_1200"])
