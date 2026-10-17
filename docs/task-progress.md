@@ -6,12 +6,12 @@ combined implementation. No branch has been merged into `main` or `dev`.
 
 | Task | Branch | Purpose |
 | --- | --- | --- |
-| 1 | `codex/task-1-perforce-setup` | Perforce onboarding and local setup verification |
-| 2 | `codex/task-2-unreal-project-setup` | UE 5.8 loading/build instructions and recorded evidence |
-| 3 | `codex/task-3-directory-json-validation` | Reuse the JSON schema and validate malformed directory data |
-| 4 | `codex/task-4-unreal-json-loader` | Load/search JSON in a separate UE plugin and install it locally |
-| 5 | `codex/task-5-room-destination-markers` | Resolve search results to map-derived markers |
-| 6 | `codex/task-6-exploration-controls` | Search panel, flying camera, mouse control, and return to player |
+| 1 | `task-1-perforce-setup` | Perforce onboarding and local setup verification |
+| 2 | `task-2-unreal-project-setup` | UE 5.8 loading/build instructions and recorded evidence |
+| 3 | `task-3-directory-json-validation` | Reuse the JSON schema and validate malformed directory data |
+| 4 | `task-4-unreal-json-loader` | Load/search JSON in a separate UE plugin and install it locally |
+| 5 | `task-5-room-destination-markers` | Resolve search results to map-derived markers |
+| 6 | `task-6-exploration-controls` | Search panel, flying camera, mouse control, and return to player |
 
 ## Scope and remaining acceptance checks
 
