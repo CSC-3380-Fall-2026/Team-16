@@ -7,6 +7,7 @@
 #   python tools/validate_data.py
 
 import json
+import math
 import os
 import sys
 
@@ -148,7 +149,28 @@ def validate(folder):
     # References need every file loaded, so skip them if one failed to load
     if len(data) == len(REQUIRED_FIELDS) and not errors:
         errors += check_references(data)
+        binding_path = os.path.join(folder, "room_bindings.json")
+        if os.path.exists(binding_path):
+            errors += check_bindings(load_file(folder, "room_bindings.json"), get_ids(data["rooms.json"]))
 
+    return errors
+
+
+def check_bindings(rows, room_ids):
+    if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
+        return ["room_bindings.json: expected a list of objects"]
+    errors, keys = [], set()
+    for row in rows:
+        room_id, map_path, location = row.get("RoomId"), row.get("Map"), row.get("Location")
+        if not isinstance(room_id, str) or room_id not in room_ids or not isinstance(map_path, str) or not map_path.startswith("/Game/"):
+            errors.append("room_bindings.json: invalid room or map")
+            continue
+        key = (room_id, map_path)
+        if key in keys:
+            errors.append(f"room_bindings.json: duplicate binding for {room_id}")
+        keys.add(key)
+        if not isinstance(location, dict) or not all(type(location.get(axis)) in (int, float) and math.isfinite(location[axis]) for axis in ("X", "Y", "Z")):
+            errors.append(f"room_bindings.json: invalid location for {room_id}")
     return errors
 
 
