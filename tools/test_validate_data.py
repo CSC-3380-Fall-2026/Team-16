@@ -85,6 +85,40 @@ class TestValidateData(unittest.TestCase):
         self.assertEqual(len(errors), 1)
         self.assertIn("Could not load departments.json", errors[0])
 
+    def test_wrong_root_type(self):
+        self.data["rooms.json"] = {"Name": "PFT_1200"}
+        self.write_files()
+        self.assertTrue(validate_data.validate(self.folder))
+
+    def test_non_object_row(self):
+        self.data["rooms.json"].append(None)
+        self.write_files()
+        self.assertTrue(validate_data.validate(self.folder))
+
+    def test_wrong_field_types(self):
+        for field, value in [("Floor", True), ("Floor", 1.5), ("Floor", 0), ("Name", []), ("RoomNumber", 1200)]:
+            with self.subTest(field=field, value=value):
+                self.data = make_good_data()
+                self.data["rooms.json"][0][field] = value
+                self.write_files()
+                self.assertTrue(validate_data.validate(self.folder))
+
+    def test_whitespace_field(self):
+        self.data["courses.json"][0]["CourseTitle"] = "   "
+        self.write_files()
+        self.assertTrue(validate_data.validate(self.folder))
+
+    def test_duplicate_room_number(self):
+        self.data["rooms.json"][1]["RoomNumber"] = "1200"
+        self.write_files()
+        self.assertIn("RoomNumber", validate_data.validate(self.folder)[0])
+
+    def test_invalid_json(self):
+        self.write_files()
+        with open(os.path.join(self.folder, "rooms.json"), "w") as file:
+            file.write("[")
+        self.assertTrue(validate_data.validate(self.folder))
+
 
 if __name__ == "__main__":
     unittest.main()

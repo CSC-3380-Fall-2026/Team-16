@@ -28,9 +28,9 @@ def load_file(folder, file_name):
     """
     path = os.path.join(folder, file_name)
     try:
-        with open(path) as file:
+        with open(path, encoding="utf-8-sig") as file:
             return json.load(file)
-    except (FileNotFoundError, json.JSONDecodeError):
+    except (OSError, UnicodeError, json.JSONDecodeError):
         return None
 
 
@@ -51,8 +51,25 @@ def check_required_fields(file_name, rows):
     for row in rows:
         row_id = row.get("Name", "(row with no Name)")
         for field in REQUIRED_FIELDS[file_name]:
-            if row.get(field) in (None, ""):
+            value = row.get(field)
+            if value is None or value == "" or isinstance(value, str) and not value.strip():
                 errors.append(f"{file_name}: {row_id} is missing {field}")
+    return errors
+
+
+def check_field_types(file_name, rows):
+    errors = []
+    for row in rows:
+        for field in REQUIRED_FIELDS[file_name]:
+            value = row.get(field)
+            if value is None or value == "":
+                continue
+            if field == "Floor":
+                valid = type(value) is int and value > 0
+            else:
+                valid = isinstance(value, str) and value == value.strip()
+            if not valid:
+                errors.append(f"{file_name}: {row.get('Name')} has invalid {field}")
     return errors
 
 
@@ -114,12 +131,22 @@ def validate(folder):
         if rows is None:
             errors.append(f"Could not load {file_name} (missing or not valid JSON)")
             continue
+        if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
+            errors.append(f"{file_name}: expected a list of objects")
+            continue
         data[file_name] = rows
         errors += check_required_fields(file_name, rows)
-        errors += check_duplicate_ids(file_name, rows)
+        type_errors = check_field_types(file_name, rows)
+        errors += type_errors
+        if not type_errors:
+            errors += check_duplicate_ids(file_name, rows)
+        if file_name == "rooms.json" and not type_errors:
+            numbers = [row.get("RoomNumber") for row in rows]
+            if len(numbers) != len(set(numbers)) and len(get_ids(rows)) == len(rows):
+                errors.append("rooms.json: a RoomNumber is used more than once")
 
     # References need every file loaded, so skip them if one failed to load
-    if len(data) == len(REQUIRED_FIELDS):
+    if len(data) == len(REQUIRED_FIELDS) and not errors:
         errors += check_references(data)
 
     return errors
