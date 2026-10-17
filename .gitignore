@@ -1,0 +1,18 @@
+# Unreal generated folders
+Binaries/
+Intermediate/
+Saved/
+DerivedDataCache/
+
+# IDE files
+.vs/
+.vscode/
+.idea/
+*.sln
+
+# Python
+__pycache__/
+
+# Mac / Windows
+.DS_Store
+Thumbs.db
