@@ -1,0 +1,65 @@
+[
+  {
+    "Name": "PFT_1100",
+    "RoomNumber": "1100",
+    "DisplayName": "PFT 1100",
+    "Floor": 1,
+    "RoomType": "TBD"
+  },
+  {
+    "Name": "PFT_1120",
+    "RoomNumber": "1120",
+    "DisplayName": "PFT 1120",
+    "Floor": 1,
+    "RoomType": "TBD"
+  },
+  {
+    "Name": "PFT_1140",
+    "RoomNumber": "1140",
+    "DisplayName": "PFT 1140",
+    "Floor": 1,
+    "RoomType": "TBD"
+  },
+  {
+    "Name": "PFT_1160",
+    "RoomNumber": "1160",
+    "DisplayName": "PFT 1160",
+    "Floor": 1,
+    "RoomType": "TBD"
+  },
+  {
+    "Name": "PFT_1180",
+    "RoomNumber": "1180",
+    "DisplayName": "PFT 1180",
+    "Floor": 1,
+    "RoomType": "TBD"
+  },
+  {
+    "Name": "PFT_1200",
+    "RoomNumber": "1200",
+    "DisplayName": "PFT 1200",
+    "Floor": 1,
+    "RoomType": "Lecture"
+  },
+  {
+    "Name": "PFT_1220",
+    "RoomNumber": "1220",
+    "DisplayName": "PFT 1220",
+    "Floor": 1,
+    "RoomType": "TBD"
+  },
+  {
+    "Name": "PFT_1240",
+    "RoomNumber": "1240",
+    "DisplayName": "PFT 1240",
+    "Floor": 1,
+    "RoomType": "TBD"
+  },
+  {
+    "Name": "PFT_3325",
+    "RoomNumber": "3325",
+    "DisplayName": "PFT 3325",
+    "Floor": 3,
+    "RoomType": "Office"
+  }
+]
