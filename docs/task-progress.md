@@ -4,6 +4,16 @@ These branches are stacked in task order from `dev`. Each branch adds one task
 to the preceding task's work. Merge/review them in order, or review task 6 as the
 combined implementation. No branch has been merged into `main` or `dev`.
 
+The six pull requests are open. Merge task 1 into `dev` first, then retarget the
+next task's PR to `dev` before merging it. Continue in task order.
+
+- Task 1: [PR #4](https://github.com/CSC-3380-Fall-2026/Team-16/pull/4)
+- Task 2: [PR #5](https://github.com/CSC-3380-Fall-2026/Team-16/pull/5), based on task 1
+- Task 3: [PR #6](https://github.com/CSC-3380-Fall-2026/Team-16/pull/6), based on task 2
+- Task 4: [PR #7](https://github.com/CSC-3380-Fall-2026/Team-16/pull/7), based on task 3
+- Task 5: [PR #8](https://github.com/CSC-3380-Fall-2026/Team-16/pull/8), based on task 4
+- Task 6: [PR #9](https://github.com/CSC-3380-Fall-2026/Team-16/pull/9), based on task 5
+
 | Task | Branch | Purpose |
 | --- | --- | --- |
 | 1 | `task-1-perforce-setup` | Perforce onboarding and local setup verification |
@@ -31,7 +41,8 @@ treating the app as a real directory. A visual building walkthrough is still
 needed; desktop viewport capture was unavailable during this work.
 
 Tasks 7 through 10, including routing and a first-person guide, are outside this
-implementation. No Perforce changelist or GitHub pull request was submitted/merged.
+implementation. No Perforce changelist has been submitted, and no pull request
+has been merged.
 
 ## Final checks on October 17, 2026
 
