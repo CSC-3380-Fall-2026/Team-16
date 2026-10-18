@@ -3,7 +3,7 @@
 Project Manager: [Name] ([GitHub Name])\
 Communications Lead: [Name] ([GitHub Name])\
 Git Master: Malek Badawi ([GitHub Name])\
-Design Lead: [Name] ([GitHub Name])\
+Design Lead: Claire Bonius ([claire-coded])\
 Quality Assurance Tester: Laila Holland ([lailaholland])
 
 # About Our Software
