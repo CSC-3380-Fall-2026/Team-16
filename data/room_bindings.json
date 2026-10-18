@@ -1,0 +1,62 @@
+[
+  {
+    "RoomId": "PFT_1100",
+    "Map": "/Game/Level/PatrickFTaylorHall",
+    "Location": {
+      "X": 5810.228441208403,
+      "Y": 2609.7636424748553,
+      "Z": 96.08144762000097
+    },
+    "SourceLabel": "Room1100"
+  },
+  {
+    "RoomId": "PFT_1120",
+    "Map": "/Game/Level/PatrickFTaylorHall",
+    "Location": {
+      "X": 7515.355907952634,
+      "Y": -1843.9697152212643,
+      "Z": 107.98144762000095
+    },
+    "SourceLabel": "Room1120"
+  },
+  {
+    "RoomId": "PFT_1140",
+    "Map": "/Game/Level/PatrickFTaylorHall",
+    "Location": {
+      "X": 7593.308336269307,
+      "Y": -5639.16686105036,
+      "Z": 107.98144762000095
+    },
+    "SourceLabel": "Room1140"
+  },
+  {
+    "RoomId": "PFT_1200",
+    "Map": "/Game/Level/PatrickFTaylorHall",
+    "Location": {
+      "X": 8721.53718381882,
+      "Y": 3454.6142591343437,
+      "Z": 107.81351105186872
+    },
+    "SourceLabel": "Room1200"
+  },
+  {
+    "RoomId": "PFT_1240",
+    "Map": "/Game/Level/PatrickFTaylorHall",
+    "Location": {
+      "X": 11507.527570621322,
+      "Y": -3918.851253852931,
+      "Z": 113.64599922828506
+    },
+    "SourceLabel": "Room1240"
+  },
+  {
+    "RoomId": "PFT_3325",
+    "Map": "/Game/Level/PatrickFTaylorHall",
+    "Location": {
+      "X": 15655.1349867496,
+      "Y": -3977.7669676469386,
+      "Z": 1022.5
+    },
+    "SourceLabel": "Room3325"
+  }
+]
