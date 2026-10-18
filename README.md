@@ -24,7 +24,7 @@ Styles Guide(s): [Code Standards](docs/style-guide.md)
 
 ## Dependencies
 - Python 3.10+ (for the data check script)
-- Unreal Engine (version TBD, has to match the Digital Twin project)
+- Unreal Engine 5.8, matching the Digital Twin project
 - Perforce P4V (to access the Digital Twin)
 ### Downloading Dependencies
 - Python: https://www.python.org/downloads/
@@ -32,7 +32,9 @@ Styles Guide(s): [Code Standards](docs/style-guide.md)
 - Perforce P4V: https://www.perforce.com/downloads
 
 ## Commands
-Steps for launching the app will be added once we're set up in Unreal. For now, run these from the root of the repo to check the data files:
+See [Perforce setup](docs/perforce-setup.md) and [Unreal setup](docs/unreal-setup.md)
+to sync, build, and open the existing digital twin. Run these from this repo's root
+to check the directory data:
 
 ```sh
 python tools/validate_data.py
