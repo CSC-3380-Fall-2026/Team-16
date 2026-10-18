@@ -7,7 +7,8 @@ import re
 def build_bindings(rooms, actors, map_path):
     bindings, unresolved = [], []
     for room in rooms:
-        matches = [actor for actor in actors if room["RoomNumber"] in re.findall(r"(?<!\d)\d{4}[A-Za-z]?(?!\d)", actor["Label"])]
+        pattern = r"(?<!\d)" + re.escape(room["RoomNumber"]) + r"(?![A-Za-z0-9])"
+        matches = [actor for actor in actors if re.search(pattern, actor["Label"], re.IGNORECASE)]
         if len(matches) != 1:
             unresolved.append(room["Name"])
             continue

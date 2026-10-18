@@ -49,3 +49,34 @@ The Perforce asset `Content/Blueprints/Network/BP_NetworkManager.uasset` points 
 They redirect unauthenticated requests to LSU's Microsoft sign-in. Full room
 descriptions and ownership were not retrieved. The binding export uses geometry
 metadata already available in the Perforce map; it does not guess missing rooms.
+
+## Task 6 exploration and UI
+
+After installing, building, and restarting Unreal, press Play. The Navigator
+panel appears below the twin's top bar for the local player. Search by room
+number or course code/title, then select a result to show its room marker.
+**View selected room** moves the exploration camera near that marker. Unbound
+rooms show an explanation and never move the camera to an invented location.
+
+Click **Explore** or **Fly** to use the separate exploration pawn:
+
+- WASD or arrow keys move; Q/E move down/up.
+- Mouse movement looks around.
+- Tab releases the mouse and pauses movement so the panel is usable.
+- Fly captures the mouse again.
+- Return to original player restores the previous pawn, rotation, and cursor.
+
+Exploration uses UE's spectator movement and can pass through walls. It is a
+standalone/local-host prototype, not multiplayer navigation or a walking guide.
+It does not replace the twin's existing pawn classes or edit its shared plugin.
+The results list shows at most 25 matches. Current data contains 9 rooms and
+1 placeholder course; 6 rooms have map-derived destinations.
+
+## Verification
+
+Run `python -m unittest discover -s tools` and `python tools/validate_data.py`.
+Build the editor, then run the UE automation tests named `PFTNavigator` with the
+Session Frontend or a headless editor using `-nullrhi -unattended -nop4
+-ExecCmds="Automation RunTests PFTNavigator" -TestExit="Automation Test Queue Empty"`.
+Check the exported test report; the process exit code alone does not prove tests
+passed. A visual walkthrough of the building is a separate acceptance check.
