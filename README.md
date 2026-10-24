@@ -45,3 +45,10 @@ python -m unittest discover -s tools
 ```
 
 These also run automatically on every pull request. On Mac you may need to use `python3` instead of `python`.
+
+## Navigator prototype
+
+Our UE 5.8 plugin adds local room/course search, destination markers, and flying
+exploration controls. See [plugin installation and controls](docs/navigator-plugin.md)
+and [task branches and remaining checks](docs/task-progress.md). The original
+digital twin stays in Perforce; GitHub contains our separate plugin source.
