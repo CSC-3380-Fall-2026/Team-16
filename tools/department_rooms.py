@@ -5,13 +5,14 @@
 from validate_data import load_file, DATA_FOLDER
 
 
-def get_department_room_ids(department_id: str) -> list[str]:
+def get_department_room_ids(department_id: str, folder: str = DATA_FOLDER) -> list[str]:
     """Returns the room IDs used by the given department.
        Params: department_id: the ID of the department
+               folder: the data folder (defaults to data/, the tests pass in their own)
        Returns: a list of room IDs used by the department
     """
 
-    courses = load_file(DATA_FOLDER, "courses.json")
+    courses = load_file(folder, "courses.json")
 
     if courses is None:
         return []
