@@ -6,6 +6,8 @@ Every search ends up at a room, so faculty, courses, and departments all point t
 
 All the data right now is placeholder data until we confirm the real rooms and offices.
 
+The rooms from our [design scope](design.md) are in `rooms.json`. If a room has a name (like Panera), it goes in the DisplayName after the number so it shows up when someone searches for it. The Commons doesn't have a room number, so its RoomNumber is just `"Commons"`.
+
 ## rooms.json
 | Field | Example |
 |---|---|
