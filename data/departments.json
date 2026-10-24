@@ -3,5 +3,30 @@
     "Name": "DEPT_CSE",
     "DisplayName": "Computer Science and Engineering",
     "OfficeRoomId": "PFT_3325"
+  },
+  {
+    "Name": "DEPT_ECE",
+    "DisplayName": "Electrical and Computer Engineering",
+    "OfficeRoomId": "PFT_3325"
+  },
+  {
+    "Name": "DEPT_CHE",
+    "DisplayName": "Chemical Engineering",
+    "OfficeRoomId": "PFT_3307"
+  },
+  {
+    "Name": "DEPT_CEE",
+    "DisplayName": "Civil and Environmental Engineering",
+    "OfficeRoomId": "PFT_3255"
+  },
+  {
+    "Name": "DEPT_MIE",
+    "DisplayName": "Mechanical and Industrial Engineering",
+    "OfficeRoomId": "PFT_3261"
+  },
+  {
+    "Name": "DEPT_CM",
+    "DisplayName": "Construction Management",
+    "OfficeRoomId": "PFT_3319"
   }
 ]

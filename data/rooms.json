@@ -2,9 +2,9 @@
   {
     "Name": "PFT_1100",
     "RoomNumber": "1100",
-    "DisplayName": "PFT 1100",
+    "DisplayName": "PFT 1100 - Roy O. Martin Auditorium",
     "Floor": 1,
-    "RoomType": "TBD"
+    "RoomType": "Auditorium"
   },
   {
     "Name": "PFT_1120",
@@ -21,44 +21,23 @@
     "RoomType": "TBD"
   },
   {
-    "Name": "PFT_1160",
-    "RoomNumber": "1160",
-    "DisplayName": "PFT 1160",
-    "Floor": 1,
-    "RoomType": "TBD"
-  },
-  {
-    "Name": "PFT_1180",
-    "RoomNumber": "1180",
-    "DisplayName": "PFT 1180",
-    "Floor": 1,
-    "RoomType": "TBD"
-  },
-  {
     "Name": "PFT_1200",
     "RoomNumber": "1200",
     "DisplayName": "PFT 1200",
     "Floor": 1,
-    "RoomType": "Lecture"
-  },
-  {
-    "Name": "PFT_1220",
-    "RoomNumber": "1220",
-    "DisplayName": "PFT 1220",
-    "Floor": 1,
-    "RoomType": "TBD"
+    "RoomType": "Classroom"
   },
   {
     "Name": "PFT_1240",
     "RoomNumber": "1240",
     "DisplayName": "PFT 1240",
     "Floor": 1,
-    "RoomType": "TBD"
+    "RoomType": "Classroom"
   },
   {
     "Name": "PFT_3325",
     "RoomNumber": "3325",
-    "DisplayName": "PFT 3325",
+    "DisplayName": "PFT 3325 - CSE and ECE Office",
     "Floor": 3,
     "RoomType": "Office"
   },
@@ -116,14 +95,14 @@
     "RoomNumber": "1245",
     "DisplayName": "PFT 1245",
     "Floor": 1,
-    "RoomType": "TBD"
+    "RoomType": "Classroom"
   },
   {
     "Name": "PFT_1225",
     "RoomNumber": "1225",
     "DisplayName": "PFT 1225",
     "Floor": 1,
-    "RoomType": "TBD"
+    "RoomType": "Classroom"
   },
   {
     "Name": "PFT_1232",
@@ -137,7 +116,7 @@
     "RoomNumber": "1236",
     "DisplayName": "PFT 1236",
     "Floor": 1,
-    "RoomType": "TBD"
+    "RoomType": "Classroom"
   },
   {
     "Name": "PFT_1244",
@@ -158,34 +137,342 @@
     "RoomNumber": "1221",
     "DisplayName": "PFT 1221",
     "Floor": 1,
-    "RoomType": "TBD"
+    "RoomType": "Classroom"
   },
   {
     "Name": "PFT_1218",
     "RoomNumber": "1218",
     "DisplayName": "PFT 1218",
     "Floor": 1,
-    "RoomType": "TBD"
+    "RoomType": "Classroom"
   },
   {
     "Name": "PFT_1216",
     "RoomNumber": "1216",
     "DisplayName": "PFT 1216",
     "Floor": 1,
-    "RoomType": "TBD"
+    "RoomType": "Classroom"
   },
   {
     "Name": "PFT_1212",
     "RoomNumber": "1212",
     "DisplayName": "PFT 1212",
     "Floor": 1,
-    "RoomType": "TBD"
+    "RoomType": "Classroom"
   },
   {
     "Name": "PFT_1253",
     "RoomNumber": "1253",
     "DisplayName": "PFT 1253",
     "Floor": 1,
-    "RoomType": "TBD"
+    "RoomType": "Classroom"
+  },
+  {
+    "Name": "PFT_1202",
+    "RoomNumber": "1202",
+    "DisplayName": "PFT 1202 - Longwell Classroom",
+    "Floor": 1,
+    "RoomType": "Classroom"
+  },
+  {
+    "Name": "PFT_1206",
+    "RoomNumber": "1206",
+    "DisplayName": "PFT 1206",
+    "Floor": 1,
+    "RoomType": "Classroom"
+  },
+  {
+    "Name": "PFT_1258",
+    "RoomNumber": "1258",
+    "DisplayName": "PFT 1258",
+    "Floor": 1,
+    "RoomType": "Classroom"
+  },
+  {
+    "Name": "PFT_1259",
+    "RoomNumber": "1259",
+    "DisplayName": "PFT 1259 - Capstone West",
+    "Floor": 1,
+    "RoomType": "Classroom"
+  },
+  {
+    "Name": "PFT_1263",
+    "RoomNumber": "1263",
+    "DisplayName": "PFT 1263",
+    "Floor": 1,
+    "RoomType": "Classroom"
+  },
+  {
+    "Name": "PFT_1340",
+    "RoomNumber": "1340",
+    "DisplayName": "PFT 1340 - Capstone East",
+    "Floor": 1,
+    "RoomType": "Classroom"
+  },
+  {
+    "Name": "PFT_3307",
+    "RoomNumber": "3307",
+    "DisplayName": "PFT 3307 - Chemical Engineering Office",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3255",
+    "RoomNumber": "3255",
+    "DisplayName": "PFT 3255 - Civil and Environmental Engineering Office",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3261",
+    "RoomNumber": "3261",
+    "DisplayName": "PFT 3261 - Mechanical and Industrial Engineering Office",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3319",
+    "RoomNumber": "3319",
+    "DisplayName": "PFT 3319 - Construction Management Office",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3325E",
+    "RoomNumber": "3325E",
+    "DisplayName": "PFT 3325E - Ibrahim Baggili",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3272Y",
+    "RoomNumber": "3272Y",
+    "DisplayName": "PFT 3272Y - Ibrahem Aljabea",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3210",
+    "RoomNumber": "3210",
+    "DisplayName": "PFT 3210 - Aisha Ali-Gombe",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3209D",
+    "RoomNumber": "3209D",
+    "DisplayName": "PFT 3209D - Reza Ghaiumy Anaraky",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3272D",
+    "RoomNumber": "3272D",
+    "DisplayName": "PFT 3272D - Gerald Baumgartner",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3272L",
+    "RoomNumber": "3272L",
+    "DisplayName": "PFT 3272L - Elias Bou-Harb",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3272F",
+    "RoomNumber": "3272F",
+    "DisplayName": "PFT 3272F - Jianhua Chen",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3272S",
+    "RoomNumber": "3272S",
+    "DisplayName": "PFT 3272S - Tasnuva Farheen",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3209M",
+    "RoomNumber": "3209M",
+    "DisplayName": "PFT 3209M - Umar Farooq",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3272X",
+    "RoomNumber": "3272X",
+    "DisplayName": "PFT 3272X - Felipe Fronchetti",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3209B",
+    "RoomNumber": "3209B",
+    "DisplayName": "PFT 3209B - James Ghawaly",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3209G",
+    "RoomNumber": "3209G",
+    "DisplayName": "PFT 3209G - Mahmood Jasim",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3209F",
+    "RoomNumber": "3209F",
+    "DisplayName": "PFT 3209F - Hartmut Kaiser",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3272G",
+    "RoomNumber": "3272G",
+    "DisplayName": "PFT 3272G - Bijaya Karki",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3272Q",
+    "RoomNumber": "3272Q",
+    "DisplayName": "PFT 3272Q - Joseph Khoury",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3272W",
+    "RoomNumber": "3272W",
+    "DisplayName": "PFT 3272W - Dong Lao",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3272B",
+    "RoomNumber": "3272B",
+    "DisplayName": "PFT 3272B - Kisung Lee",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3272H",
+    "RoomNumber": "3272H",
+    "DisplayName": "PFT 3272H - Anas Mahmoud",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3270A",
+    "RoomNumber": "3270A",
+    "DisplayName": "PFT 3270A - Keith G. Mills",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3209L",
+    "RoomNumber": "3209L",
+    "DisplayName": "PFT 3209L - Golden Richard III",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3272R",
+    "RoomNumber": "3272R",
+    "DisplayName": "PFT 3272R - Sayak Saha Roy",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3272J",
+    "RoomNumber": "3272J",
+    "DisplayName": "PFT 3272J - Rahul Shah",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3272C",
+    "RoomNumber": "3272C",
+    "DisplayName": "PFT 3272C - Evangelos Triantaphyllou",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3209E",
+    "RoomNumber": "3209E",
+    "DisplayName": "PFT 3209E - Phani Vadrevu",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3272M",
+    "RoomNumber": "3272M",
+    "DisplayName": "PFT 3272M - Qingyang Wang",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3272E",
+    "RoomNumber": "3272E",
+    "DisplayName": "PFT 3272E - Andrew Webb",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3272K",
+    "RoomNumber": "3272K",
+    "DisplayName": "PFT 3272K - Jian Zhang",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3330H",
+    "RoomNumber": "3330H",
+    "DisplayName": "PFT 3330H - Xugui Zhou",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3270B",
+    "RoomNumber": "3270B",
+    "DisplayName": "PFT 3270B - Nathan E. Brener",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3272V",
+    "RoomNumber": "3272V",
+    "DisplayName": "PFT 3272V - John Luke Denny",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3272U",
+    "RoomNumber": "3272U",
+    "DisplayName": "PFT 3272U - Kellie Dieutto",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3270C",
+    "RoomNumber": "3270C",
+    "DisplayName": "PFT 3270C - William Duncan",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3272T",
+    "RoomNumber": "3272T",
+    "DisplayName": "PFT 3272T - Abeer Eldewahi",
+    "Floor": 3,
+    "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_3324G",
+    "RoomNumber": "3324G",
+    "DisplayName": "PFT 3324G - David Trammell",
+    "Floor": 3,
+    "RoomType": "Office"
   }
 ]

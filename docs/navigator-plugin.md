@@ -34,7 +34,7 @@ a JSON binding; two matching placed markers are an error.
 `data/room_bindings.json` contains map-specific positions derived from the twin's
 room trigger bounds, in Unreal centimeters. Each entry records its source label.
 On October 17, 2026, six repo rooms matched unique triggers: 1100, 1120, 1140,
-1200, 1240, and 3325. Rooms 1160, 1180, and 1220 had no match and remain unbound.
+1200, 1240, and 3325. Rooms 1160, 1180, and 1220 had no match. They turned out to be numbers from our pitch mockup that aren't on the PFT floor plan, so they were removed from `rooms.json`.
 The sample CSC 3380 record resolves to the bound PFT 1200 room; its class assignment
 is still placeholder data. A marker indicates a destination, not a walking route.
 
