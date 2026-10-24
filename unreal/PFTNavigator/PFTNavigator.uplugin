@@ -1,0 +1,10 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "0.1",
+  "FriendlyName": "PFT Navigator",
+  "Description": "Student directory, destinations, and exploration for the PFT twin.",
+  "Category": "Navigation",
+  "CanContainContent": true,
+  "Modules": [{ "Name": "PFTNavigator", "Type": "Runtime", "LoadingPhase": "Default" }]
+}
