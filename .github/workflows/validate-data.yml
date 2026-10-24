@@ -1,9 +1,11 @@
-# Checks the data files on every pull request and push to dev or main
+# Checks the data files on every pull request and push to dev or main.
+# Runs on every pull request, not just ones into dev or main, because some of
+# our task branches are stacked (task 2 goes into task 1, and so on) and those
+# PRs weren't getting checked before.
 name: Validate data
 
 on:
   pull_request:
-    branches: [dev, main]
   push:
     branches: [dev, main]
 

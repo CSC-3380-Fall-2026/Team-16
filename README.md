@@ -1,8 +1,8 @@
 # PFT Navigator : Team 16
 # Members
-Project Manager: [Name] ([GitHub Name])\
-Communications Lead: [Name] ([GitHub Name])\
-Git Master: Malek Badawi ([GitHub Name])\
+Project Manager: Jayden Hong ([jaydenhongfails])\
+Communications Lead: Josemaria Ramos ([GitHub Name])\
+Git Master: Malek Badawi ([malekbadawi21])\
 Design Lead: Claire Bonius ([claire-coded])\
 Quality Assurance Tester: Laila Holland ([lailaholland])
 
@@ -13,12 +13,14 @@ Our idea is to make the PFT Digital Twin more student-facing. We already have pe
 The Digital Twin itself is on LSU's Perforce server. This repo has our data files (rooms, faculty, courses, departments), docs, and a script to check the data. Digital Twin files should not be committed here.
 
 ## Platforms Tested on
-- Not tested yet, will update once we have a build running
+- Windows (UE 5.8 editor build, see [task progress](docs/task-progress.md))
+- Mac not tested yet
 
 # Important Links
 Kanban Board: [link]\
-Designs: [link]\
-Styles Guide(s): [Code Standards](docs/style-guide.md)
+Designs: [Figma](https://www.figma.com/design/nF6y5i40ezSFQVI5zOSS9M/PFT-Navigator-UI---Team-16), [Design doc](docs/design.md)\
+Styles Guide(s): [Code Standards](docs/style-guide.md)\
+Git Workflow: [Branches and pull requests](docs/git-workflow.md)
 
 # How to Run Dev and Test Environment
 
