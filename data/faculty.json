@@ -1,8 +1,206 @@
 [
   {
-    "Name": "FAC_PLACEHOLDER",
-    "FullName": "Placeholder Professor",
+    "Name": "FAC_BAGGILI",
+    "FullName": "Ibrahim Baggili",
     "DepartmentId": "DEPT_CSE",
-    "OfficeRoomId": "PFT_3325"
+    "OfficeRoomId": "PFT_3325E"
+  },
+  {
+    "Name": "FAC_ALJABEA",
+    "FullName": "Ibrahem Aljabea",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3272Y"
+  },
+  {
+    "Name": "FAC_ALIGOMBE",
+    "FullName": "Aisha Ali-Gombe",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3210"
+  },
+  {
+    "Name": "FAC_ANARAKY",
+    "FullName": "Reza Ghaiumy Anaraky",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3209D"
+  },
+  {
+    "Name": "FAC_BAUMGARTNER",
+    "FullName": "Gerald Baumgartner",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3272D"
+  },
+  {
+    "Name": "FAC_BOUHARB",
+    "FullName": "Elias Bou-Harb",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3272L"
+  },
+  {
+    "Name": "FAC_CHEN",
+    "FullName": "Jianhua Chen",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3272F"
+  },
+  {
+    "Name": "FAC_FARHEEN",
+    "FullName": "Tasnuva Farheen",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3272S"
+  },
+  {
+    "Name": "FAC_FAROOQ",
+    "FullName": "Umar Farooq",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3209M"
+  },
+  {
+    "Name": "FAC_FRONCHETTI",
+    "FullName": "Felipe Fronchetti",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3272X"
+  },
+  {
+    "Name": "FAC_GHAWALY",
+    "FullName": "James Ghawaly",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3209B"
+  },
+  {
+    "Name": "FAC_JASIM",
+    "FullName": "Mahmood Jasim",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3209G"
+  },
+  {
+    "Name": "FAC_KAISER",
+    "FullName": "Hartmut Kaiser",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3209F"
+  },
+  {
+    "Name": "FAC_KARKI",
+    "FullName": "Bijaya Karki",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3272G"
+  },
+  {
+    "Name": "FAC_KHOURY",
+    "FullName": "Joseph Khoury",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3272Q"
+  },
+  {
+    "Name": "FAC_LAO",
+    "FullName": "Dong Lao",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3272W"
+  },
+  {
+    "Name": "FAC_LEE",
+    "FullName": "Kisung Lee",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3272B"
+  },
+  {
+    "Name": "FAC_MAHMOUD",
+    "FullName": "Anas Mahmoud",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3272H"
+  },
+  {
+    "Name": "FAC_MILLS",
+    "FullName": "Keith G. Mills",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3270A"
+  },
+  {
+    "Name": "FAC_RICHARD",
+    "FullName": "Golden Richard III",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3209L"
+  },
+  {
+    "Name": "FAC_SAHAROY",
+    "FullName": "Sayak Saha Roy",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3272R"
+  },
+  {
+    "Name": "FAC_SHAH",
+    "FullName": "Rahul Shah",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3272J"
+  },
+  {
+    "Name": "FAC_TRIANTAPHYLLOU",
+    "FullName": "Evangelos Triantaphyllou",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3272C"
+  },
+  {
+    "Name": "FAC_VADREVU",
+    "FullName": "Phani Vadrevu",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3209E"
+  },
+  {
+    "Name": "FAC_WANG",
+    "FullName": "Qingyang Wang",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3272M"
+  },
+  {
+    "Name": "FAC_WEBB",
+    "FullName": "Andrew Webb",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3272E"
+  },
+  {
+    "Name": "FAC_ZHANG",
+    "FullName": "Jian Zhang",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3272K"
+  },
+  {
+    "Name": "FAC_ZHOU",
+    "FullName": "Xugui Zhou",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3330H"
+  },
+  {
+    "Name": "FAC_BRENER",
+    "FullName": "Nathan E. Brener",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3270B"
+  },
+  {
+    "Name": "FAC_DENNY",
+    "FullName": "John Luke Denny",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3272V"
+  },
+  {
+    "Name": "FAC_DIEUTTO",
+    "FullName": "Kellie Dieutto",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3272U"
+  },
+  {
+    "Name": "FAC_DUNCAN",
+    "FullName": "William Duncan",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3270C"
+  },
+  {
+    "Name": "FAC_ELDEWAHI",
+    "FullName": "Abeer Eldewahi",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3272T"
+  },
+  {
+    "Name": "FAC_TRAMMELL",
+    "FullName": "David Trammell",
+    "DepartmentId": "DEPT_CSE",
+    "OfficeRoomId": "PFT_3324G"
   }
 ]
