@@ -61,5 +61,131 @@
     "DisplayName": "PFT 3325",
     "Floor": 3,
     "RoomType": "Office"
+  },
+  {
+    "Name": "PFT_1375",
+    "RoomNumber": "1375",
+    "DisplayName": "PFT 1375 - Panera Bread",
+    "Floor": 1,
+    "RoomType": "Dining"
+  },
+  {
+    "Name": "PFT_1350",
+    "RoomNumber": "1350",
+    "DisplayName": "PFT 1350 - Campus Computer Lab",
+    "Floor": 1,
+    "RoomType": "Computer Lab"
+  },
+  {
+    "Name": "PFT_COMMONS",
+    "RoomNumber": "Commons",
+    "DisplayName": "PFT Commons",
+    "Floor": 1,
+    "RoomType": "Common Area"
+  },
+  {
+    "Name": "PFT_1280",
+    "RoomNumber": "1280",
+    "DisplayName": "PFT 1280 - Student Leadership Incubator",
+    "Floor": 1,
+    "RoomType": "Student Space"
+  },
+  {
+    "Name": "PFT_1278",
+    "RoomNumber": "1278",
+    "DisplayName": "PFT 1278 - Student Leadership Conference",
+    "Floor": 1,
+    "RoomType": "Conference Room"
+  },
+  {
+    "Name": "PFT_1233",
+    "RoomNumber": "1233",
+    "DisplayName": "PFT 1233 - CM Surveying Studio",
+    "Floor": 1,
+    "RoomType": "Studio"
+  },
+  {
+    "Name": "PFT_1237",
+    "RoomNumber": "1237",
+    "DisplayName": "PFT 1237 - Chem Eng Grad Computer Lab",
+    "Floor": 1,
+    "RoomType": "Computer Lab"
+  },
+  {
+    "Name": "PFT_1245",
+    "RoomNumber": "1245",
+    "DisplayName": "PFT 1245",
+    "Floor": 1,
+    "RoomType": "TBD"
+  },
+  {
+    "Name": "PFT_1225",
+    "RoomNumber": "1225",
+    "DisplayName": "PFT 1225",
+    "Floor": 1,
+    "RoomType": "TBD"
+  },
+  {
+    "Name": "PFT_1232",
+    "RoomNumber": "1232",
+    "DisplayName": "PFT 1232",
+    "Floor": 1,
+    "RoomType": "TBD"
+  },
+  {
+    "Name": "PFT_1236",
+    "RoomNumber": "1236",
+    "DisplayName": "PFT 1236",
+    "Floor": 1,
+    "RoomType": "TBD"
+  },
+  {
+    "Name": "PFT_1244",
+    "RoomNumber": "1244",
+    "DisplayName": "PFT 1244 - Seminar Classroom",
+    "Floor": 1,
+    "RoomType": "Classroom"
+  },
+  {
+    "Name": "PFT_1246",
+    "RoomNumber": "1246",
+    "DisplayName": "PFT 1246 - Computer Classroom",
+    "Floor": 1,
+    "RoomType": "Classroom"
+  },
+  {
+    "Name": "PFT_1221",
+    "RoomNumber": "1221",
+    "DisplayName": "PFT 1221",
+    "Floor": 1,
+    "RoomType": "TBD"
+  },
+  {
+    "Name": "PFT_1218",
+    "RoomNumber": "1218",
+    "DisplayName": "PFT 1218",
+    "Floor": 1,
+    "RoomType": "TBD"
+  },
+  {
+    "Name": "PFT_1216",
+    "RoomNumber": "1216",
+    "DisplayName": "PFT 1216",
+    "Floor": 1,
+    "RoomType": "TBD"
+  },
+  {
+    "Name": "PFT_1212",
+    "RoomNumber": "1212",
+    "DisplayName": "PFT 1212",
+    "Floor": 1,
+    "RoomType": "TBD"
+  },
+  {
+    "Name": "PFT_1253",
+    "RoomNumber": "1253",
+    "DisplayName": "PFT 1253",
+    "Floor": 1,
+    "RoomType": "TBD"
   }
 ]
