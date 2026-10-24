@@ -41,4 +41,14 @@ All the data right now is placeholder data until we confirm the real rooms and o
 
 Keys use PascalCase instead of camelCase so they match the Unreal struct names.
 
+Every file must contain a JSON array of objects. Required fields are nonempty
+strings without leading/trailing spaces, except `Floor`, which is a positive
+integer. IDs are unique within each file; room numbers are unique. References
+must point to existing rows. Keep room numbers as strings to preserve formatting.
+
+Task 3 reuses the team's existing schema and placeholder rows. The validator
+also rejects malformed JSON, wrong row/field types, blank strings, duplicate room
+numbers, and broken references. Placeholder courses do not represent verified
+class schedules. Runtime loading and room bindings are separate tasks.
+
 Run `python tools/validate_data.py` after changing anything in here.
