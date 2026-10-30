@@ -26,6 +26,16 @@ struct PFTNAVIGATOR_API FPFTCourse
     UPROPERTY(BlueprintReadOnly) FString RoomId;
 };
 
+// One department from departments.json. OfficeRoomId is the room the main department office is in
+USTRUCT(BlueprintType)
+struct PFTNAVIGATOR_API FPFTDepartment
+{
+    GENERATED_BODY()
+    UPROPERTY(BlueprintReadOnly) FString Name;
+    UPROPERTY(BlueprintReadOnly) FString DisplayName;
+    UPROPERTY(BlueprintReadOnly) FString OfficeRoomId;
+};
+
 USTRUCT(BlueprintType)
 struct PFTNAVIGATOR_API FPFTSearchResult
 {
@@ -45,5 +55,6 @@ public:
     const FPFTRoom* FindRoom(const FString& RoomId) const;
     UPROPERTY(BlueprintReadOnly) TArray<FPFTRoom> Rooms;
     UPROPERTY(BlueprintReadOnly) TArray<FPFTCourse> Courses;
+    UPROPERTY(BlueprintReadOnly) TArray<FPFTDepartment> Departments;
     UPROPERTY(BlueprintReadOnly) FString Error;
 };
