@@ -13,14 +13,15 @@ outside Perforce. Re-run after changing plugin source or repo data.
 
 Build the editor target and restart Unreal to load a newly installed module.
 Blueprints can access `PFTDirectory` through **Get Game Instance Subsystem**.
-`Rooms`, `Courses`, `Departments`, `Search`, and `Error` expose the loaded data and failures.
+`Rooms`, `Courses`, `Departments`, `Faculty`, `Search`, and `Error` expose the loaded data and failures.
 `LoadDirectory` validates into temporary arrays, so a failed reload keeps the
 last valid data. Empty search text returns no results. Searches match room IDs,
 numbers, labels, course IDs, codes, and titles without regard to case.
 Departments match on part of their name ("Computer Science") or their exact
-short code ("CSE") and go to the department office.
+short code ("CSE") and go to the department office. The office result is followed
+by every professor in that department, each pointing at their own office.
 
-The plugin reads staged `Content/Data/rooms.json`, `courses.json`, and `departments.json`. The installer
+The plugin reads staged `Content/Data/rooms.json`, `courses.json`, `departments.json`, and `faculty.json`. The installer
 copies all four directory files after running the team's complete validator.
 All current records are placeholders, not verified room or schedule information.
 No original twin source or building assets are included in the GitHub plugin.

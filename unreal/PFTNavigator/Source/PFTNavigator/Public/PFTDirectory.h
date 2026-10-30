@@ -36,6 +36,17 @@ struct PFTNAVIGATOR_API FPFTDepartment
     UPROPERTY(BlueprintReadOnly) FString OfficeRoomId;
 };
 
+// One professor from faculty.json. OfficeRoomId is the room their office is in
+USTRUCT(BlueprintType)
+struct PFTNAVIGATOR_API FPFTFaculty
+{
+    GENERATED_BODY()
+    UPROPERTY(BlueprintReadOnly) FString Name;
+    UPROPERTY(BlueprintReadOnly) FString FullName;
+    UPROPERTY(BlueprintReadOnly) FString DepartmentId;
+    UPROPERTY(BlueprintReadOnly) FString OfficeRoomId;
+};
+
 USTRUCT(BlueprintType)
 struct PFTNAVIGATOR_API FPFTSearchResult
 {
@@ -56,5 +67,8 @@ public:
     UPROPERTY(BlueprintReadOnly) TArray<FPFTRoom> Rooms;
     UPROPERTY(BlueprintReadOnly) TArray<FPFTCourse> Courses;
     UPROPERTY(BlueprintReadOnly) TArray<FPFTDepartment> Departments;
+    UPROPERTY(BlueprintReadOnly) TArray<FPFTFaculty> Faculty;
     UPROPERTY(BlueprintReadOnly) FString Error;
+private:
+    void AddDepartmentFaculty(const FString& DepartmentId, TArray<FPFTSearchResult>& Results) const;
 };
