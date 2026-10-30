@@ -14,12 +14,14 @@ bool FPFTDirectoryTest::RunTest(const FString& Parameters)
     IFileManager::Get().MakeDirectory(*Folder, true);
     const FString Room = TEXT("{\"Name\":\"PFT_1200\",\"RoomNumber\":\"1200\",\"DisplayName\":\"PFT 1200\",\"Floor\":1,\"RoomType\":\"Lecture\"}");
     const FString Course = TEXT("[{\"Name\":\"CSC_3380\",\"CourseCode\":\"CSC 3380\",\"CourseTitle\":\"Object-Oriented Design\",\"DepartmentId\":\"CSE\",\"RoomId\":\"PFT_1200\"}]");
-    // The directory loads departments.json too now, so the test folder needs one or loading fails
+    // The directory loads departments.json and faculty.json too now, so the test folder needs both or loading fails
     const FString Department = TEXT("[{\"Name\":\"DEPT_CSE\",\"DisplayName\":\"Computer Science and Engineering\",\"OfficeRoomId\":\"PFT_1200\"}]");
+    const FString Professor = TEXT("[{\"Name\":\"FAC_TIGER\",\"FullName\":\"Mike Tiger\",\"DepartmentId\":\"DEPT_CSE\",\"OfficeRoomId\":\"PFT_1200\"}]");
     auto WriteRooms = [&](const FString& Text) { FFileHelper::SaveStringToFile(Text, *(Folder / TEXT("rooms.json"))); };
     WriteRooms(TEXT("[") + Room + TEXT("]"));
     FFileHelper::SaveStringToFile(Course, *(Folder / TEXT("courses.json")));
     FFileHelper::SaveStringToFile(Department, *(Folder / TEXT("departments.json")));
+    FFileHelper::SaveStringToFile(Professor, *(Folder / TEXT("faculty.json")));
     UGameInstance* GameInstance = NewObject<UGameInstance>();
     UPFTDirectory* Directory = NewObject<UPFTDirectory>(GameInstance);
     TestTrue(TEXT("Load valid data"), Directory->LoadDirectory(Folder));

@@ -81,7 +81,9 @@ void UPFTNavigatorWidget::SearchChanged(const FText& Text)
 {
     Results->ClearChildren();
     const auto Entries = GetGameInstance()->GetSubsystem<UPFTDirectory>()->Search(Text.ToString());
-    for (int32 Index = 0; Index < FMath::Min(Entries.Num(), 25); ++Index)
+    // Raised from 25 so a whole department's professors fit (CSE alone has 34 plus the office)
+    const int32 MaxShownResults = 50;
+    for (int32 Index = 0; Index < FMath::Min(Entries.Num(), MaxShownResults); ++Index)
     {
         auto* Button = WidgetTree->ConstructWidget<UPFTSearchButton>();
         Button->RoomId = Entries[Index].RoomId;
@@ -95,7 +97,7 @@ void UPFTNavigatorWidget::SearchChanged(const FText& Text)
         Button->OnClicked.AddDynamic(Button, &UPFTSearchButton::SelectRoom);
         Results->AddChild(Button);
     }
-    const FString Message = Text.IsEmpty() ? TEXT("Enter a room, course, or department.") : FString::Printf(TEXT("%d matches (up to 25 shown)."), Entries.Num());
+    const FString Message = Text.IsEmpty() ? TEXT("Enter a room, course, or department.") : FString::Printf(TEXT("%d matches (up to %d shown)."), Entries.Num(), MaxShownResults);
     Status->SetText(FText::FromString(Message));
 }
 
