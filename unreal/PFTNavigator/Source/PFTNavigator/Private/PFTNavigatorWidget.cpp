@@ -44,7 +44,7 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     Style.TextStyle.SetColorAndOpacity(FSlateColor(FLinearColor::Black));
     Search->SetWidgetStyle(Style);
     Search->SetForegroundColor(FLinearColor::Black);
-    Search->SetHintText(FText::FromString(TEXT("1200 or CSC 3380")));
+    Search->SetHintText(FText::FromString(TEXT("1200, CSC 3380, or CSE")));
     Search->OnTextChanged.AddDynamic(this, &UPFTNavigatorWidget::SearchChanged);
     Column->AddChild(Search);
     auto* ListSize = WidgetTree->ConstructWidget<USizeBox>();
@@ -95,7 +95,7 @@ void UPFTNavigatorWidget::SearchChanged(const FText& Text)
         Button->OnClicked.AddDynamic(Button, &UPFTSearchButton::SelectRoom);
         Results->AddChild(Button);
     }
-    const FString Message = Text.IsEmpty() ? TEXT("Enter a room or course.") : FString::Printf(TEXT("%d matches (up to 25 shown)."), Entries.Num());
+    const FString Message = Text.IsEmpty() ? TEXT("Enter a room, course, or department.") : FString::Printf(TEXT("%d matches (up to 25 shown)."), Entries.Num());
     Status->SetText(FText::FromString(Message));
 }
 

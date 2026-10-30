@@ -53,6 +53,16 @@ namespace
         }
         return true;
     }
+
+    // Checks if a search matches a department. Students might type part of the full name ("Computer Science")
+    // or the short code ("CSE"). The code has to match exactly since short searches like "c" would match almost every code
+    // Params: Department - the department to check, Text - the trimmed search text
+    // Returns: true if the department should show up in the results
+    bool DepartmentMatches(const FPFTDepartment& Department, const FString& Text)
+    {
+        const FString Code = Department.Name.Replace(TEXT("DEPT_"), TEXT(""));
+        return Department.DisplayName.Contains(Text) || Code.Equals(Text, ESearchCase::IgnoreCase);
+    }
 }
 
 void UPFTDirectory::Initialize(FSubsystemCollectionBase& Collection)
@@ -66,10 +76,12 @@ bool UPFTDirectory::LoadDirectory(const FString& Folder)
 {
     TArray<FPFTRoom> NewRooms;
     TArray<FPFTCourse> NewCourses;
+    TArray<FPFTDepartment> NewDepartments;
     Error.Empty();
     if (!ReadRows(Folder / TEXT("rooms.json"), { TEXT("Name"), TEXT("RoomNumber"), TEXT("DisplayName"), TEXT("RoomType") }, NewRooms, Error)) return false;
     if (!ReadRows(Folder / TEXT("courses.json"), { TEXT("Name"), TEXT("CourseCode"), TEXT("CourseTitle"), TEXT("DepartmentId"), TEXT("RoomId") }, NewCourses, Error)) return false;
-    TSet<FString> RoomIds, RoomNumbers, CourseIds;
+    if (!ReadRows(Folder / TEXT("departments.json"), { TEXT("Name"), TEXT("DisplayName"), TEXT("OfficeRoomId") }, NewDepartments, Error)) return false;
+    TSet<FString> RoomIds, RoomNumbers, CourseIds, DepartmentIds;
     for (const auto& Room : NewRooms)
     {
         if (Room.Floor < 1 || RoomIds.Contains(Room.Name) || RoomNumbers.Contains(Room.RoomNumber))
@@ -89,8 +101,20 @@ bool UPFTDirectory::LoadDirectory(const FString& Folder)
         }
         CourseIds.Add(Course.Name);
     }
+    // Same idea as the courses check. A department's office has to be a real room
+    // or its search result would send you nowhere
+    for (const auto& Department : NewDepartments)
+    {
+        if (!RoomIds.Contains(Department.OfficeRoomId) || DepartmentIds.Contains(Department.Name))
+        {
+            Error = TEXT("Invalid office room or duplicate department: ") + Department.Name;
+            return false;
+        }
+        DepartmentIds.Add(Department.Name);
+    }
     Rooms = MoveTemp(NewRooms);
     Courses = MoveTemp(NewCourses);
+    Departments = MoveTemp(NewDepartments);
     return true;
 }
 
@@ -113,6 +137,12 @@ TArray<FPFTSearchResult> UPFTDirectory::Search(const FString& Query) const
     {
         if (Course.CourseCode.Contains(Text) || Course.CourseTitle.Contains(Text) || Course.Name.Contains(Text))
             Results.Add({ Course.RoomId, Course.CourseCode + TEXT(" - ") + Course.CourseTitle });
+    }
+    // Departments match on their full name or their short code, and the result takes you to the department office
+    for (const auto& Department : Departments)
+    {
+        if (DepartmentMatches(Department, Text))
+            Results.Add({ Department.OfficeRoomId, Department.DisplayName + TEXT(" - Department Office") });
     }
     return Results;
 }
