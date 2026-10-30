@@ -137,6 +137,31 @@ const FPFTRoom* UPFTDirectory::FindRoom(const FString& RoomId) const
     return Rooms.FindByPredicate([&](const FPFTRoom& Room) { return Room.Name == RoomId; });
 }
 
+// Builds the info the panel shows when you pick a room. This only uses our JSON data,
+// so it still works for rooms we don't have a spot on the map for yet
+// Params: RoomId - the room that was picked (like PFT_1200)
+// Result: a few lines with the room name, type, floor, and any department office, professor, or class in it.
+//         Empty if the room isn't in rooms.json
+FString UPFTDirectory::GetRoomDetails(const FString& RoomId) const
+{
+    const FPFTRoom* Room = FindRoom(RoomId);
+    if (!Room) return FString();
+    FString Details = Room->DisplayName + TEXT("\n") + Room->RoomType + TEXT(" | Floor ") + FString::FromInt(Room->Floor);
+    for (const auto& Department : Departments)
+    {
+        if (Department.OfficeRoomId == RoomId) Details += TEXT("\nDepartment office: ") + Department.DisplayName;
+    }
+    for (const auto& Professor : Faculty)
+    {
+        if (Professor.OfficeRoomId == RoomId) Details += TEXT("\nOffice of ") + Professor.FullName;
+    }
+    for (const auto& Course : Courses)
+    {
+        if (Course.RoomId == RoomId) Details += TEXT("\nClass here: ") + Course.CourseCode + TEXT(" - ") + Course.CourseTitle;
+    }
+    return Details;
+}
+
 TArray<FPFTSearchResult> UPFTDirectory::Search(const FString& Query) const
 {
     const FString Text = Query.TrimStartAndEnd();

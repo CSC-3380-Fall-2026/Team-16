@@ -31,7 +31,8 @@ No original twin source or building assets are included in the GitHub plugin.
 `PFTDestinations` is a world subsystem. Pass a search result's `RoomId` to
 `SelectRoom` to show its marker and hide the previous selection. Missing and
 ambiguous bindings return false with a readable `Error`. `ClearSelection` hides
-the destination. A placed `PFTRoomMarker` with the matching `RoomId` can override
+the destination. `HasLocation` returns whether a room has a placed marker or a
+binding on the current map, without selecting it. A placed `PFTRoomMarker` with the matching `RoomId` can override
 a JSON binding; two matching placed markers are an error.
 
 `data/room_bindings.json` contains map-specific positions derived from the twin's
@@ -57,7 +58,9 @@ metadata already available in the Perforce map; it does not guess missing rooms.
 
 After installing, building, and restarting Unreal, press Play. The Navigator
 panel appears below the twin's top bar for the local player. Search by room
-number or course code/title, then select a result to show its room marker.
+number, course code/title, or department, then select a result to show its room
+info (name, type, floor, offices, and classes) and its marker. Rooms with no map
+location yet still show their info with "Map location not available yet."
 **View selected room** moves the exploration camera near that marker. Unbound
 rooms show an explanation and never move the camera to an invented location.
 
