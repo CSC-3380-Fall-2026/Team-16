@@ -19,6 +19,9 @@ bool FPFTDestinationTest::RunTest(const FString& Parameters)
     auto* Second = World->SpawnActor<APFTRoomMarker>();
     First->RoomId = TEXT("PFT_1200");
     Second->RoomId = TEXT("PFT_3325");
+    // HasLocation is what the panel uses to say "Map location not available yet", so it can't guess
+    TestTrue(TEXT("Placed marker has a location"), Destinations->HasLocation(First->RoomId));
+    TestFalse(TEXT("Unknown room has no location"), Destinations->HasLocation(TEXT("PFT_9999")));
     TestTrue(TEXT("Select known room"), Destinations->SelectRoom(First->RoomId));
     TestFalse(TEXT("Selected marker shown"), First->IsHidden());
     TestTrue(TEXT("Select other room"), Destinations->SelectRoom(Second->RoomId));
@@ -31,11 +34,14 @@ bool FPFTDestinationTest::RunTest(const FString& Parameters)
     const FString Path = FPaths::CreateTempFilename(*FPaths::ProjectSavedDir(), TEXT("PFTBindings"), TEXT(".json"));
     const FString Json = FString::Printf(TEXT("[{\"RoomId\":\"PFT_1120\",\"Map\":\"%s\",\"Location\":{\"X\":10,\"Y\":20,\"Z\":30}}]"), *Package->GetName());
     FFileHelper::SaveStringToFile(Json, *Path);
+    TestFalse(TEXT("No location before bindings load"), Destinations->HasLocation(TEXT("PFT_1120")));
     TestTrue(TEXT("Load bindings"), Destinations->LoadBindings(Path));
+    TestTrue(TEXT("Bound room has a location"), Destinations->HasLocation(TEXT("PFT_1120")));
     TestTrue(TEXT("Create bound marker"), Destinations->SelectRoom(TEXT("PFT_1120")));
     if (Destinations->ActiveMarker) TestEqual(TEXT("Bound location"), Destinations->ActiveMarker->GetActorLocation(), FVector(10, 20, 30));
     FFileHelper::SaveStringToFile(TEXT("[]"), *Path);
     TestTrue(TEXT("Reload bindings"), Destinations->LoadBindings(Path));
+    TestFalse(TEXT("Location gone after reload"), Destinations->HasLocation(TEXT("PFT_1120")));
     TestFalse(TEXT("Reload removes obsolete generated markers"), Destinations->SelectRoom(TEXT("PFT_1120")));
     IFileManager::Get().Delete(*Path);
     World->DestroyWorld(false);
