@@ -64,6 +64,7 @@ public:
     UFUNCTION(BlueprintCallable) bool LoadDirectory(const FString& Folder);
     UFUNCTION(BlueprintCallable) TArray<FPFTSearchResult> Search(const FString& Query) const;
     const FPFTRoom* FindRoom(const FString& RoomId) const;
+    UFUNCTION(BlueprintCallable) FString GetRoomDetails(const FString& RoomId) const;
     UPROPERTY(BlueprintReadOnly) TArray<FPFTRoom> Rooms;
     UPROPERTY(BlueprintReadOnly) TArray<FPFTCourse> Courses;
     UPROPERTY(BlueprintReadOnly) TArray<FPFTDepartment> Departments;

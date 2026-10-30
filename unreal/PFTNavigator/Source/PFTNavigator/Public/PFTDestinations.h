@@ -24,6 +24,7 @@ public:
     virtual bool DoesSupportWorldType(EWorldType::Type WorldType) const override;
     UFUNCTION(BlueprintCallable) bool LoadBindings(const FString& Path);
     UFUNCTION(BlueprintCallable) bool SelectRoom(const FString& RoomId);
+    UFUNCTION(BlueprintCallable) bool HasLocation(const FString& RoomId) const;
     UFUNCTION(BlueprintCallable) void ClearSelection();
     UPROPERTY(BlueprintReadOnly) FString Error;
     UPROPERTY(BlueprintReadOnly) TObjectPtr<APFTRoomMarker> ActiveMarker;

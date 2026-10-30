@@ -58,6 +58,20 @@ void UPFTDestinations::ClearSelection()
     ActiveMarker = nullptr;
 }
 
+// Checks if we know where a room is on the map, either from a marker placed in the level or from room_bindings.json.
+// The panel uses this to tell "we just don't have this room's location yet" apart from a real error
+// Params: RoomId - the room to check
+// Result: true if the room can get a marker, false if it isn't on the map yet
+bool UPFTDestinations::HasLocation(const FString& RoomId) const
+{
+    for (TActorIterator<APFTRoomMarker> Marker(GetWorld()); Marker; ++Marker)
+    {
+        if (Marker->RoomId == RoomId) return true;
+    }
+    const FString Map = UWorld::RemovePIEPrefix(GetWorld()->GetPackage()->GetName());
+    return Bindings.ContainsByPredicate([&](const FPFTRoomBinding& Binding) { return Binding.RoomId == RoomId && Binding.Map == Map; });
+}
+
 bool UPFTDestinations::SelectRoom(const FString& RoomId)
 {
     ClearSelection();

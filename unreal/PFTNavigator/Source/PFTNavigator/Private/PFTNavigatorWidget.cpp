@@ -101,11 +101,25 @@ void UPFTNavigatorWidget::SearchChanged(const FText& Text)
     Status->SetText(FText::FromString(Message));
 }
 
+// Shows the picked room's info and marks it on the map if we can. Rooms we have data for
+// but no map spot yet (like the third floor) still show their info with a note instead of an error
+// Params: RoomId - the room from the search result that was clicked
 void UPFTNavigatorWidget::ChooseRoom(const FString& RoomId)
 {
+    const auto* Directory = GetGameInstance()->GetSubsystem<UPFTDirectory>();
     auto* Destinations = GetWorld()->GetSubsystem<UPFTDestinations>();
-    const bool bSelected = Destinations->SelectRoom(RoomId);
-    Status->SetText(FText::FromString(bSelected ? TEXT("Selected ") + RoomId : Destinations->Error));
+    FString Message = Directory->GetRoomDetails(RoomId);
+    if (!Destinations->HasLocation(RoomId))
+    {
+        // Clear the old marker so it doesn't look like the last room is still picked
+        Destinations->ClearSelection();
+        Message += TEXT("\nMap location not available yet.");
+    }
+    else if (!Destinations->SelectRoom(RoomId))
+    {
+        Message += TEXT("\n") + Destinations->Error;
+    }
+    Status->SetText(FText::FromString(Message));
 }
 
 void UPFTNavigatorWidget::ToggleExplore()
