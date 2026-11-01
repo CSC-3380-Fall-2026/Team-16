@@ -53,3 +53,19 @@ camera focus, and restoring the original pawn. A small DX12 game test rendered
 the panel; that confirms its layout, not the building's appearance or performance.
 That render showed MegaLights hardware-raytracing warnings on the test machine's
 GTX 1080 under the twin's existing renderer settings. Those settings were not edited.
+
+## Room browser update on October 31, 2026
+
+Branch `task-room-browser` adds a room list for blank searches, floor filtering,
+the existing room, department, faculty, and course details, and a button to clear the selected
+marker. Unbound rooms show details while the room-view button remains disabled.
+The panel scrolls so longer details do not hide its controls.
+
+The UE 5.8 editor build, all 22 Python tests, and all 4 Unreal automation tests
+passed. The Unreal report contains no test warnings. Tests cover browsing by
+floor, filtering course results by their room floor, room details, clearing the
+marker, and disabling camera movement for unbound rooms. An offscreen render
+confirmed that the room list and floor selector display. Unreal tests ran from
+the engine's Entry map; they do not verify building navigation. The integration
+remains in pending Perforce changelist 41648. Routing and first-person guidance
+remain unfinished.
