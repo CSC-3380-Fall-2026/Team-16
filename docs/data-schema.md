@@ -52,7 +52,8 @@ Keys use PascalCase instead of camelCase so they match the Unreal struct names.
 
 Every file must contain a JSON array of objects. Required fields are nonempty
 strings without leading/trailing spaces, except `Floor`, which is a positive
-integer. IDs are unique within each file; room numbers are unique. References
+integer no greater than 2147483647, matching Unreal's `int32` field. IDs are unique
+within each file; room numbers are unique. References
 must point to existing rows. Keep room numbers as strings to preserve formatting.
 
 Task 3 reuses the team's existing schema and placeholder rows. The validator
