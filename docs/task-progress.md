@@ -1,11 +1,9 @@
 # Tasks 1 through 6
 
-These branches are stacked in task order from `dev`. Each branch adds one task
-to the preceding task's work. Merge/review them in order, or review task 6 as the
-combined implementation. No branch has been merged into `main` or `dev`.
-
-The six pull requests are open. Merge task 1 into `dev` first, then retarget the
-next task's PR to `dev` before merging it. Continue in task order.
+The six task pull requests below were merged into `dev` on October 24, 2026.
+They were originally stacked in task order. Their branch names and links are
+kept here as a record of that work. Start new independent tasks from current
+`dev`; those original branches have been deleted from the remote.
 
 - Task 1: [PR #4](https://github.com/CSC-3380-Fall-2026/Team-16/pull/4)
 - Task 2: [PR #5](https://github.com/CSC-3380-Fall-2026/Team-16/pull/5), based on task 1
@@ -34,15 +32,16 @@ Tasks 4 through 6 add only our plugin, tools, docs, and destination data to GitH
 The twin's original source and assets remain in Perforce. Local plugin integration
 is in pending changelist 41648 and has not been submitted.
 
-Six room destinations were matched to unique map triggers. Rooms 1160, 1180,
-and 1220 remain unbound. Full room descriptions redirect to LSU sign-in, and
-course assignments are still placeholders. Confirm this information before
-treating the app as a real directory. A visual building walkthrough is still
-needed; desktop viewport capture was unavailable during this work.
+Six room destinations were matched to unique map triggers. The team later
+removed mockup rooms 1160, 1180, and 1220 from the directory. Current `dev`
+contains 68 rooms, 34 faculty records, 6 departments, 1 placeholder course,
+and 6 room bindings. See [data sources](data-schema.md) for the directory's
+provenance. These records do not establish verified course assignments or
+walking routes. A visual building walkthrough is still needed.
 
 Tasks 7 through 10, including routing and a first-person guide, are outside this
-implementation. No Perforce changelist has been submitted, and no pull request
-has been merged.
+implementation. The local Perforce integration remains pending; the GitHub
+task PRs have been merged into `dev`.
 
 ## Final checks on October 17, 2026
 
