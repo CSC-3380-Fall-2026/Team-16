@@ -66,7 +66,7 @@ def check_field_types(file_name, rows):
             if value is None or value == "":
                 continue
             if field == "Floor":
-                valid = type(value) is int and value > 0
+                valid = type(value) is int and 1 <= value <= 2147483647
             else:
                 valid = isinstance(value, str) and value == value.strip()
             if not valid:

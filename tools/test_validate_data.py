@@ -57,6 +57,18 @@ class TestValidateData(unittest.TestCase):
         # The actual data we have in the repo should always pass
         self.assertEqual(validate_data.validate(validate_data.DATA_FOLDER), [])
 
+    def test_floor_limit_matches_unreal(self):
+        self.data["rooms.json"][0]["Floor"] = 2147483647
+        self.write_files()
+        self.assertEqual(validate_data.validate(self.folder), [])
+
+    def test_floor_above_unreal_limit_is_rejected(self):
+        for floor in [2147483648, 10 ** 100]:
+            with self.subTest(floor=floor):
+                self.data["rooms.json"][0]["Floor"] = floor
+                self.write_files()
+                self.assertTrue(any("invalid Floor" in error for error in validate_data.validate(self.folder)))
+
     def test_missing_field(self):
         del self.data["faculty.json"][0]["FullName"]
         self.write_files()
