@@ -23,7 +23,8 @@ by every professor in that department, each pointing at their own office.
 
 The plugin reads staged `Content/Data/rooms.json`, `courses.json`, `departments.json`, and `faculty.json`. The installer
 copies all four directory files after running the team's complete validator.
-All current records are placeholders, not verified room or schedule information.
+Room, faculty, and department records include sourced directory entries; see
+[data sources](data-schema.md). Course assignments remain placeholders.
 No original twin source or building assets are included in the GitHub plugin.
 
 ## Task 5 destinations
@@ -75,8 +76,9 @@ Click **Explore** or **Fly** to use the separate exploration pawn:
 Exploration uses UE's spectator movement and can pass through walls. It is a
 standalone/local-host prototype, not multiplayer navigation or a walking guide.
 It does not replace the twin's existing pawn classes or edit its shared plugin.
-The results list shows at most 25 matches. Current data contains 9 rooms and
-1 placeholder course; 6 rooms have map-derived destinations.
+The results list shows at most 50 matches. Current data contains 68 rooms,
+34 faculty records, 6 departments, and 1 placeholder course; 6 rooms have
+map-derived destinations.
 
 ## Room browser
 

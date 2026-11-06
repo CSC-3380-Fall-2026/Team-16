@@ -3,7 +3,7 @@
 ## Branches
 - `main` - stable version, only updated from `dev`
 - `dev` - where all our work gets merged
-- `feature/<task-name>` or `task-<number>-<task-name>` - one branch per task
+- `task-<purpose>` or `task-<number>-<purpose>` - one descriptive branch per task
 
 Don't commit straight to `main` or `dev`, use a pull request.
 
@@ -11,15 +11,20 @@ Don't commit straight to `main` or `dev`, use a pull request.
 ```sh
 git checkout dev
 git pull
-git checkout -b feature/your-task-name
+git checkout -b task-your-task-name
 
 # do your work, then
 git add .
 git commit -m "Short description of what you changed"
-git push -u origin feature/your-task-name
+git push -u origin task-your-task-name
 ```
 
 Then open a pull request on GitHub into `dev` (not `main`) and have someone review it before merging.
+
+Use a clear title such as `Feature: ...`, `Fix: ...`, `Docs: ...`, `Test: ...`, or
+`Cleanup: ...`. Add a matching GitHub label, such as `enhancement`, `bug`, or
+`documentation`, and state what changed and how it was checked. Small bug fixes,
+test improvements, and documentation updates can each be their own PR.
 
 ## Stacked branches
 If your task needs another task that isn't merged yet, you can branch off that task's branch instead of `dev` and point your PR at it. Just put that in the PR description so we know the order.
