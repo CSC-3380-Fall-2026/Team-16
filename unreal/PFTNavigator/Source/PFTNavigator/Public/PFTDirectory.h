@@ -63,6 +63,7 @@ public:
     virtual void Initialize(FSubsystemCollectionBase& Collection) override;
     UFUNCTION(BlueprintCallable) bool LoadDirectory(const FString& Folder);
     UFUNCTION(BlueprintCallable) TArray<FPFTSearchResult> Search(const FString& Query) const;
+    UFUNCTION(BlueprintCallable) TArray<FPFTSearchResult> BrowseRooms(const FString& Query, int32 Floor = 0) const;
     const FPFTRoom* FindRoom(const FString& RoomId) const;
     UFUNCTION(BlueprintCallable) FString GetRoomDetails(const FString& RoomId) const;
     UPROPERTY(BlueprintReadOnly) TArray<FPFTRoom> Rooms;

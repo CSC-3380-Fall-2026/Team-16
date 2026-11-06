@@ -202,3 +202,26 @@ void UPFTDirectory::AddDepartmentFaculty(const FString& DepartmentId, TArray<FPF
         Results.Add({ Professor.OfficeRoomId, Professor.FullName + TEXT(" - Office ") + OfficeNumber });
     }
 }
+
+// Returns room/search results on Floor (0 means all floors); blank Query lists rooms.
+TArray<FPFTSearchResult> UPFTDirectory::BrowseRooms(const FString& Query, int32 Floor) const
+{
+    TArray<FPFTSearchResult> Results;
+    if (Floor < 0) return Results;
+    if (!Query.TrimStartAndEnd().IsEmpty()) Results = Search(Query);
+    else for (const auto& Room : Rooms) Results.Add({ Room.Name, Room.DisplayName });
+    Results.RemoveAll([&](const FPFTSearchResult& Result)
+    {
+        const auto* Room = FindRoom(Result.RoomId);
+        return !Room || (Floor > 0 && Room->Floor != Floor);
+    });
+    if (!Query.TrimStartAndEnd().IsEmpty()) return Results;
+    Results.StableSort([&](const FPFTSearchResult& A, const FPFTSearchResult& B)
+    {
+        const auto* First = FindRoom(A.RoomId);
+        const auto* Second = FindRoom(B.RoomId);
+        if (First->Floor != Second->Floor) return First->Floor < Second->Floor;
+        return First->RoomNumber < Second->RoomNumber;
+    });
+    return Results;
+}

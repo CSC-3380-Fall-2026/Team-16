@@ -25,8 +25,10 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     Border->SetPadding(FMargin(14));
     Border->SetBrushColor(FLinearColor(0.025f, 0.035f, 0.06f, 0.96f));
     WidgetTree->RootWidget = Border;
+    auto* PanelScroll = WidgetTree->ConstructWidget<UScrollBox>();
+    Border->SetContent(PanelScroll);
     auto* Column = WidgetTree->ConstructWidget<UVerticalBox>();
-    Border->SetContent(Column);
+    PanelScroll->AddChild(Column);
     auto AddText = [&](const FString& Text)
     {
         auto* Label = WidgetTree->ConstructWidget<UTextBlock>();
@@ -38,7 +40,7 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     };
     AddText(TEXT("PFT Navigator"))->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), 20));
     AddText(TEXT("Sample course data"));
-    auto* Search = WidgetTree->ConstructWidget<UEditableTextBox>();
+    Search = WidgetTree->ConstructWidget<UEditableTextBox>(UEditableTextBox::StaticClass(), TEXT("RoomSearch"));
     auto Style = Search->GetWidgetStyle();
     Style.TextStyle.SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Regular"), 16));
     Style.TextStyle.SetColorAndOpacity(FSlateColor(FLinearColor::Black));
@@ -47,12 +49,25 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     Search->SetHintText(FText::FromString(TEXT("1200, CSC 3380, or CSE")));
     Search->OnTextChanged.AddDynamic(this, &UPFTNavigatorWidget::SearchChanged);
     Column->AddChild(Search);
+    AddText(TEXT("Floor"));
+    Floors = WidgetTree->ConstructWidget<UComboBoxString>(UComboBoxString::StaticClass(), TEXT("FloorFilter"));
+    Floors->AddOption(TEXT("All floors"));
+    TArray<int32> FloorNumbers;
+    const auto* Directory = GetGameInstance()->GetSubsystem<UPFTDirectory>();
+    for (const auto& Room : Directory->Rooms) FloorNumbers.AddUnique(Room.Floor);
+    FloorNumbers.Sort();
+    for (int32 Floor : FloorNumbers) Floors->AddOption(FString::FromInt(Floor));
+    Floors->SetSelectedOption(TEXT("All floors"));
+    Floors->OnSelectionChanged.AddDynamic(this, &UPFTNavigatorWidget::FloorChanged);
+    Column->AddChild(Floors);
     auto* ListSize = WidgetTree->ConstructWidget<USizeBox>();
     ListSize->SetHeightOverride(180);
     Results = WidgetTree->ConstructWidget<UScrollBox>();
     ListSize->SetContent(Results);
     Column->AddChild(ListSize);
     Status = AddText(TEXT("Select a result to mark its room."));
+    Details = AddText(TEXT("Select a room to see its details."));
+    Details->Rename(TEXT("RoomDetails"));
     auto AddButton = [&](const FString& Text, UTextBlock*& Label)
     {
         auto* Button = WidgetTree->ConstructWidget<UButton>();
@@ -67,29 +82,45 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     UTextBlock* Label;
     AddButton(TEXT("Explore"), Label)->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ToggleExplore);
     ExploreLabel = Label;
-    AddButton(TEXT("View selected room"), Label)->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ViewRoom);
+    ViewButton = AddButton(TEXT("View selected room"), Label);
+    ViewButton->Rename(TEXT("ViewRoomButton"));
+    ViewButton->SetIsEnabled(false);
+    ViewButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ViewRoom);
+    ClearButton = AddButton(TEXT("Clear selected room"), Label);
+    ClearButton->Rename(TEXT("ClearRoomButton"));
+    ClearButton->SetIsEnabled(false);
+    ClearButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ClearRoom);
     AddButton(TEXT("Fly (Tab returns to mouse)"), Label)->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::Fly);
     AddText(TEXT("WASD move | Q down | E up\nMouse look | Tab switches mouse"));
     for (auto* Child : Column->GetAllChildren())
         Cast<UVerticalBoxSlot>(Child->Slot)->SetPadding(FMargin(0, 0, 0, 6));
-    const auto* Directory = GetGameInstance()->GetSubsystem<UPFTDirectory>();
-    if (!Directory->Error.IsEmpty()) Status->SetText(FText::FromString(Directory->Error));
+    RefreshResults();
     return Super::RebuildWidget();
 }
 
 void UPFTNavigatorWidget::SearchChanged(const FText& Text)
 {
+    RefreshResults();
+}
+
+void UPFTNavigatorWidget::FloorChanged(FString Floor, ESelectInfo::Type SelectionType)
+{
+    RefreshResults();
+}
+
+void UPFTNavigatorWidget::RefreshResults()
+{
     Results->ClearChildren();
-    const auto Entries = GetGameInstance()->GetSubsystem<UPFTDirectory>()->Search(Text.ToString());
-    // Raised from 25 so a whole department's professors fit (CSE alone has 34 plus the office)
-    const int32 MaxShownResults = 50;
-    for (int32 Index = 0; Index < FMath::Min(Entries.Num(), MaxShownResults); ++Index)
+    const auto* Directory = GetGameInstance()->GetSubsystem<UPFTDirectory>();
+    const auto Entries = Directory->BrowseRooms(Search->GetText().ToString(), FCString::Atoi(*Floors->GetSelectedOption()));
+    for (int32 Index = 0; Index < FMath::Min(Entries.Num(), 50); ++Index)
     {
         auto* Button = WidgetTree->ConstructWidget<UPFTSearchButton>();
         Button->RoomId = Entries[Index].RoomId;
         Button->Panel = this;
         auto* Label = WidgetTree->ConstructWidget<UTextBlock>();
-        Label->SetText(FText::FromString(Entries[Index].Label));
+        const auto* Room = Directory->FindRoom(Entries[Index].RoomId);
+        Label->SetText(FText::FromString(FString::Printf(TEXT("%s | Floor %d"), *Entries[Index].Label, Room->Floor)));
         Label->SetAutoWrapText(true);
         Label->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Regular"), 14));
         Label->SetColorAndOpacity(FSlateColor(FLinearColor::Black));
@@ -97,29 +128,39 @@ void UPFTNavigatorWidget::SearchChanged(const FText& Text)
         Button->OnClicked.AddDynamic(Button, &UPFTSearchButton::SelectRoom);
         Results->AddChild(Button);
     }
-    const FString Message = Text.IsEmpty() ? TEXT("Enter a room, course, or department.") : FString::Printf(TEXT("%d matches (up to %d shown)."), Entries.Num(), MaxShownResults);
+    FString Message = Entries.IsEmpty() ? TEXT("No matches on this floor. Try another floor or search.") : FString::Printf(TEXT("%d results (up to 50 shown)."), Entries.Num());
+    if (!Directory->Error.IsEmpty()) Message = Directory->Error;
     Status->SetText(FText::FromString(Message));
 }
 
-// Shows the picked room's info and marks it on the map if we can. Rooms we have data for
-// but no map spot yet (like the third floor) still show their info with a note instead of an error
-// Params: RoomId - the room from the search result that was clicked
 void UPFTNavigatorWidget::ChooseRoom(const FString& RoomId)
 {
     const auto* Directory = GetGameInstance()->GetSubsystem<UPFTDirectory>();
+    const auto* Room = Directory->FindRoom(RoomId);
+    ClearRoom();
+    if (!Room)
+    {
+        Status->SetText(FText::FromString(TEXT("This room is no longer in the directory.")));
+        return;
+    }
     auto* Destinations = GetWorld()->GetSubsystem<UPFTDestinations>();
-    FString Message = Directory->GetRoomDetails(RoomId);
-    if (!Destinations->HasLocation(RoomId))
-    {
-        // Clear the old marker so it doesn't look like the last room is still picked
-        Destinations->ClearSelection();
-        Message += TEXT("\nMap location not available yet.");
-    }
-    else if (!Destinations->SelectRoom(RoomId))
-    {
-        Message += TEXT("\n") + Destinations->Error;
-    }
+    const bool bHasLocation = Destinations->HasLocation(RoomId);
+    const bool bSelected = bHasLocation && Destinations->SelectRoom(RoomId);
+    Details->SetText(FText::FromString(Directory->GetRoomDetails(RoomId)));
+    ViewButton->SetIsEnabled(bSelected);
+    ClearButton->SetIsEnabled(true);
+    FString Message = TEXT("Map location not available yet.");
+    if (bHasLocation) Message = bSelected ? TEXT("Room marker shown.") : Destinations->Error;
     Status->SetText(FText::FromString(Message));
+}
+
+void UPFTNavigatorWidget::ClearRoom()
+{
+    GetWorld()->GetSubsystem<UPFTDestinations>()->ClearSelection();
+    Details->SetText(FText::FromString(TEXT("Select a room to see its details.")));
+    ViewButton->SetIsEnabled(false);
+    ClearButton->SetIsEnabled(false);
+    Status->SetText(FText::FromString(TEXT("Room selection cleared.")));
 }
 
 void UPFTNavigatorWidget::ToggleExplore()

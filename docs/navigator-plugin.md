@@ -78,6 +78,21 @@ It does not replace the twin's existing pawn classes or edit its shared plugin.
 The results list shows at most 25 matches. Current data contains 9 rooms and
 1 placeholder course; 6 rooms have map-derived destinations.
 
+## Room browser
+
+The panel lists rooms as soon as Play starts. Leave the search blank to browse
+all rooms, or choose a floor to narrow the list. Floor choices come from the
+loaded room data. Searches for rooms and courses also respect the selected floor;
+course results use the floor of their assigned room. Department and faculty
+results use their office floor. Blank-query room lists are ordered by floor
+and room number. Searches preserve their result order, and up to 50 are shown.
+
+Selecting a result shows the room number, floor, room type, and department offices, faculty, and any courses
+assigned in the directory. Unbound rooms still show their details, but
+**View selected room** stays disabled. **Clear selected room** hides the marker
+and clears the details without moving the camera. Scroll the panel to reach
+controls when the details take more space. Course assignments remain placeholders.
+
 ## Verification
 
 Run `python -m unittest discover -s tools` and `python tools/validate_data.py`.

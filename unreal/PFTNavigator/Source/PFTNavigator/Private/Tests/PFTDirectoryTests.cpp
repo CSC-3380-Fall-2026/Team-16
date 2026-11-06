@@ -78,4 +78,56 @@ bool FPFTDirectoryTest::RunTest(const FString& Parameters)
     IFileManager::Get().DeleteDirectory(*Folder, false, true);
     return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPFTBrowseTest, "PFTNavigator.Directory.BrowseByFloor", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPFTBrowseTest::RunTest(const FString& Parameters)
+{
+    auto* Directory = NewObject<UPFTDirectory>(NewObject<UGameInstance>());
+    FPFTRoom Upstairs, Downstairs;
+    Upstairs.Name = TEXT("PFT_3325");
+    Upstairs.RoomNumber = TEXT("3325");
+    Upstairs.DisplayName = TEXT("PFT 3325");
+    Upstairs.Floor = 3;
+    Downstairs.Name = TEXT("PFT_1200");
+    Downstairs.RoomNumber = TEXT("1200");
+    Downstairs.DisplayName = TEXT("PFT 1200");
+    Directory->Rooms = { Upstairs, Downstairs };
+    FPFTCourse Course;
+    Course.Name = TEXT("CSC_3380");
+    Course.CourseCode = TEXT("CSC 3380");
+    Course.CourseTitle = TEXT("Object-Oriented Design");
+    Course.RoomId = Downstairs.Name;
+    Directory->Courses.Add(Course);
+    FPFTDepartment Department;
+    Department.Name = TEXT("DEPT_CSE");
+    Department.DisplayName = TEXT("Computer Science and Engineering");
+    Department.OfficeRoomId = Upstairs.Name;
+    Directory->Departments.Add(Department);
+    FPFTFaculty Professor;
+    Professor.FullName = TEXT("Test Professor");
+    Professor.DepartmentId = Department.Name;
+    Professor.OfficeRoomId = Downstairs.Name;
+    Directory->Faculty.Add(Professor);
+    const auto DepartmentResults = Directory->BrowseRooms(TEXT("CSE"));
+    TestEqual(TEXT("Browser keeps department and faculty"), DepartmentResults.Num(), 2);
+    if (DepartmentResults.Num() == 2) TestEqual(TEXT("Department office remains first"), DepartmentResults[0].RoomId, Upstairs.Name);
+    TestEqual(TEXT("Department offices respect floor filter"), Directory->BrowseRooms(TEXT("CSE"), 3).Num(), 1);
+    const auto FacultyResults = Directory->BrowseRooms(TEXT("CSE"), 1);
+    TestEqual(TEXT("Faculty respects floor filter"), FacultyResults.Num(), 1);
+    if (!FacultyResults.IsEmpty()) TestTrue(TEXT("Faculty label preserved"), FacultyResults[0].Label.Contains(Professor.FullName));
+    const auto AllRooms = Directory->BrowseRooms(TEXT("  "));
+    TestEqual(TEXT("Blank browser lists every room"), AllRooms.Num(), 2);
+    if (AllRooms.Num() == 2) TestEqual(TEXT("Browser sorts by floor"), AllRooms[0].RoomId, Downstairs.Name);
+    const auto ThirdFloor = Directory->BrowseRooms(TEXT(""), 3);
+    TestEqual(TEXT("Floor filter lists only its rooms"), ThirdFloor.Num(), 1);
+    if (!ThirdFloor.IsEmpty()) TestEqual(TEXT("Third floor result"), ThirdFloor[0].RoomId, Upstairs.Name);
+    TestEqual(TEXT("Course title matches on its room floor"), Directory->BrowseRooms(TEXT(" design "), 1).Num(), 1);
+    TestEqual(TEXT("Course hidden on a different floor"), Directory->BrowseRooms(TEXT("CSC"), 3).Num(), 0);
+    TestEqual(TEXT("Room query respects floor"), Directory->BrowseRooms(TEXT("1200"), 3).Num(), 0);
+    TestEqual(TEXT("Unknown floor is empty"), Directory->BrowseRooms(TEXT(""), 2).Num(), 0);
+    TestEqual(TEXT("Negative floor is empty"), Directory->BrowseRooms(TEXT(""), -1).Num(), 0);
+    TestEqual(TEXT("Original empty search behavior preserved"), Directory->Search(TEXT("")).Num(), 0);
+    return true;
+}
 #endif
