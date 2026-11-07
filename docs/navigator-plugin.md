@@ -24,7 +24,7 @@ by every professor in that department, each pointing at their own office.
 The plugin reads staged `Content/Data/rooms.json`, `courses.json`, `departments.json`, and `faculty.json`. The installer
 copies all four directory files after running the team's complete validator.
 Room, faculty, and department records include sourced directory entries; see
-[data sources](data-schema.md). Course assignments remain placeholders.
+[data sources](data-schema.md). Courses are real Fall 2026 CSC sections that meet in PFT.
 No original twin source or building assets are included in the GitHub plugin.
 
 ## Task 5 destinations
@@ -40,8 +40,7 @@ a JSON binding; two matching placed markers are an error.
 room trigger bounds, in Unreal centimeters. Each entry records its source label.
 On October 17, 2026, six repo rooms matched unique triggers: 1100, 1120, 1140,
 1200, 1240, and 3325. Rooms 1160, 1180, and 1220 had no match. They turned out to be numbers from our pitch mockup that aren't on the PFT floor plan, so they were removed from `rooms.json`.
-The sample CSC 3380 record resolves to the bound PFT 1200 room; its class assignment
-is still placeholder data. A marker indicates a destination, not a walking route.
+Courses in PFT 1200 (like CSC 1350) resolve to the bound PFT 1200 room. A marker indicates a destination, not a walking route.
 
 To regenerate bindings, close extra editor sessions and run UE's
 `UnrealEditor-Cmd.exe "<project>" -run=pythonscript -script="<repo>/tools/export_room_bindings.py" -nullrhi -unattended -nop4`.
@@ -77,7 +76,7 @@ Exploration uses UE's spectator movement and can pass through walls. It is a
 standalone/local-host prototype, not multiplayer navigation or a walking guide.
 It does not replace the twin's existing pawn classes or edit its shared plugin.
 The results list shows at most 50 matches. Current data contains 68 rooms,
-34 faculty records, 6 departments, and 1 placeholder course; 6 rooms have
+34 faculty records, 6 departments, and 7 courses; 6 rooms have
 map-derived destinations.
 
 ## Room browser
@@ -95,7 +94,7 @@ assigned in the directory. Unbound rooms still show their details, but
 and clears the details without moving the camera. Results for the selected room get
 a gold **Selected** tag that stays when you search or change floors and goes away
 when you clear the room. Scroll the panel to reach
-controls when the details take more space. Course assignments remain placeholders.
+controls when the details take more space.
 
 ## Colors
 
