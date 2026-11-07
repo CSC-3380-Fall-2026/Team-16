@@ -45,14 +45,14 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     auto* Title = AddText(TEXT("PFT Navigator"));
     Title->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), 20));
     Title->SetColorAndOpacity(FSlateColor(FLinearColor(PFTPalette::Purple)));
-    AddText(TEXT("Sample course data"));
+    AddText(TEXT("Fall 2026 CSC classes in PFT"));
     Search = WidgetTree->ConstructWidget<UEditableTextBox>(UEditableTextBox::StaticClass(), TEXT("RoomSearch"));
     auto Style = Search->GetWidgetStyle();
     Style.TextStyle.SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Regular"), 16));
     Style.TextStyle.SetColorAndOpacity(FSlateColor(FLinearColor(PFTPalette::Ink)));
     Search->SetWidgetStyle(Style);
     Search->SetForegroundColor(FLinearColor(PFTPalette::Ink));
-    Search->SetHintText(FText::FromString(TEXT("1200, CSC 3380, or CSE")));
+    Search->SetHintText(FText::FromString(TEXT("1200, CSC 1350, or CSE")));
     Search->OnTextChanged.AddDynamic(this, &UPFTNavigatorWidget::SearchChanged);
     Column->AddChild(Search);
     AddText(TEXT("Floor"));

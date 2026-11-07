@@ -1,9 +1,51 @@
 [
   {
-    "Name": "CSC_3380",
-    "CourseCode": "CSC 3380",
-    "CourseTitle": "Object-Oriented Design",
+    "Name": "CSC_1253",
+    "CourseCode": "CSC 1253",
+    "CourseTitle": "COMP SCI WITH C++",
     "DepartmentId": "DEPT_CSE",
     "RoomId": "PFT_1200"
+  },
+  {
+    "Name": "CSC_1350",
+    "CourseCode": "CSC 1350",
+    "CourseTitle": "COMP SCI I-MJRS",
+    "DepartmentId": "DEPT_CSE",
+    "RoomId": "PFT_1200"
+  },
+  {
+    "Name": "CSC_2259",
+    "CourseCode": "CSC 2259",
+    "CourseTitle": "Discrete Structures",
+    "DepartmentId": "DEPT_CSE",
+    "RoomId": "PFT_1200"
+  },
+  {
+    "Name": "CSC_2262",
+    "CourseCode": "CSC 2262",
+    "CourseTitle": "Numerical Methods",
+    "DepartmentId": "DEPT_CSE",
+    "RoomId": "PFT_1200"
+  },
+  {
+    "Name": "CSC_2362",
+    "CourseCode": "CSC 2362",
+    "CourseTitle": "Introduction to Cybersecurity and Cyber Defense",
+    "DepartmentId": "DEPT_CSE",
+    "RoomId": "PFT_1200"
+  },
+  {
+    "Name": "CSC_3102",
+    "CourseCode": "CSC 3102",
+    "CourseTitle": "ADV DATA STRUCTURES",
+    "DepartmentId": "DEPT_CSE",
+    "RoomId": "PFT_1100"
+  },
+  {
+    "Name": "CSC_3200",
+    "CourseCode": "CSC 3200",
+    "CourseTitle": "ETHICS IN COMPUTING",
+    "DepartmentId": "DEPT_CSE",
+    "RoomId": "PFT_1100"
   }
 ]

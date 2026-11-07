@@ -82,7 +82,7 @@ bool FPFTExplorationTest::RunTest(const FString& Parameters)
     {
         if (auto* Search = Cast<UEditableTextBox>(Item))
         {
-            Search->SetText(FText::FromString(TEXT("CSC 3380")));
+            Search->SetText(FText::FromString(TEXT("CSC 1350")));
             Search->OnTextChanged.Broadcast(Search->GetText());
         }
     }
@@ -100,7 +100,7 @@ bool FPFTExplorationTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("Course search produces one button"), ResultCount, 1);
     TestTrue(TEXT("Click selects course destination"), World->GetSubsystem<UPFTDestinations>()->ActiveMarker == Marker);
     TestTrue(TEXT("Selected details show floor"), Details->GetText().ToString().Contains(TEXT("Floor 1")));
-    TestTrue(TEXT("Selected details show course"), Details->GetText().ToString().Contains(TEXT("CSC 3380")));
+    TestTrue(TEXT("Selected details show course"), Details->GetText().ToString().Contains(TEXT("CSC 1350")));
     TestTrue(TEXT("Bound room enables view"), ViewButton->GetIsEnabled());
     if (!TestTrue(TEXT("View selected room"), Exploration->ViewRoom()))
     {

@@ -9,7 +9,7 @@ We're focused on the first floor right now. First floor room types are from the 
 
 The third floor offices, faculty, and departments are only in here so they're ready once we finish the first floor. The faculty list is from the [CSE faculty page](https://www.lsu.edu/eng/cse/people/faculty/index.php) and the department offices are from each department's contact page. Only faculty with an office in PFT are included.
 
-Courses are still placeholder data until we find where classes actually meet.
+Courses are Fall 2026 CSC lecture sections that meet in PFT, from LSU's [Course Offerings](https://courseofferings.lsu.edu/LSU) (checked November 2026). Titles are written the way that site lists them. This isn't every class in PFT yet, only the CSC sections we've checked so far, so more can be added the same way.
 
 Each office's DisplayName has the professor's name or the department in it, like `PFT 3209B - James Ghawaly`. That way searching a name in the app already finds their office, even before faculty search is added. If someone changes offices, update both `faculty.json` and their room in `rooms.json`.
 
@@ -35,9 +35,9 @@ The rooms from our [design scope](design.md) are in `rooms.json`. If a room has 
 ## courses.json
 | Field | Example |
 |---|---|
-| Name | `CSC_3380` |
-| CourseCode | `"CSC 3380"` |
-| CourseTitle | `"Object-Oriented Design"` |
+| Name | `CSC_1350` |
+| CourseCode | `"CSC 1350"` |
+| CourseTitle | `"COMP SCI I-MJRS"` |
 | DepartmentId | `DEPT_CSE` (from departments.json) |
 | RoomId | `PFT_1200` (from rooms.json) |
 
@@ -58,7 +58,7 @@ must point to existing rows. Keep room numbers as strings to preserve formatting
 
 Task 3 reuses the team's existing schema and placeholder rows. The validator
 also rejects malformed JSON, wrong row/field types, blank strings, duplicate room
-numbers, and broken references. Placeholder courses do not represent verified
-class schedules. Runtime loading and room bindings are separate tasks.
+numbers, and broken references. Course rows only say which room a class
+meets in, not its section or meeting times. Runtime loading and room bindings are separate tasks.
 
 Run `python tools/validate_data.py` after changing anything in here.
