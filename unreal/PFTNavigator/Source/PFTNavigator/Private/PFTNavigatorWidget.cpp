@@ -128,7 +128,9 @@ void UPFTNavigatorWidget::RefreshResults()
         Button->Panel = this;
         auto* Label = WidgetTree->ConstructWidget<UTextBlock>();
         const auto* Room = Directory->FindRoom(Entries[Index].RoomId);
-        Label->SetText(FText::FromString(FString::Printf(TEXT("%s | Floor %d"), *Entries[Index].Label, Room->Floor)));
+        Button->ResultText = FString::Printf(TEXT("%s | Floor %d"), *Entries[Index].Label, Room->Floor);
+        Button->Label = Label;
+        Label->SetText(FText::FromString(Button->ResultText));
         Label->SetAutoWrapText(true);
         Label->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Regular"), 14));
         Label->SetColorAndOpacity(FSlateColor(FLinearColor(PFTPalette::Ink)));
@@ -136,6 +138,7 @@ void UPFTNavigatorWidget::RefreshResults()
         Button->OnClicked.AddDynamic(Button, &UPFTSearchButton::SelectRoom);
         Results->AddChild(Button);
     }
+    UpdateSelectedTags();
     FString Message = Entries.IsEmpty() ? TEXT("No matches on this floor. Try another floor or search.") : FString::Printf(TEXT("%d results (up to 50 shown)."), Entries.Num());
     if (!Directory->Error.IsEmpty()) Message = Directory->Error;
     Status->SetText(FText::FromString(Message));
@@ -151,6 +154,8 @@ void UPFTNavigatorWidget::ChooseRoom(const FString& RoomId)
         Status->SetText(FText::FromString(TEXT("This room is no longer in the directory.")));
         return;
     }
+    SelectedRoomId = RoomId;
+    UpdateSelectedTags();
     auto* Destinations = GetWorld()->GetSubsystem<UPFTDestinations>();
     const bool bHasLocation = Destinations->HasLocation(RoomId);
     const bool bSelected = bHasLocation && Destinations->SelectRoom(RoomId);
@@ -165,10 +170,30 @@ void UPFTNavigatorWidget::ChooseRoom(const FString& RoomId)
 void UPFTNavigatorWidget::ClearRoom()
 {
     GetWorld()->GetSubsystem<UPFTDestinations>()->ClearSelection();
+    SelectedRoomId.Empty();
+    UpdateSelectedTags();
     Details->SetText(FText::FromString(TEXT("Select a room to see its details.")));
     ViewButton->SetIsEnabled(false);
     ClearButton->SetIsEnabled(false);
     Status->SetText(FText::FromString(TEXT("Room selection cleared.")));
+}
+
+// Puts a gold "Selected" tag on every result that points at the selected room.
+// It runs after the list is rebuilt and whenever the selection changes, so the tag
+// stays on the right room when you search or switch floors.
+// No params. Result: selected results start with "Selected | " and have a gold background,
+// everything else goes back to normal.
+void UPFTNavigatorWidget::UpdateSelectedTags()
+{
+    for (auto* Child : Results->GetAllChildren())
+    {
+        auto* Button = Cast<UPFTSearchButton>(Child);
+        if (!Button || !Button->Label) continue;
+        const bool bSelected = !SelectedRoomId.IsEmpty() && Button->RoomId == SelectedRoomId;
+        const FString Text = bSelected ? TEXT("Selected | ") + Button->ResultText : Button->ResultText;
+        Button->Label->SetText(FText::FromString(Text));
+        Button->SetBackgroundColor(bSelected ? FLinearColor(PFTPalette::Gold) : FLinearColor::White);
+    }
 }
 
 void UPFTNavigatorWidget::ToggleExplore()

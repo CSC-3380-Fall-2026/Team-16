@@ -92,7 +92,9 @@ and room number. Searches preserve their result order, and up to 50 are shown.
 Selecting a result shows the room number, floor, room type, and department offices, faculty, and any courses
 assigned in the directory. Unbound rooms still show their details, but
 **View selected room** stays disabled. **Clear selected room** hides the marker
-and clears the details without moving the camera. Scroll the panel to reach
+and clears the details without moving the camera. Results for the selected room get
+a gold **Selected** tag that stays when you search or change floors and goes away
+when you clear the room. Scroll the panel to reach
 controls when the details take more space. Course assignments remain placeholders.
 
 ## Colors

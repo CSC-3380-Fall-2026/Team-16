@@ -17,6 +17,9 @@ class UPFTSearchButton : public UButton
 public:
     UPROPERTY() FString RoomId;
     UPROPERTY() TObjectPtr<class UPFTNavigatorWidget> Panel;
+    // The result's normal text and label, kept so the Selected tag can be added and removed
+    UPROPERTY() FString ResultText;
+    UPROPERTY() TObjectPtr<UTextBlock> Label;
     UFUNCTION() void SelectRoom();
 };
 
@@ -34,6 +37,7 @@ private:
     UFUNCTION() void FloorChanged(FString Floor, ESelectInfo::Type SelectionType);
     UFUNCTION() void ClearRoom();
     void RefreshResults();
+    void UpdateSelectedTags();
     UFUNCTION() void ToggleExplore();
     UFUNCTION() void Fly();
     UFUNCTION() void ViewRoom();
@@ -45,4 +49,6 @@ private:
     UPROPERTY() TObjectPtr<UButton> ClearButton;
     UPROPERTY() TObjectPtr<UTextBlock> ExploreLabel;
     UPROPERTY() TObjectPtr<UScrollBox> Results;
+    // Room that's currently picked, empty when nothing is selected
+    FString SelectedRoomId;
 };
