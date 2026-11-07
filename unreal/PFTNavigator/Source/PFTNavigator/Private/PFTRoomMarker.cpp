@@ -1,4 +1,5 @@
 #include "PFTRoomMarker.h"
+#include "PFTPalette.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Engine/StaticMesh.h"
@@ -19,7 +20,8 @@ APFTRoomMarker::APFTRoomMarker()
     Label->SetRelativeLocation(FVector(0, 0, 150));
     Label->SetWorldSize(70);
     Label->SetHorizontalAlignment(EHTA_Center);
-    Label->SetTextRenderColor(FColor::Yellow);
+    // Gold is the "selected room" color in Claire's design, and a marker only shows for the selected room
+    Label->SetTextRenderColor(PFTPalette::Gold);
     SetSelected(false);
 }
 

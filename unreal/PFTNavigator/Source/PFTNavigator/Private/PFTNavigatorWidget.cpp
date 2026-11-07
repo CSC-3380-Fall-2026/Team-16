@@ -2,6 +2,7 @@
 #include "PFTDirectory.h"
 #include "PFTDestinations.h"
 #include "PFTExploration.h"
+#include "PFTPalette.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/EditableTextBox.h"
@@ -23,7 +24,8 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     if (WidgetTree->RootWidget) return Super::RebuildWidget();
     auto* Border = WidgetTree->ConstructWidget<UBorder>();
     Border->SetPadding(FMargin(14));
-    Border->SetBrushColor(FLinearColor(0.025f, 0.035f, 0.06f, 0.96f));
+    // Light background so the ink text and purple buttons from the LSU palette are easy to read
+    Border->SetBrushColor(FLinearColor(FColor(255, 255, 255, 245)));
     WidgetTree->RootWidget = Border;
     auto* PanelScroll = WidgetTree->ConstructWidget<UScrollBox>();
     Border->SetContent(PanelScroll);
@@ -35,17 +37,21 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
         Label->SetText(FText::FromString(Text));
         Label->SetAutoWrapText(true);
         Label->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Regular"), 14));
+        Label->SetColorAndOpacity(FSlateColor(FLinearColor(PFTPalette::Ink)));
         Column->AddChild(Label);
         return Label;
     };
-    AddText(TEXT("PFT Navigator"))->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), 20));
+    // The heading is purple like the rest of the controls in Claire's design
+    auto* Title = AddText(TEXT("PFT Navigator"));
+    Title->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), 20));
+    Title->SetColorAndOpacity(FSlateColor(FLinearColor(PFTPalette::Purple)));
     AddText(TEXT("Sample course data"));
     Search = WidgetTree->ConstructWidget<UEditableTextBox>(UEditableTextBox::StaticClass(), TEXT("RoomSearch"));
     auto Style = Search->GetWidgetStyle();
     Style.TextStyle.SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Regular"), 16));
-    Style.TextStyle.SetColorAndOpacity(FSlateColor(FLinearColor::Black));
+    Style.TextStyle.SetColorAndOpacity(FSlateColor(FLinearColor(PFTPalette::Ink)));
     Search->SetWidgetStyle(Style);
-    Search->SetForegroundColor(FLinearColor::Black);
+    Search->SetForegroundColor(FLinearColor(PFTPalette::Ink));
     Search->SetHintText(FText::FromString(TEXT("1200, CSC 3380, or CSE")));
     Search->OnTextChanged.AddDynamic(this, &UPFTNavigatorWidget::SearchChanged);
     Column->AddChild(Search);
@@ -74,7 +80,9 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
         Label = WidgetTree->ConstructWidget<UTextBlock>();
         Label->SetText(FText::FromString(Text));
         Label->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Regular"), 14));
-        Label->SetColorAndOpacity(FSlateColor(FLinearColor::Black));
+        // Control buttons are LSU purple with white text so they stand out from the results
+        Label->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+        Button->SetBackgroundColor(FLinearColor(PFTPalette::Purple));
         Button->SetContent(Label);
         Column->AddChild(Button);
         return Button;
@@ -123,7 +131,7 @@ void UPFTNavigatorWidget::RefreshResults()
         Label->SetText(FText::FromString(FString::Printf(TEXT("%s | Floor %d"), *Entries[Index].Label, Room->Floor)));
         Label->SetAutoWrapText(true);
         Label->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Regular"), 14));
-        Label->SetColorAndOpacity(FSlateColor(FLinearColor::Black));
+        Label->SetColorAndOpacity(FSlateColor(FLinearColor(PFTPalette::Ink)));
         Button->SetContent(Label);
         Button->OnClicked.AddDynamic(Button, &UPFTSearchButton::SelectRoom);
         Results->AddChild(Button);

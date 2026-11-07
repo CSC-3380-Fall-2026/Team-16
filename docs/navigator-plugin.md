@@ -95,6 +95,12 @@ assigned in the directory. Unbound rooms still show their details, but
 and clears the details without moving the camera. Scroll the panel to reach
 controls when the details take more space. Course assignments remain placeholders.
 
+## Colors
+
+The panel and the room marker use Claire's LSU palette from [the design doc](design.md):
+purple for the heading and control buttons, ink for text, and gold for the selected
+room's marker label. The colors are all in `Private/PFTPalette.h`, so change them there.
+
 ## Verification
 
 Run `python -m unittest discover -s tools` and `python tools/validate_data.py`.
