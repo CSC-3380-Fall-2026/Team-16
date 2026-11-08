@@ -28,7 +28,7 @@ The default editor map and game map are `/Game/Level/PFTFirstFloor`. Packaging
 cooks this map and its dependencies instead of cooking every map in the project.
 The complete twin remains at `/Game/Level/PatrickFTaylorHall` for editing.
 
-`CreateFirstFloorLevel.py` copies the first-floor data layer, first-floor room
+`create_first_floor_level.py` copies the first-floor data layer, first-floor room
 volumes, shared lighting, and unfiled static meshes within the first-floor room
 height range. Floors 2–4, the roof, MEP, campus scenery, and the full-building HLODs
 are excluded. Shared meshes and tall structural elements are kept whole.
@@ -41,8 +41,8 @@ twin are removed from the lightweight copy.
 
 ## Create or update the lightweight map
 
-The GitHub copies are `tools/CreateFirstFloorLevel.py`,
-`tools/VerifyFirstFloorLevel.py`, and `tools/test_first_floor_level.py`. The shelf
+The GitHub copies are `tools/create_first_floor_level.py`,
+`tools/verify_first_floor_level.py`, and `tools/test_first_floor_level.py`. The shelf
 installs matching copies under the Unreal project's `Tools` directory. After
 changing these scripts, check out the existing project copies with `p4 edit`
 before copying updates into that directory.
@@ -52,11 +52,13 @@ Run from the project directory with Unreal Editor closed:
 ```powershell
 & 'C:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' `
   "$PWD\PFTDigitalTwin.uproject" /Engine/Maps/Entry `
-  "-ExecutePythonScript=$PWD\Tools\CreateFirstFloorLevel.py --dry-run" `
+  "-ExecutePythonScript=$PWD\Tools\create_first_floor_level.py --dry-run" `
   -unattended -nullrhi -RenderOffscreen -nosplash -nop4 -nosound
 ```
 
 Read `Saved/FirstFloorBuild.json` to review the selected counts and height range.
+Report fields use PascalCase, including `SelectedActors` and `SourceRoomIds`.
+The tools also accept build reports produced with the earlier snake_case fields.
 Remove `--dry-run` to create the geometry. After that editor process exits, run
 the same command with `--finish` instead of `--dry-run` to add the destinations.
 The two passes use separate editor processes so Unreal can release the temporary
@@ -86,7 +88,7 @@ Check the saved map and its dependency graph without opening the full twin:
 ```powershell
 & 'C:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' `
   "$PWD\PFTDigitalTwin.uproject" -run=PythonScript `
-  "-script=$PWD\Tools\VerifyFirstFloorLevel.py" `
+  "-script=$PWD\Tools\verify_first_floor_level.py" `
   -unattended -nullrhi -nosplash -nop4 -nosound
 ```
 
