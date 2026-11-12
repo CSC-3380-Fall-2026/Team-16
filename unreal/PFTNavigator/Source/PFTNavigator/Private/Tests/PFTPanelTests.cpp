@@ -250,16 +250,9 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
         TestEqual(TEXT("Enter leaves multiple matches unselected"), GetTaggedRooms(Panel).Num(), 0);
 
         SetSearch(Panel, TEXT("CSC 1350"));
-        TestTrue(TEXT("Enter selects a single result"), PressEnter());
+        TestTrue(TEXT("Enter opens the single result"), PressEnter());
         TestTrue(TEXT("The keyboard selects PFT 1200"), GetTaggedRooms(Panel).Contains(TEXT("PFT_1200")));
-        TestEqual(TEXT("The first Enter keeps the original pawn"), Player->GetPawn(), OriginalPawn);
-        return true;
-    }));
-    ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
-    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Player]()
-    {
-        TestTrue(TEXT("Enter is handled for the selected result"), PressEnter());
-        TestNotNull(TEXT("The second Enter opens the preview"), Cast<APFTExplorePawn>(Player->GetPawn()));
+        TestNotNull(TEXT("Enter opens the room preview"), Cast<APFTExplorePawn>(Player->GetPawn()));
         return true;
     }));
     ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));

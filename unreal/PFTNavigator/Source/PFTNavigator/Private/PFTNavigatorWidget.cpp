@@ -152,7 +152,7 @@ void UPFTNavigatorWidget::RefreshResults()
     UpdateSelectedTags();
     FString Message = FString::Printf(TEXT("%d results (up to 50 shown)."), Entries.Num());
     if (Entries.IsEmpty()) Message = TEXT("No matches. Try another floor or search.");
-    if (Entries.Num() == 1) Message = TEXT("Press Enter in search to select the result.");
+    if (Entries.Num() == 1) Message = TEXT("Press Enter in search to open the result.");
     if (!Directory->Error.IsEmpty()) Message = Directory->Error;
     Status->SetText(FText::FromString(Message));
 }
@@ -254,14 +254,9 @@ FReply UPFTNavigatorWidget::NativeOnPreviewKeyDown(const FGeometry& Geometry, co
     if (Event.GetKey() == EKeys::Enter && (Search->HasKeyboardFocus() || Search->HasFocusedDescendants()))
     {
         if (Event.IsRepeat() || Results->GetChildrenCount() != 1) return FReply::Handled();
-        auto* Result = CastChecked<UPFTSearchButton>(Results->GetChildAt(0));
-        if (SelectedRoomId == Result->RoomId && ViewButton->GetIsEnabled())
-        {
-            ViewRoom();
-            return FReply::Handled();
-        }
-        ChooseRoom(Result->RoomId);
-        if (ViewButton->GetIsEnabled()) Status->SetText(FText::FromString(TEXT("Room selected. Press Enter to preview.")));
+        const FString RoomId = CastChecked<UPFTSearchButton>(Results->GetChildAt(0))->RoomId;
+        ChooseRoom(RoomId);
+        if (SelectedRoomId == RoomId && ViewButton->GetIsEnabled()) ViewRoom();
         return FReply::Handled();
     }
     auto* Exploration = GetWorld()->GetSubsystem<UPFTExploration>();

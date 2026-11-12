@@ -64,8 +64,8 @@ tag on the local player controller and clearing it when the screen closes.
 Search by room number, course code/title, or department, then select a result to show its room
 info (name, type, floor, offices, and classes) and its marker. Rooms with no map
 location yet still show their info with "Map location not available yet."
-Press Enter in the search box when there is one result to select it. For a room
-with a map location, press Enter again to open its preview.
+Press Enter in the search box when there is one result to open its preview.
+For a room without a map location, Enter shows its directory details.
 **View selected room** moves the exploration camera near that marker. Unbound
 rooms show an explanation and never move the camera to an invented location.
 
