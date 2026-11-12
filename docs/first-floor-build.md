@@ -36,7 +36,8 @@ The finishing pass disables shadows on point, spot, and rect fixtures to reduce
 render-thread work while retaining their light and the sun's directional shadow.
 It also gives typical fixtures a 60-metre draw limit with a 12-metre fade. Wider
 fixtures get a longer limit based on their attenuation radius, and shorter
-authored limits are kept.
+authored limits are kept. The Windows launcher uses these distances even with
+its low shadow quality setting.
 The selection retains ambiguous upper-floor meshes and drops known furnishing
 and equipment categories outside the first-floor height band. It also omits
 the source map's unloaded MEP and cinematic layers, distant campus meshes,
