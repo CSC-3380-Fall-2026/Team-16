@@ -13,6 +13,7 @@ from create_first_floor_level import (
     MAIN_HALLWAY_FLOOR, OUTPUT_MAP, baked_terrain_textures, local_lights, missing_material_assets,
     read_build_report, write_report,
 )
+from first_floor_destinations import check_room_markers
 
 
 MAP = OUTPUT_MAP
@@ -130,6 +131,7 @@ def verification_report(world, actors, visited, paths):
     if any(actor.get_actor_label() == CAMPUS_ROAD_OVERLAY for actor in actors):
         errors.append("Output includes the elevated campus road overlay")
     errors.extend(check_entrance_terrain(actors, visited))
+    errors.extend(check_room_markers(actors, markers))
     report_path = Path(unreal.Paths.project_saved_dir(), "FirstFloorBuild.json")
     errors.extend(check_room_ids(rooms, report_path))
     return {

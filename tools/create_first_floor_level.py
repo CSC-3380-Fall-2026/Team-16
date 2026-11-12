@@ -5,6 +5,7 @@ import collections
 import json
 from pathlib import Path
 import re
+import sys
 
 import unreal
 
@@ -138,39 +139,6 @@ def missing_material_assets():
     """Return the required material and texture assets missing from the workspace."""
     asset_editor = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
     return [path for path in REQUIRED_MATERIAL_ASSETS if not asset_editor.does_asset_exist(path)]
-
-
-def first_floor_bindings():
-    """Return source-map bindings for directory rooms assigned to the first floor."""
-    folder = Path(unreal.Paths.project_plugins_dir()) / "PFTNavigator" / "Content" / "Data"
-    rooms = json.loads((folder / "rooms.json").read_text(encoding="utf-8-sig"))
-    bindings = json.loads((folder / "room_bindings.json").read_text(encoding="utf-8-sig"))
-    floor_ids = {room["Name"] for room in rooms if room["Floor"] == 1}
-    return [
-        binding for binding in bindings
-        if binding["Map"] == SOURCE_MAP and binding["RoomId"] in floor_ids
-    ]
-
-
-def add_room_markers():
-    """Add missing first-floor destinations to the active map; return the total count."""
-    subsystem = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
-    existing = {
-        actor.get_editor_property("room_id") for actor in subsystem.get_all_level_actors()
-        if isinstance(actor, unreal.PFTRoomMarker)
-    }
-    bindings = first_floor_bindings()
-    for binding in bindings:
-        if binding["RoomId"] in existing:
-            continue
-        position = binding["Location"]
-        location = unreal.Vector(position["X"], position["Y"], position["Z"])
-        marker = subsystem.spawn_actor_from_class(unreal.PFTRoomMarker, location)
-        if not marker:
-            raise RuntimeError(f"Could not create marker for {binding['RoomId']}")
-        marker.set_editor_property("room_id", binding["RoomId"])
-        marker.set_actor_label(f"Destination_{binding['RoomId']}")
-    return len(bindings)
 
 
 def restore_room_ids(actors, room_ids):
@@ -377,13 +345,17 @@ def generate_map(output, report_path, dry_run):
 
 def finish_saved_map(output, report_path):
     """Finish saved geometry using its build report, then save markers and source IDs."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from first_floor_destinations import add_room_markers
+
     report = read_build_report(report_path)
     if report["Output"] != output:
         raise RuntimeError("The generation report belongs to a different output map")
     world = unreal.EditorLoadingAndSavingUtils.load_map(output)
     if not world:
         raise RuntimeError("Generate the first-floor geometry before running --finish")
-    report["RoomMarkers"] = add_room_markers()
+    unreal.SystemLibrary.execute_console_command(world, "Editor.AsyncStaticMeshCompilationFinishAll")
+    report["RoomMarkers"] = add_room_markers(world)
     cleared_templates, disabled_shadows = finish_map(report["SourceRoomIds"])
     report["ClearedImportTemplates"] = cleared_templates
     report["FixtureShadowsDisabled"] = disabled_shadows
