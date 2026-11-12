@@ -21,12 +21,17 @@ void UPFTExploration::Tick(float DeltaTime)
     if (Widget || !GetWorld()->HasBegunPlay() || IsRunningDedicatedServer()) return;
     auto* Player = GetWorld()->GetFirstPlayerController();
     if (!Player || !Player->IsLocalPlayerController()) return;
+    // The welcome screen owns the cursor until the twin removes this tag.
+    static const FName OnboardingActiveTag(TEXT("PFTOnboardingActive"));
+    if (Player->ActorHasTag(OnboardingActiveTag)) return;
     Widget = CreateWidget<UPFTNavigatorWidget>(Player, UPFTNavigatorWidget::StaticClass());
     Widget->AddToViewport(20);
     Widget->SetPositionInViewport(FVector2D(24, 108));
     Widget->SetDesiredSizeInViewport(FVector2D(360, 500));
     Player->bShowMouseCursor = true;
-    Player->SetInputMode(FInputModeGameAndUI());
+    FInputModeGameAndUI Mode;
+    Mode.SetHideCursorDuringCapture(false);
+    Player->SetInputMode(Mode);
 }
 
 bool UPFTExploration::BeginExplore()
