@@ -36,6 +36,8 @@ The finishing pass replaces checkerboard slots on the lounge seating and tables,
 the C1003 wall, floor pieces in rooms 1221 and 1363, the Panera soda fountain,
 foundation slabs, and nearby paving. It uses existing building materials on the
 demo's mesh components and preserves material assignments that already work.
+Retained upper-floor meshes also get matching finishes on the floor pieces,
+chairs, cushions, couches, and lab benches where slots are blank or checkered.
 The finishing pass disables shadows on point, spot, and rect fixtures to reduce
 render-thread work while retaining their light and the sun's directional shadow.
 It also gives typical fixtures a 60-metre draw limit with a 12-metre fade. Wider
@@ -108,8 +110,8 @@ directory.
 
 Results are written to `Saved/FirstFloorVerification.json`. This checks loading,
 room preview coverage and positions, references, fixture shadows and draw limits,
-known checkerboard slots, and material dependencies. Rendered gameplay and
-packaging need separate checks.
+checkerboard and unassigned static-mesh slots, and material dependencies.
+Rendered gameplay and packaging need separate checks.
 
 For a selection preview, run `create_first_floor_level.py --dry-run` with
 `-ExecutePythonScript` in the editor. Read `FirstFloorSelection.json` in the

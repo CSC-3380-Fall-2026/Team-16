@@ -15,7 +15,7 @@ from create_first_floor_level import (
     map_report_path, missing_material_assets, read_map_build_report, valid_output_map, write_report,
 )
 from first_floor_destinations import check_room_markers
-from first_floor_materials import checkerboard_slots
+from first_floor_materials import fallback_material_slots, replacement_material
 
 
 MAP = OUTPUT_MAP
@@ -133,9 +133,13 @@ def verification_report(world, actors, visited, paths, map_path=MAP):
     missing_materials = missing_material_assets()
     if missing_materials:
         errors.append("Missing material dependencies; sync both shared plugins and the project material assets")
-    checkerboard_count = sum(1 for _ in checkerboard_slots(actors))
+    fallbacks = list(fallback_material_slots(actors))
+    checkerboard_count = sum(material is not None for _, _, _, material in fallbacks)
+    unassigned_count = len(fallbacks) - checkerboard_count
     if checkerboard_count:
-        errors.append(f"{checkerboard_count} mapped surfaces still use the checkerboard material")
+        errors.append(f"{checkerboard_count} mesh slots still use the checkerboard material")
+    if unassigned_count:
+        errors.append(f"{unassigned_count} mesh slots have no material assigned")
     if not any(actor.get_actor_label() == MAIN_HALLWAY_FLOOR for actor in actors):
         errors.append("Missing the original main hallway floor")
     if any(actor.get_actor_label() == CAMPUS_ROAD_OVERLAY for actor in actors):
@@ -150,7 +154,12 @@ def verification_report(world, actors, visited, paths, map_path=MAP):
         "Classes": dict(classes),
         "DependencyPackages": len(visited),
         "MissingMaterialDependencies": missing_materials,
-        "MappedCheckerboardSlots": checkerboard_count,
+        "MappedCheckerboardSlots": sum(
+            material is not None and replacement_material(mesh_path, index) is not None
+            for _, mesh_path, index, material in fallbacks
+        ),
+        "CheckerboardMaterialSlots": checkerboard_count,
+        "UnassignedMaterialSlots": unassigned_count,
         "ShadowCastingFixtures": shadowed_fixtures,
         "FixturesWithDrawLimits": len(fixtures) - fixtures_without_limits,
         "FullTwinDependencies": forbidden,

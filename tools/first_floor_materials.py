@@ -1,4 +1,4 @@
-"""Restore known checkerboard surfaces with materials already used in the building."""
+"""Restore missing surfaces with materials already used in the building."""
 
 import unreal
 
@@ -8,6 +8,7 @@ SHARED = "/Game/MaterialInstances/Shared"
 HARDSCAPING = "/Game/MaterialInstances/Outdoors/Hardscaping"
 MESHES = "/Game/StaticMeshes"
 COUCHES = f"{MESHES}/Shared/Furniture/DeanSuiteFurniture/CommonAreaCouch"
+UPPER_FLOOR_CARPET = f"{SHARED}/Flooring/MI_GrayCarpet_Dark_2_WS"
 
 MATERIALS = {
     f"{MESHES}/Shared/Furniture/SM_SecondFloor_CommonArea_Table": {
@@ -37,11 +38,26 @@ MATERIALS = {
     f"{MESHES}/Outdoors/SideWalks/SM_ParkingLot_01": {
         0: f"{HARDSCAPING}/MI_DestroyedRoad",
     },
+    f"{MESHES}/2ndFloor/Zone2200/2203/SM_FloorPiece_2203D": {
+        0: f"{SHARED}/Flooring/MI_TerrazoWS",
+    },
+    f"{MESHES}/3rdFloor/Zone3200/3201/SM_3201_FloorPiece_02": {0: UPPER_FLOOR_CARPET},
+    f"{MESHES}/3rdFloor/Zone3200/3202/SM_3202FloorPiece_03": {0: UPPER_FLOOR_CARPET},
+    f"{MESHES}/Shared/Furniture/DeanSuiteFurniture/SM_DeanConferenceTableChair": {
+        0: "/Game/MaterialInstances/2ndFloor/Zone2200/2214A/MI_DeanConferenceRoomPack",
+    },
+    f"{MESHES}/Shared/Furniture/SM_Cushion": {1: f"{SHARED}/Walls/MI_Gray_01"},
+    f"{MESHES}/Shared/Furniture/DeanSuiteFurniture/SM_DeansSuiteCouch": {
+        1: f"{SHARED}/Plastic/MI_GrayPlastic3",
+    },
+    f"{MESHES}/RevitBuildoutModels/Casework_Lab_Bench_-_TB_TB-60": {
+        0: f"{SHARED}/Walls/MI_Gray_01",
+    },
 }
 
 
-def checkerboard_slots(actors):
-    """Find replaceable material slots on the standalone map's mesh components."""
+def fallback_material_slots(actors):
+    """Yield the component, mesh path, index, and material for each fallback slot."""
     for actor in actors:
         if not isinstance(actor, unreal.StaticMeshActor):
             continue
@@ -50,20 +66,28 @@ def checkerboard_slots(actors):
         if not mesh:
             continue
         path = mesh.get_path_name().split(".", 1)[0]
-        materials = MATERIALS.get(path, {})
-        if path.startswith(f"{MESHES}/Foundation/SM_Slab"):
-            materials = {0: f"{SHARED}/Cement/MI_Concrete"}
-        elif path.lower().startswith(f"{MESHES}/Outdoors/SideWalks/SM_Sidewalk_".lower()):
-            materials = {0: f"{HARDSCAPING}/MI_GravelConcrete"}
-        for index, replacement in materials.items():
+        for index in range(component.get_num_materials()):
             material = component.get_material(index)
-            if material and material.get_path_name() == WORLD_GRID:
-                yield component, index, replacement
+            if material is None or material.get_path_name() == WORLD_GRID:
+                yield component, path, index, material
+
+
+def replacement_material(mesh_path, index):
+    """Return the matching building material for a known mesh slot."""
+    if index == 0 and mesh_path.startswith(f"{MESHES}/Foundation/SM_Slab"):
+        return f"{SHARED}/Cement/MI_Concrete"
+    if index == 0 and mesh_path.lower().startswith(f"{MESHES}/Outdoors/SideWalks/SM_Sidewalk_".lower()):
+        return f"{HARDSCAPING}/MI_GravelConcrete"
+    return MATERIALS.get(mesh_path, {}).get(index)
 
 
 def restore_surface_materials(actors):
-    """Override only checkerboard slots, leaving shared meshes and valid overrides alone."""
-    slots = list(checkerboard_slots(actors))
+    """Fill known fallback slots on map components and return the repair count."""
+    slots = []
+    for component, mesh_path, index, _ in fallback_material_slots(actors):
+        replacement = replacement_material(mesh_path, index)
+        if replacement:
+            slots.append((component, index, replacement))
     materials = {}
     for path in sorted({path for _, _, path in slots}):
         material = unreal.load_asset(path)
