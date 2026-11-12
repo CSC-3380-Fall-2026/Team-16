@@ -11,12 +11,14 @@ from unittest import mock
 
 sys.modules.setdefault("unreal", types.ModuleType("unreal"))
 from create_first_floor_level import (
-    FLOOR_LAYER, clear_import_templates, read_build_report, select_actors, write_report,
+    CAMPUS_ROAD_OVERLAY, FLOOR_LAYER, MAIN_HALLWAY_FLOOR, REQUIRED_MATERIAL_ASSETS, clear_import_templates,
+    disable_fixture_shadows, load_selected_actors, missing_material_assets, read_build_report,
+    select_actors, write_report,
 )
 from verify_first_floor_level import MAP, SOURCE, find_dependencies
 
 
-def actor(label, layer="", kind="StaticMeshActor", low=0, high=100, editor_only=False):
+def actor(label, layer="", kind="StaticMeshActor", low=0, high=100, editor_only=False, x=0):
     """Return a fake actor descriptor with the supplied layer, type, and height bounds."""
     path = SimpleNamespace(export_text=lambda: layer)
     return SimpleNamespace(
@@ -24,7 +26,9 @@ def actor(label, layer="", kind="StaticMeshActor", low=0, high=100, editor_only=
         native_class=SimpleNamespace(get_name=lambda: kind),
         data_layer_assets=[path] if layer else [],
         actor_is_editor_only=editor_only,
-        bounds=SimpleNamespace(min=SimpleNamespace(z=low), max=SimpleNamespace(z=high)),
+        bounds=SimpleNamespace(
+            min=SimpleNamespace(x=x, y=0, z=low), max=SimpleNamespace(x=x + 100, y=100, z=high),
+        ),
     )
 
 
@@ -34,21 +38,23 @@ class FirstFloorSelectionTests(unittest.TestCase):
         """Create a first-floor room descriptor shared by the selection tests."""
         self.room = actor("Room1100", FLOOR_LAYER, "PFTAreaTriggers", 0, 400)
 
-    def test_upper_floors_roof_and_mep_are_excluded(self):
-        """Reject actors in each upper-floor, roof, or mechanical-services layer."""
-        excluded = [
-            actor(name, f"/Game/DataLayers/{name}.{name}")
-            for name in ("Floor2", "Floor3", "Floor4", "Roof", "MEP")
-        ]
-        selected, _ = select_actors([self.room] + excluded)
-        self.assertEqual([self.room], selected)
+    def test_building_structure_is_retained_across_floors(self):
+        """Keep upper architecture and roof meshes while excluding hidden services and upper desks."""
+        upper_wall = actor("Walls_CurtainWall", "/Game/DataLayers/Floor2.Floor2", low=500, high=800)
+        roof = actor("Roof", "/Game/DataLayers/Roof.Roof", low=1500, high=1600)
+        desk = actor("Furniture_Desk", "/Game/DataLayers/Floor2.Floor2", low=500, high=600)
+        duct = actor("Duct", "/Game/DataLayers/MEP.MEP")
+        selected, _ = select_actors([self.room, upper_wall, roof, desk, duct])
+        self.assertEqual([self.room, upper_wall, roof], selected)
 
-    def test_unfiled_and_unlayered_geometry_use_first_floor_height(self):
-        """Keep unfiled ground-floor geometry and reject unlayered upper-floor geometry."""
-        ground = actor("GroundWall", "/Game/DataLayers/ToBeFiled.ToBeFiled", low=0, high=350)
-        upper = actor("UpperWall", low=900, high=1200)
-        selected, _ = select_actors([self.room, ground, upper])
-        self.assertEqual([self.room, ground], selected)
+    def test_unfiled_structure_and_nearby_scenery_are_retained(self):
+        """Keep shared geometry and entrance scenery without copying distant campus meshes."""
+        tall_wall = actor("TallWall", "/Game/DataLayers/ToBeFiled.ToBeFiled", low=0, high=1200)
+        entrance = actor("EntranceSlab", low=-150, high=-60)
+        tree = actor("Tree", "/Game/DataLayers/Landscapes.Landscapes", x=500)
+        distant_building = actor("CampusBuilding", "/Game/DataLayers/OtherLSUBuildings.OtherLSUBuildings", x=5000)
+        selected, _ = select_actors([self.room, tall_wall, entrance, tree, distant_building])
+        self.assertEqual([self.room, tall_wall, entrance, tree], selected)
 
     def test_shared_lighting_and_room_volumes_are_kept(self):
         """Retain shared lighting and first-floor rooms without copying upper-floor rooms."""
@@ -59,6 +65,19 @@ class FirstFloorSelectionTests(unittest.TestCase):
         )
         selected, _ = select_actors([self.room, light, room, upper_room])
         self.assertEqual([self.room, light, room], selected)
+
+    def test_main_hallway_floor_group_is_kept(self):
+        """Keep the original hallway floor even though its meshes are grouped on an Actor."""
+        floor = actor(MAIN_HALLWAY_FLOOR, kind="Actor", low=10, high=10)
+        selected, _ = select_actors([self.room, floor])
+        self.assertEqual([self.room, floor], selected)
+
+    def test_campus_road_overlay_is_excluded(self):
+        """Keep the entrance sidewalk while dropping the elevated campus-wide road mesh."""
+        road = actor(CAMPUS_ROAD_OVERLAY, "/Game/DataLayers/LSUCampusWide.LSUCampusWide", low=1177, high=1202)
+        sidewalk = actor("SM_Sidewalk_03", "/Game/DataLayers/Landscapes.Landscapes", low=-15, high=0)
+        selected, _ = select_actors([self.room, road, sidewalk])
+        self.assertEqual([self.room, sidewalk], selected)
 
     def test_editor_only_actors_are_excluded(self):
         """Reject editor helpers even when they belong to the first-floor layer."""
@@ -74,6 +93,31 @@ class FirstFloorSelectionTests(unittest.TestCase):
         """Reject room volumes that have no accompanying first-floor layer content."""
         with self.assertRaises(RuntimeError):
             select_actors([actor("Room1100", kind="PFTAreaTriggers")])
+
+    def test_actor_loader_enables_selected_layers(self):
+        """Enable the selected actors' layers before asking World Partition to load them."""
+        self.room.guid = "room-guid"
+        self.room.actor_path = "/Game/Source.Source:PersistentLevel.Room1100"
+        floor = mock.Mock()
+        floor.get_asset.return_value.get_path_name.return_value = FLOOR_LAYER
+        other = mock.Mock()
+        other.get_asset.return_value.get_path_name.return_value = "/Game/DataLayers/MEP.MEP"
+        layer_editor = mock.Mock()
+        layer_editor.get_all_data_layers.return_value = [floor, other]
+        partition = mock.Mock()
+        calls = mock.Mock()
+        calls.attach_mock(layer_editor.set_data_layers_is_loaded_in_editor, "enable_layers")
+        calls.attach_mock(partition.load_actors, "load_actors")
+        loaded_room = object()
+        with mock.patch.multiple(
+            sys.modules["unreal"], create=True, DataLayerEditorSubsystem=object(),
+            get_editor_subsystem=lambda subsystem_class: layer_editor,
+            WorldPartitionBlueprintLibrary=partition, find_object=lambda outer, path: loaded_room,
+        ):
+            self.assertEqual(load_selected_actors([self.room]), [loaded_room])
+        self.assertEqual(calls.mock_calls, [
+            mock.call.enable_layers([floor], True, False), mock.call.load_actors(["room-guid"]),
+        ])
 
 
 class MetadataData:
@@ -91,6 +135,30 @@ class MetadataData:
 
 class FirstFloorCompatibilityTests(unittest.TestCase):
     """Check report migration and references retained by the refactored tools."""
+
+    def test_material_check_reports_only_missing_assets(self):
+        """Name the absent texture package so it can be synced before generation."""
+        missing_texture = REQUIRED_MATERIAL_ASSETS[1]
+        asset_editor = SimpleNamespace(does_asset_exist=lambda path: path != missing_texture)
+        with mock.patch.multiple(
+            sys.modules["unreal"], create=True, EditorAssetSubsystem=object,
+            get_editor_subsystem=lambda subsystem_class: asset_editor,
+        ):
+            self.assertEqual(missing_material_assets(), [missing_texture])
+
+    def test_fixture_shadows_leave_directional_light_alone(self):
+        """Remove shadows from local fixtures and keep the directional light unchanged."""
+        light = mock.Mock()
+        light.get_editor_property.return_value = True
+        fixture_type = type("Fixture", (), {"get_component_by_class": lambda self, kind: light})
+        sun = mock.Mock()
+        with mock.patch.multiple(
+            sys.modules["unreal"], create=True, PointLight=fixture_type,
+            SpotLight=fixture_type, RectLight=fixture_type, LightComponent=object,
+        ):
+            self.assertEqual(disable_fixture_shadows([fixture_type(), sun]), 1)
+        light.set_editor_property.assert_called_once_with("cast_shadows", False)
+        sun.get_component_by_class.assert_not_called()
 
     def test_legacy_report_preserves_room_ids(self):
         """Read old field names without changing nested room IDs or completion state."""
