@@ -2,10 +2,9 @@
 
 ## Apply the Perforce changes
 
-Perforce shelf `42426` contains the original `PFTFirstFloor` implementation.
-The revised generator below creates `PFTFirstFloorComplete` from the same source
-map. GitHub contains the separate tools, tests, and instructions. The building
-assets and original project source stay in Perforce.
+Perforce shelf `42426` contains `PFTFirstFloorComplete`, its baked entrance terrain,
+and the project settings. GitHub contains the separate tools, plugin source, tests,
+and instructions. The building assets and original project source stay in Perforce.
 
 In another workspace mapped to the PFTDigitalTwin depot, create a pending
 changelist and unshelve the implementation into it:
@@ -17,10 +16,9 @@ p4 unshelve -s 42426 -c CHANGE_NUMBER
 Replace `CHANGE_NUMBER` with your pending changelist number. Resolve any conflicts
 with your local work before building. The shelf includes the startup and packaging
 settings, active-map reload change, source room-ID support, generated map, and
-project copies of the scripts below. Install the [Navigator plugin](navigator-plugin.md)
-if it is not already present, then build `PFTDigitalTwinEditor Win64 Development`
-and restart Unreal. Use the revised tools below to generate the updated map,
-then set `EditorStartupMap`, `GameDefaultMap`, and `MapsToCook` to its path.
+project copies of the scripts below. Install the [Navigator plugin](navigator-plugin.md),
+then build `PFTDigitalTwinEditor Win64 Development` and restart Unreal. Use the
+Navigator room preview update to view the camera positions saved in the current shelf.
 
 ## Map contents
 
