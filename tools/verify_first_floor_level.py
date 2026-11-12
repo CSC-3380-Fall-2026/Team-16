@@ -1,5 +1,6 @@
 """Check that the lightweight map opens independently of the full twin."""
 
+import argparse
 import collections
 from pathlib import Path
 import sys
@@ -11,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from create_first_floor_level import (
     C1003_TERRAIN, C1003_TERRAIN_LABEL, CAMPUS_ROAD_OVERLAY, DEMO_START_LOCATION, DEMO_START_YAW,
     MAIN_HALLWAY_FLOOR, OUTPUT_MAP, baked_terrain_textures, fixture_draw_limit, local_lights,
-    missing_material_assets, read_build_report, write_report,
+    map_report_path, missing_material_assets, read_map_build_report, valid_output_map, write_report,
 )
 from first_floor_destinations import check_room_markers
 from first_floor_materials import checkerboard_slots
@@ -21,7 +22,7 @@ MAP = OUTPUT_MAP
 SOURCE = "/Game/Level/PatrickFTaylorHall"
 
 
-def find_dependencies(registry):
+def find_dependencies(registry, map_path=MAP):
     """Return the map's reachable packages and reference paths, handling dependency cycles."""
     options = unreal.AssetRegistryDependencyOptions(
         include_hard_package_references=True,
@@ -31,8 +32,8 @@ def find_dependencies(registry):
         include_soft_management_references=False,
     )
     visited = set()
-    pending = [MAP]
-    paths = {MAP: [MAP]}
+    pending = [map_path]
+    paths = {map_path: [map_path]}
     while pending:
         package = pending.pop()
         if package in visited:
@@ -49,14 +50,12 @@ def find_dependencies(registry):
     return visited, paths
 
 
-def check_room_ids(rooms, report_path):
+def check_room_ids(rooms, map_path):
     """Return room-ID errors, comparing source IDs when a saved build report is available."""
     errors = []
     if any(not actor.get_editor_property("source_room_id") for actor in rooms):
         errors.append("Copied room volumes are missing source IDs")
-    if not report_path.exists():
-        return errors
-    room_ids = read_build_report(report_path).get("SourceRoomIds", {})
+    room_ids = read_map_build_report(map_path).get("SourceRoomIds", {})
     for actor in rooms:
         source_id = actor.get_editor_property("source_room_id")
         if room_ids and source_id != room_ids.get(actor.get_actor_label()):
@@ -102,7 +101,7 @@ def check_entrance_terrain(actors, visited):
     return []
 
 
-def verification_report(world, actors, visited, paths):
+def verification_report(world, actors, visited, paths, map_path=MAP):
     """Return counts, source dependency paths, and validation errors for the loaded map."""
     classes = collections.Counter(actor.get_class().get_name() for actor in actors)
     starts = [actor for actor in actors if isinstance(actor, unreal.PlayerStart)]
@@ -143,11 +142,10 @@ def verification_report(world, actors, visited, paths):
         errors.append("Output includes the elevated campus road overlay")
     errors.extend(check_entrance_terrain(actors, visited))
     errors.extend(check_room_markers(actors, markers))
-    report_path = Path(unreal.Paths.project_saved_dir(), "FirstFloorBuild.json")
-    errors.extend(check_room_ids(rooms, report_path))
+    errors.extend(check_room_ids(rooms, map_path))
     return {
         "Name": "FirstFloorVerification",
-        "Map": MAP,
+        "Map": map_path,
         "Actors": len(actors),
         "Classes": dict(classes),
         "DependencyPackages": len(visited),
@@ -168,14 +166,19 @@ def verification_report(world, actors, visited, paths):
 
 def main():
     """Load the first-floor map, write a verification report, and raise on failed checks."""
-    world = unreal.EditorLoadingAndSavingUtils.load_map(MAP)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", default=MAP)
+    map_path = parser.parse_args().output
+    if not valid_output_map(map_path):
+        raise RuntimeError("Output must be a first-floor map package under /Game/")
+    world = unreal.EditorLoadingAndSavingUtils.load_map(map_path)
     if not world:
-        raise RuntimeError(f"Could not load {MAP}")
+        raise RuntimeError(f"Could not load {map_path}")
     actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem).get_all_level_actors()
     registry = unreal.AssetRegistryHelpers.get_asset_registry()
-    visited, paths = find_dependencies(registry)
-    report = verification_report(world, actors, visited, paths)
-    write_report(Path(unreal.Paths.project_saved_dir(), "FirstFloorVerification.json"), report)
+    visited, paths = find_dependencies(registry, map_path)
+    report = verification_report(world, actors, visited, paths, map_path)
+    write_report(map_report_path(map_path, "FirstFloorVerification.json"), report)
     if report["Errors"]:
         raise RuntimeError("; ".join(report["Errors"]))
     unreal.log(f"FIRST_FLOOR_VERIFIED: {len(actors)} actors; no full-twin dependencies")
