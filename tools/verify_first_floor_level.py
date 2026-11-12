@@ -145,7 +145,7 @@ def verification_report(world, actors, visited, paths, map_path=MAP):
     if any(actor.get_actor_label() == CAMPUS_ROAD_OVERLAY for actor in actors):
         errors.append("Output includes the elevated campus road overlay")
     errors.extend(check_entrance_terrain(actors, visited))
-    errors.extend(check_room_markers(actors, markers))
+    errors.extend(check_room_markers(world, actors, markers))
     errors.extend(check_room_ids(rooms, map_path))
     return {
         "Name": "FirstFloorVerification",
@@ -183,6 +183,7 @@ def main():
     world = unreal.EditorLoadingAndSavingUtils.load_map(map_path)
     if not world:
         raise RuntimeError(f"Could not load {map_path}")
+    unreal.SystemLibrary.execute_console_command(world, "Editor.AsyncStaticMeshCompilationFinishAll")
     actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem).get_all_level_actors()
     registry = unreal.AssetRegistryHelpers.get_asset_registry()
     visited, paths = find_dependencies(registry, map_path)

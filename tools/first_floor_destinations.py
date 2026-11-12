@@ -10,13 +10,21 @@ import unreal
 
 CAMERA_RADIUS = 35
 CAMERA_HEIGHT = 155
+MARKER_RADIUS = 20
 MARKER_HEIGHT = 115
+SIGHTLINE_RADIUS = 12
 MIN_VIEW_DISTANCE = 70
 MAX_VIEW_DISTANCE = 550
 ROOM_SAMPLES = (0, -0.25, 0.25, -0.5, 0.5, -0.75, 0.75)
 COMMONS_VOLUME = "HallwayC1008"
 # The room contains gas cylinders. Preview its door from the adjacent hall.
 ROOM_1140_ENTRANCE = (7720, -5607)
+ROOM_PREVIEW_YAWS = {
+    "PFT_1245": 136,
+    "PFT_1278": -124,
+    "PFT_1280": 0,
+    "PFT_COMMONS": 90,
+}
 
 
 def first_floor_rooms():
@@ -92,7 +100,35 @@ def sample_room_floor(world, room, focus):
     return sorted(positions, key=lambda position: math.hypot(position.x - x, position.y - y))
 
 
-def find_room_view(world, room, focus=None):
+def framed_marker(world, room, brush, camera, yaw):
+    """Place a marker in the preferred direction if the room and sightline allow it."""
+    center, extent = room.get_actor_bounds(False)
+    angle = math.radians(yaw)
+    for distance in (300, 250, 200, 150, 100, 85, 70):
+        x = camera.x + distance * math.cos(angle)
+        y = camera.y + distance * math.sin(angle)
+        floor = floor_point(world, x, y, center.z - extent.z)
+        if floor is None or abs(floor.z + CAMERA_HEIGHT - camera.z) > 40:
+            continue
+        marker = floor + unreal.Vector(0, 0, MARKER_HEIGHT)
+        if (inside_room(brush, marker)
+                and clear_view(world, marker, marker + unreal.Vector(0, 0, 1), MARKER_RADIUS)
+                and clear_view(world, camera, marker, SIGHTLINE_RADIUS)):
+            return marker
+    return None
+
+
+def preferred_room_view(world, room, brush, camera, cameras, yaw):
+    """Try the default camera first, then the closest clear alternatives."""
+    nearby = sorted(cameras, key=lambda position: math.dist(position.to_tuple(), camera.to_tuple()))
+    for position in nearby:
+        marker = framed_marker(world, room, brush, position, yaw)
+        if marker is not None:
+            return marker, position
+    return None
+
+
+def find_room_view(world, room, focus=None, preferred_yaw=None):
     """Return a marker and an eye-level camera with a clear view inside the room."""
     brush = room.get_component_by_class(unreal.BrushComponent)
     floor = sample_room_floor(world, room, focus)
@@ -104,18 +140,23 @@ def find_room_view(world, room, focus=None):
         if focus and math.hypot(point.x - focus[0], point.y - focus[1]) > 110:
             break
         marker = point + up * MARKER_HEIGHT
-        if not clear_view(world, marker, marker + up, 20):
+        if not clear_view(world, marker, marker + up, MARKER_RADIUS):
             continue
         nearby = [(math.dist(marker.to_tuple(), camera.to_tuple()), camera) for camera in cameras]
         nearby = sorted(nearby, key=lambda candidate: abs(candidate[0] - 300))
         for distance, camera in nearby:
-            if MIN_VIEW_DISTANCE <= distance <= MAX_VIEW_DISTANCE and clear_view(world, camera, marker, 12):
-                return marker, camera
+            if not (MIN_VIEW_DISTANCE <= distance <= MAX_VIEW_DISTANCE
+                    and clear_view(world, camera, marker, SIGHTLINE_RADIUS)):
+                continue
+            if preferred_yaw is not None:
+                preferred = preferred_room_view(world, room, brush, camera, cameras, preferred_yaw)
+                return preferred or (marker, camera)
+            return marker, camera
     return None
 
 
-def check_room_markers(actors, markers):
-    """Return errors for missing, duplicate, or out-of-room preview placements."""
+def check_room_markers(world, actors, markers):
+    """Return errors for missing markers, invalid placement, or blocked previews."""
     sources = room_sources(actors)
     counts = Counter(marker.get_editor_property("room_id") for marker in markers)
     errors = [f"Expected one preview marker for {room_id}, found {counts[room_id]}"
@@ -131,6 +172,12 @@ def check_room_markers(actors, markers):
         if not (MIN_VIEW_DISTANCE <= distance <= MAX_VIEW_DISTANCE
                 and inside_room(brush, location) and inside_room(brush, camera)):
             errors.append(f"The {room_id} preview is outside its room or has an invalid distance")
+            continue
+        up = unreal.Vector(0, 0, 1)
+        if not (clear_view(world, camera, camera + up, CAMERA_RADIUS)
+                and clear_view(world, location, location + up, MARKER_RADIUS)
+                and clear_view(world, camera, location, SIGHTLINE_RADIUS)):
+            errors.append(f"The {room_id} preview camera or its sightline is blocked")
     return errors
 
 
@@ -138,8 +185,10 @@ def add_room_markers(world):
     """Create or update destination markers after verifying every camera position."""
     subsystem = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
     actors = subsystem.get_all_level_actors()
-    views = {room_id: find_room_view(world, room, ROOM_1140_ENTRANCE if room_id == "PFT_1140" else None)
-             for room_id, room in room_sources(actors).items()}
+    views = {}
+    for room_id, room in room_sources(actors).items():
+        focus = ROOM_1140_ENTRANCE if room_id == "PFT_1140" else None
+        views[room_id] = find_room_view(world, room, focus, ROOM_PREVIEW_YAWS.get(room_id))
     unresolved = [room_id for room_id, view in views.items() if view is None]
     if unresolved:
         raise RuntimeError(f"No clear first-floor preview for {', '.join(unresolved)}")

@@ -56,9 +56,12 @@ elevated `SM_road_full_block` overlay from the standalone map.
 The output is a standalone map, so opening it does not scan the full twin's
 World Partition actors. The finishing pass places first-floor destination
 markers and preview cameras using the room volumes. It checks the floor, camera
-clearance, and sightline to each marker. Room 1140 is viewed from its hallway
-because the storage room is too narrow. The Commons uses the C1008 atrium
-volume. [LSU's first-floor plan](https://www.lsu.edu/eng/images/pft_floorplan_guide2_webupdated2021.pdf)
+clearance, and sightline to each marker. Preferred directions show the lectern
+in room 1245, the conference table in room 1278, the Incubator seating in room
+1280, and the stairs and seating in the Commons. The generator uses the default
+clear view when the preferred direction is obstructed. Room 1140 is viewed from
+its hallway because the storage room is too narrow. The Commons uses the C1008
+atrium volume. [LSU's first-floor plan](https://www.lsu.edu/eng/images/pft_floorplan_guide2_webupdated2021.pdf)
 Pixel Streaming reloads the active map when the last viewer leaves.
 Copied room volumes keep their source room IDs for the existing room-data service.
 Datasmith metadata is retained, while reimport templates that reference the full
@@ -109,8 +112,9 @@ directory.
 ```
 
 Results are written to `Saved/FirstFloorVerification.json`. This checks loading,
-room preview coverage and positions, references, fixture shadows and draw limits,
-checkerboard and unassigned static-mesh slots, and material dependencies.
+room preview coverage, camera clearance and sightlines, references, fixture
+shadows and draw limits, checkerboard and unassigned static-mesh slots, and
+material dependencies.
 Rendered gameplay and packaging need separate checks.
 
 For a selection preview, run `create_first_floor_level.py --dry-run` with
