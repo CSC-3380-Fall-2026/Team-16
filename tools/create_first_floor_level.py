@@ -43,6 +43,8 @@ C1003_TERRAIN = "/Game/Level/_GENERATED/SM_C1003Terrain"
 C1003_TERRAIN_LABEL = "C1003_ExteriorTerrain"
 DEMO_START_LOCATION = (9714, -6296, 101)
 DEMO_START_YAW = -46.912
+FIXTURE_MIN_DRAW_DISTANCE = 6000.0
+FIXTURE_FADE_DISTANCE = 1200.0
 REQUIRED_MATERIAL_ASSETS = (
     "/BasicMasterMaterials/Materials/Masters/M_OpaqueBasic",
     "/BasicMasterMaterials/Textures/MaterialsBase/T_Base_ORMS",
@@ -200,6 +202,26 @@ def disable_fixture_shadows(actors):
     return disabled
 
 
+def fixture_draw_limit(light):
+    """Keep the full light near the viewer and allow wider fixtures to reach farther."""
+    radius = light.get_editor_property("attenuation_radius")
+    return max(FIXTURE_MIN_DRAW_DISTANCE, 4 * radius + FIXTURE_FADE_DISTANCE)
+
+
+def limit_fixture_draw_distance(actors):
+    """Fade distant fixture lights and preserve any shorter authored distance."""
+    adjusted = 0
+    for light in local_lights(actors):
+        limit = fixture_draw_limit(light)
+        current = light.get_editor_property("max_draw_distance")
+        if 0 < current <= limit:
+            continue
+        light.set_editor_property("max_draw_distance", limit)
+        light.set_editor_property("max_distance_fade_range", FIXTURE_FADE_DISTANCE)
+        adjusted += 1
+    return adjusted
+
+
 def add_entrance_terrain(subsystem, actors):
     """Place the textured source terrain at its baked world coordinates."""
     mesh = unreal.EditorAssetLibrary.load_asset(C1003_TERRAIN)
@@ -237,7 +259,7 @@ def finish_map(room_ids):
     cleared = sum(clear_import_templates(actor) for actor in actors)
     move_player_start(actors)
     add_entrance_terrain(subsystem, actors)
-    return cleared, disable_fixture_shadows(actors)
+    return cleared, disable_fixture_shadows(actors), limit_fixture_draw_distance(actors)
 
 
 def load_source_map():
@@ -356,9 +378,10 @@ def finish_saved_map(output, report_path):
         raise RuntimeError("Generate the first-floor geometry before running --finish")
     unreal.SystemLibrary.execute_console_command(world, "Editor.AsyncStaticMeshCompilationFinishAll")
     report["RoomMarkers"] = add_room_markers(world)
-    cleared_templates, disabled_shadows = finish_map(report["SourceRoomIds"])
+    cleared_templates, disabled_shadows, limited_fixtures = finish_map(report["SourceRoomIds"])
     report["ClearedImportTemplates"] = cleared_templates
     report["FixtureShadowsDisabled"] = disabled_shadows
+    report["FixtureDrawLimitsApplied"] = limited_fixtures
     if not unreal.EditorLoadingAndSavingUtils.save_map(world, output):
         raise RuntimeError("Could not save room markers; use p4 edit if the map is versioned")
     report.update({"Complete": True, "DryRun": False})

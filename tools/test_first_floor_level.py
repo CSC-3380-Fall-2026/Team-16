@@ -12,7 +12,8 @@ from unittest import mock
 sys.modules.setdefault("unreal", types.ModuleType("unreal"))
 from create_first_floor_level import (
     CAMPUS_ROAD_OVERLAY, FLOOR_LAYER, MAIN_HALLWAY_FLOOR, REQUIRED_MATERIAL_ASSETS, clear_import_templates,
-    disable_fixture_shadows, load_selected_actors, missing_material_assets, read_build_report,
+    disable_fixture_shadows, limit_fixture_draw_distance, load_selected_actors, missing_material_assets,
+    read_build_report,
     select_actors, write_report,
 )
 from verify_first_floor_level import MAP, SOURCE, find_dependencies
@@ -159,6 +160,27 @@ class FirstFloorCompatibilityTests(unittest.TestCase):
             self.assertEqual(disable_fixture_shadows([fixture_type(), sun]), 1)
         light.set_editor_property.assert_called_once_with("cast_shadows", False)
         sun.get_component_by_class.assert_not_called()
+
+    def test_fixture_draw_limits_respect_coverage_and_shorter_authored_distances(self):
+        """Cap typical fixtures, keep a wider light's reach, and preserve a shorter limit."""
+        normal, wide, authored = [mock.Mock() for _ in range(3)]
+        for light, radius, distance in ((normal, 1000, 0), (wide, 5000, 0), (authored, 1000, 2000)):
+            properties = {"attenuation_radius": radius, "max_draw_distance": distance}
+            light.get_editor_property.side_effect = properties.__getitem__
+        fixture_type = type("Fixture", (), {"get_component_by_class": lambda self, kind: self.light})
+        actors = [fixture_type() for _ in range(3)]
+        for actor, light in zip(actors, (normal, wide, authored)):
+            actor.light = light
+        with mock.patch.multiple(
+            sys.modules["unreal"], create=True, PointLight=fixture_type,
+            SpotLight=fixture_type, RectLight=fixture_type, LightComponent=object,
+        ):
+            self.assertEqual(limit_fixture_draw_distance(actors), 2)
+        normal.set_editor_property.assert_has_calls([
+            mock.call("max_draw_distance", 6000), mock.call("max_distance_fade_range", 1200),
+        ])
+        wide.set_editor_property.assert_any_call("max_draw_distance", 21200)
+        authored.set_editor_property.assert_not_called()
 
     def test_legacy_report_preserves_room_ids(self):
         """Read old field names without changing nested room IDs or completion state."""

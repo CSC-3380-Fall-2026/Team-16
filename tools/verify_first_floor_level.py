@@ -10,8 +10,8 @@ import unreal
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from create_first_floor_level import (
     C1003_TERRAIN, C1003_TERRAIN_LABEL, CAMPUS_ROAD_OVERLAY, DEMO_START_LOCATION, DEMO_START_YAW,
-    MAIN_HALLWAY_FLOOR, OUTPUT_MAP, baked_terrain_textures, local_lights, missing_material_assets,
-    read_build_report, write_report,
+    MAIN_HALLWAY_FLOOR, OUTPUT_MAP, baked_terrain_textures, fixture_draw_limit, local_lights,
+    missing_material_assets, read_build_report, write_report,
 )
 from first_floor_destinations import check_room_markers
 
@@ -120,9 +120,16 @@ def verification_report(world, actors, visited, paths):
         yaw_error = abs((start_yaws[0] - DEMO_START_YAW + 180) % 360 - 180)
         if position_error > 1 or yaw_error > 1:
             errors.append("PlayerStart must face Zone 1200 from the C1003 hallway")
-    shadowed_fixtures = sum(light.get_editor_property("cast_shadows") for light in local_lights(actors))
+    fixtures = list(local_lights(actors))
+    shadowed_fixtures = sum(light.get_editor_property("cast_shadows") for light in fixtures)
     if shadowed_fixtures:
         errors.append(f"{shadowed_fixtures} local fixture lights still cast shadows")
+    fixtures_without_limits = sum(
+        not 0 < light.get_editor_property("max_draw_distance") <= fixture_draw_limit(light) + 0.01
+        for light in fixtures
+    )
+    if fixtures_without_limits:
+        errors.append(f"{fixtures_without_limits} local fixture lights lack a valid draw distance")
     missing_materials = missing_material_assets()
     if missing_materials:
         errors.append("Missing material dependencies; sync both shared plugins and the project material assets")
@@ -142,6 +149,7 @@ def verification_report(world, actors, visited, paths):
         "DependencyPackages": len(visited),
         "MissingMaterialDependencies": missing_materials,
         "ShadowCastingFixtures": shadowed_fixtures,
+        "FixturesWithDrawLimits": len(fixtures) - fixtures_without_limits,
         "FullTwinDependencies": forbidden,
         "FullTwinDependencyPaths": [paths[package] for package in forbidden],
         "PlayerStarts": start_locations,
