@@ -151,3 +151,18 @@ the camera. Try room 1202 and the Commons to check the added destinations.
 The launcher opens the demo at 720p with DirectX 11 and a 30 FPS cap. The package
 includes both DirectX renderers. Opening `PFTDigitalTwin.exe` directly uses the
 project's default settings.
+
+## Check the Zone 1200 walkthrough
+
+Close the running demo. From the Windows package directory, run the launcher in
+walkthrough mode:
+
+```powershell
+& '.\Play PFT Demo.cmd' walkthrough
+```
+
+The test starts at C1003 and drives the walking pawn past the Zone 1200 sign and
+into the hallway. It fails if the pawn falls through the floor or stalls before
+the end. The game exits when the test finishes. Check the test result in
+`PFTDigitalTwin\Saved\Automation\FirstFloorWalk\index.json` and use `FrameTime`
+in the new CSV under `PFTDigitalTwin\Saved\Profiling\CSV` to check frame pacing.
