@@ -150,7 +150,9 @@ void UPFTNavigatorWidget::RefreshResults()
         Results->AddChild(Button);
     }
     UpdateSelectedTags();
-    FString Message = Entries.IsEmpty() ? TEXT("No matches on this floor. Try another floor or search.") : FString::Printf(TEXT("%d results (up to 50 shown)."), Entries.Num());
+    FString Message = FString::Printf(TEXT("%d results (up to 50 shown)."), Entries.Num());
+    if (Entries.IsEmpty()) Message = TEXT("No matches. Try another floor or search.");
+    if (Entries.Num() == 1) Message = TEXT("Press Enter in search to select the result.");
     if (!Directory->Error.IsEmpty()) Message = Directory->Error;
     Status->SetText(FText::FromString(Message));
 }
@@ -159,7 +161,9 @@ void UPFTNavigatorWidget::ChooseRoom(const FString& RoomId)
 {
     const auto* Directory = GetGameInstance()->GetSubsystem<UPFTDirectory>();
     const auto* Room = Directory->FindRoom(RoomId);
+    auto* Destinations = GetWorld()->GetSubsystem<UPFTDestinations>();
     ClearRoom();
+    if (Destinations->IsRoomPreviewActive()) return;
     if (!Room)
     {
         Status->SetText(FText::FromString(TEXT("This room is no longer in the directory.")));
@@ -167,7 +171,6 @@ void UPFTNavigatorWidget::ChooseRoom(const FString& RoomId)
     }
     SelectedRoomId = RoomId;
     UpdateSelectedTags();
-    auto* Destinations = GetWorld()->GetSubsystem<UPFTDestinations>();
     const bool bHasLocation = Destinations->HasLocation(RoomId);
     const bool bSelected = bHasLocation && Destinations->SelectRoom(RoomId);
     Details->SetText(FText::FromString(Directory->GetRoomDetails(RoomId)));
@@ -180,7 +183,13 @@ void UPFTNavigatorWidget::ChooseRoom(const FString& RoomId)
 
 void UPFTNavigatorWidget::ClearRoom()
 {
-    GetWorld()->GetSubsystem<UPFTDestinations>()->ClearSelection();
+    auto* Destinations = GetWorld()->GetSubsystem<UPFTDestinations>();
+    if (Destinations->IsRoomPreviewActive())
+    {
+        ToggleExplore();
+        if (Destinations->IsRoomPreviewActive()) return;
+    }
+    Destinations->ClearSelection();
     SelectedRoomId.Empty();
     UpdateSelectedTags();
     Details->SetText(FText::FromString(TEXT("Select a room to see its details.")));
@@ -242,6 +251,16 @@ void UPFTNavigatorWidget::ViewRoom()
 
 FReply UPFTNavigatorWidget::NativeOnPreviewKeyDown(const FGeometry& Geometry, const FKeyEvent& Event)
 {
+    if (Event.GetKey() == EKeys::Enter && (Search->HasKeyboardFocus() || Search->HasFocusedDescendants()))
+    {
+        if (!Event.IsRepeat() && Results->GetChildrenCount() == 1)
+        {
+            auto* Result = CastChecked<UPFTSearchButton>(Results->GetChildAt(0));
+            ChooseRoom(Result->RoomId);
+            if (ViewButton->GetIsEnabled()) ViewButton->SetKeyboardFocus();
+        }
+        return FReply::Handled();
+    }
     auto* Exploration = GetWorld()->GetSubsystem<UPFTExploration>();
     if (Event.GetKey() == EKeys::Tab && Exploration->ExplorePawn)
     {

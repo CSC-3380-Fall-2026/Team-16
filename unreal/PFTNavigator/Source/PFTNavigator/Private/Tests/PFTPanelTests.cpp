@@ -147,6 +147,15 @@ namespace
         return Slate.RoutePointerUpEvent(Hit, Up).IsEventHandled();
     }
 
+    bool PressEnter()
+    {
+        auto& Slate = FSlateApplication::Get();
+        const FKeyEvent Enter(EKeys::Enter, FModifierKeysState(), Slate.GetUserIndexForKeyboard(), false, 0, 0);
+        const bool bHandled = Slate.ProcessKeyDownEvent(Enter);
+        Slate.ProcessKeyUpEvent(Enter);
+        return bHandled;
+    }
+
     UPFTNavigatorWidget* FindNavigator(UWorld* World)
     {
         TArray<UUserWidget*> Widgets;
@@ -234,6 +243,33 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
         TestEqual(TEXT("The original pawn is restored"), Player->GetPawn(), OriginalPawn);
         TestTrue(TEXT("Clear is clickable"), ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("ClearRoomButton"))));
         TestEqual(TEXT("Clear removes the room tag"), GetTaggedRooms(Panel).Num(), 0);
+        SetSearch(Panel, TEXT("CSC"));
+        TestTrue(TEXT("The search box is clickable"), ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("RoomSearch"))));
+        TestTrue(TEXT("A broad search has multiple results"), GetResults(Panel).Num() > 1);
+        TestTrue(TEXT("The search handles Enter"), PressEnter());
+        TestEqual(TEXT("Enter leaves multiple matches unselected"), GetTaggedRooms(Panel).Num(), 0);
+
+        SetSearch(Panel, TEXT("CSC 1350"));
+        TestTrue(TEXT("Enter selects a single result"), PressEnter());
+        TestTrue(TEXT("The keyboard selects PFT 1200"), GetTaggedRooms(Panel).Contains(TEXT("PFT_1200")));
+        TestEqual(TEXT("The first Enter keeps the original pawn"), Player->GetPawn(), OriginalPawn);
+        return true;
+    }));
+    ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
+    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Player]()
+    {
+        TestTrue(TEXT("Enter activates the focused preview button"), PressEnter());
+        TestNotNull(TEXT("The second Enter opens the preview"), Cast<APFTExplorePawn>(Player->GetPawn()));
+        return true;
+    }));
+    ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
+    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World, Player, OriginalPawn = Player->GetPawn()]()
+    {
+        auto* Panel = FindNavigator(World);
+        if (!Panel) return true;
+        TestTrue(TEXT("Clear is clickable during a preview"), ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("ClearRoomButton"))));
+        TestEqual(TEXT("Clear restores the original pawn"), Player->GetPawn(), OriginalPawn);
+        TestNull(TEXT("Clear removes the active destination"), World->GetSubsystem<UPFTDestinations>()->ActiveMarker.Get());
         return true;
     }));
     return true;
