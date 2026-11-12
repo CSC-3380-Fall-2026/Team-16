@@ -9,21 +9,32 @@ pushd "%~dp0" || exit /b 1
 set "DemoMap=/Game/Level/PFTFirstFloorComplete"
 set "DemoArgs=-d3d11 -windowed -ResX=1280 -ResY=720 -nosplash"
 set "DemoSettings=r.SetRes 1280x720w,r.VSync 0,sg.ShadowQuality 1,sg.GlobalIlluminationQuality 0,sg.ReflectionQuality 0,sg.PostProcessQuality 1,sg.EffectsQuality 1,r.ScreenPercentage 100,t.MaxFPS 30,r.LightMaxDrawDistanceScale 0.5"
-if /i "%~1"=="walkthrough" goto walkthrough
+if /i "%~1"=="walkthrough" goto checks
+if /i "%~1"=="verify" goto checks
 
 start "" "PFTDigitalTwin.exe" %DemoMap% %DemoArgs% -ExecCmds="%DemoSettings%"
 popd
 exit /b
 
-:walkthrough
-set "WalkLog=%~dp0PFTDigitalTwin\Saved\Logs\FirstFloorWalk-%RANDOM%-%RANDOM%.log"
-start "" /wait "PFTDigitalTwin.exe" %DemoMap% %DemoArgs% -PFTWalkMap=%DemoMap% -ExecCmds="%DemoSettings%,Automation RunTests PFTFirstFloor.WalkPastZone1200" -TestExit="Automation Test Queue Empty" -abslog="%WalkLog%" -ReportExportPath="%~dp0PFTDigitalTwin\Saved\Automation\FirstFloorWalk"
+:checks
+call :run_check FirstFloorWalk PFTFirstFloor.WalkPastZone1200 WalkPastZone1200
+if errorlevel 1 goto checks_done
+if /i "%~1"=="verify" call :run_check Navigator PFTNavigator.Panel.AfterOnboarding AfterOnboarding -RenderOffscreen
+
+:checks_done
 set "Result=%errorlevel%"
-if not "%Result%"=="0" goto walkthrough_done
-findstr /L /C:"Test Completed. Result={Success} Name={WalkPastZone1200}" "%WalkLog%" >nul
+popd
+exit /b %Result%
+
+:run_check
+set "TestLog=%~dp0PFTDigitalTwin\Saved\Logs\%~1-%RANDOM%-%RANDOM%.log"
+echo Running %~2. Read the log at "%TestLog%".
+start "" /wait "PFTDigitalTwin.exe" %DemoMap% %DemoArgs% %~4 -PFTWalkMap=%DemoMap% -ExecCmds="%DemoSettings%,Automation RunTests %~2" -TestExit="Automation Test Queue Empty" -abslog="%TestLog%" -ReportExportPath="%~dp0PFTDigitalTwin\Saved\Automation\%~1"
+set "Result=%errorlevel%"
+if not "%Result%"=="0" goto check_done
+findstr /L /C:"Test Completed. Result={Success} Name={%~3} Path={%~2}" "%TestLog%" >nul
 set "Result=%errorlevel%"
 
-:walkthrough_done
-if not "%Result%"=="0" echo Walkthrough failed. Check "%WalkLog%".
-popd
+:check_done
+if not "%Result%"=="0" echo %~2 failed. Check "%TestLog%".
 exit /b %Result%

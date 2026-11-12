@@ -156,12 +156,15 @@ again or `-EngineRoot` if UE 5.8 is installed in a different directory. The scri
 copies the launcher into `Saved\FirstFloorWindows\Windows` after packaging succeeds.
 Keep the files under `Saved` local to the workspace.
 
+Pass `-Verify` to run the Zone 1200 walkthrough and the Navigator click test
+after packaging. The command exits with an error if either test fails.
+
 To keep a playable build while packaging a review copy, set a separate archive
 directory. Relative archive paths are resolved from the current directory.
 
 ```powershell
 & .\Tools\package_first_floor_demo.ps1 -Project .\PFTDigitalTwin.uproject `
-  -ArchiveDirectory '.\Saved\FirstFloor Review'
+  -ArchiveDirectory '.\Saved\FirstFloor Review' -Verify
 ```
 
 To package a rebuilt candidate, pass the same map name you gave the rebuild
@@ -187,17 +190,21 @@ the camera. Try room 1202 and the Commons to check the added destinations.
 The launcher opens the demo at native 720p with DirectX 11 and a 30 FPS cap.
 The package includes both DirectX renderers.
 
-## Check the Zone 1200 walkthrough
+## Verify a Windows package
 
-Close the running demo. From the Windows package directory, run the launcher in
-walkthrough mode:
+Close the running demo. From the Windows package directory, run both checks:
 
 ```powershell
-& '.\Play PFT Demo.cmd' walkthrough
+& '.\Play PFT Demo.cmd' verify
 ```
 
-The test starts at C1003 and drives the walking pawn past the Zone 1200 sign and
-into the hallway. It fails if the pawn falls through the floor or stalls before
-the end. The game exits when the test finishes. Check the test result in
-`PFTDigitalTwin\Saved\Automation\FirstFloorWalk\index.json` and use `FrameTime`
-in the new CSV under `PFTDigitalTwin\Saved\Profiling\CSV` to check frame pacing.
+The walkthrough starts at C1003 and drives the walking pawn past the Zone 1200
+sign into the hallway. It fails if the pawn falls through the floor or stalls.
+The Navigator test skips the welcome screen, searches for a course, opens the
+room preview, and returns to the original player. Use `walkthrough` to run just
+the walking route. The game exits after each test.
+
+Logs are in `PFTDigitalTwin\Saved\Logs`. The `FirstFloorWalk` and `Navigator`
+folders under `PFTDigitalTwin\Saved\Automation` each contain an `index.json`
+with the test result. Use `FrameTime` in the new CSV under
+`PFTDigitalTwin\Saved\Profiling\CSV` to check frame pacing.
