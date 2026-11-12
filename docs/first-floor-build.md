@@ -168,8 +168,9 @@ script.
 
 The candidate archive goes in
 `Saved/FirstFloorBuilds/Level/PFTFirstFloorUpdated/WindowsDemo` by default.
-Use its launcher to play and test the selected map before choosing it as the
-project startup map.
+The candidate also gets its own cook cache in that map's build folder. Use its
+launcher to play and test the selected map before choosing it as the project
+startup map.
 
 Open `Play PFT Demo.cmd` in the Windows package. From the C1003 spawn, check the floor in
 front of the glass entrance and walk past the Zone 1200 sign around the corner.

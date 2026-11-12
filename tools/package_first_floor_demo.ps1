@@ -18,13 +18,14 @@ $projectRoot = $projectFile.DirectoryName
 $map = "/Game/Level/$MapName"
 $mapFile = Join-Path $projectRoot "Content\Level\$MapName.umap"
 $defaultMap = '/Game/Level/PFTFirstFloorComplete'
-$archiveRoot = if ($map -eq $defaultMap) {
-    Join-Path $projectRoot 'Saved\FirstFloorWindows'
+$package = if ($map -eq $defaultMap) {
+    Join-Path $projectRoot 'Saved\FirstFloorWindows\Windows'
 } else {
     Join-Path $projectRoot "Saved\FirstFloorBuilds\Level\$MapName\WindowsDemo"
 }
 if ($ArchiveDirectory) {
     $archiveRoot = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ArchiveDirectory)
+    $package = Join-Path $archiveRoot 'Windows'
 }
 $automationTool = Join-Path $EngineRoot 'Engine\Build\BatchFiles\RunUAT.bat'
 $launcher = Join-Path $PSScriptRoot 'Play PFT Demo.cmd'
@@ -40,19 +41,24 @@ if (!$launcherText.Contains($defaultMap)) { throw 'The launcher is missing its f
 
 $arguments = @(
     'BuildCookRun', "-project=$($projectFile.FullName)", '-platform=Win64', '-clientconfig=Development',
-    '-build', '-cook', '-stage', '-pak', '-iostore', '-archive', "-archivedirectory=$archiveRoot",
+    '-build', '-cook', '-stage', '-pak', '-iostore', '-archive', "-archivedirectory=$package",
     "-map=$map", '-unattended', '-nop4', '-utf8output', '-ubtargs=-NoHotReloadFromIDE'
 )
 if (!$FullCook) { $arguments += '-AdditionalCookerOptions=-CookIncremental' }
 if ($map -ne $defaultMap) {
-    # Cook the review map as the game default for this build.
-    $arguments += "-ini:Engine:[/Script/EngineSettings.GameMapsSettings]:GameDefaultMap=$map.$MapName"
+    # Keep the candidate's cooked packages and metadata separate from the standard demo.
+    $cookDirectory = Join-Path $projectRoot "Saved\FirstFloorBuilds\Level\$MapName\Cooked\Windows"
+    $cacheSuffix = $MapName.ToLowerInvariant()
+    $arguments += @(
+        "-CookOutputDir=$cookDirectory",
+        "-ini:Engine:[ConsoleVariables]:ZenStoreWriter.OplogIdSuffix=.$cacheSuffix",
+        "-ini:Engine:[/Script/EngineSettings.GameMapsSettings]:GameDefaultMap=$map.$MapName"
+    )
 }
 
 & $automationTool @arguments
 if ($LASTEXITCODE -ne 0) { throw "Unreal packaging failed with exit code $LASTEXITCODE." }
 
-$package = Join-Path $archiveRoot 'Windows'
 if (!(Test-Path -LiteralPath (Join-Path $package 'PFTDigitalTwin.exe') -PathType Leaf)) {
     throw 'Packaging finished without producing the Windows demo executable.'
 }
