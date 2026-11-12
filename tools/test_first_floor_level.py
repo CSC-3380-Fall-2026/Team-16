@@ -16,6 +16,7 @@ from create_first_floor_level import (
     read_build_report,
     select_actors, write_report,
 )
+from first_floor_materials import MESHES, SHARED, WORLD_GRID, restore_surface_materials
 from verify_first_floor_level import MAP, SOURCE, find_dependencies
 
 
@@ -181,6 +182,31 @@ class FirstFloorCompatibilityTests(unittest.TestCase):
         ])
         wide.set_editor_property.assert_any_call("max_draw_distance", 21200)
         authored.set_editor_property.assert_not_called()
+
+    def test_surface_repairs_only_replace_mapped_checkerboard_slots(self):
+        class MeshActor:
+            def __init__(self, mesh_path, material_path):
+                component = mock.Mock()
+                component.get_editor_property.return_value = SimpleNamespace(get_path_name=lambda: mesh_path)
+                component.get_material.return_value = SimpleNamespace(get_path_name=lambda: material_path)
+                self.static_mesh_component = component
+
+        table = f"{MESHES}/Shared/Furniture/SM_SecondFloor_CommonArea_Table"
+        checkerboard = MeshActor(table, WORLD_GRID)
+        authored = MeshActor(table, f"{SHARED}/Metals/MI_Gray_01Metal")
+        unrelated = MeshActor(f"{MESHES}/Shared/Furniture/SM_UnlistedTable", WORLD_GRID)
+        replacement = SimpleNamespace()
+        load_asset = mock.Mock(return_value=replacement)
+        with mock.patch.multiple(
+            sys.modules["unreal"], create=True, StaticMeshActor=MeshActor,
+            MaterialInterface=SimpleNamespace, load_asset=load_asset,
+        ):
+            self.assertEqual(restore_surface_materials([checkerboard, authored, unrelated]), 1)
+
+        load_asset.assert_called_once_with(f"{SHARED}/Metals/MI_GrayGlossy")
+        checkerboard.static_mesh_component.set_material.assert_called_once_with(1, replacement)
+        authored.static_mesh_component.set_material.assert_not_called()
+        unrelated.static_mesh_component.set_material.assert_not_called()
 
     def test_legacy_report_preserves_room_ids(self):
         """Read old field names without changing nested room IDs or completion state."""

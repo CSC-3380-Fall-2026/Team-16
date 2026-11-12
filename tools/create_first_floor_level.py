@@ -252,14 +252,21 @@ def baked_terrain_textures(material):
 
 
 def finish_map(room_ids):
-    """Finish room IDs, metadata, player placement, terrain, and lighting; return counts."""
+    """Finish the map and return counts for the build report."""
+    from first_floor_materials import restore_surface_materials
+
     subsystem = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
     actors = subsystem.get_all_level_actors()
     restore_room_ids(actors, room_ids)
     cleared = sum(clear_import_templates(actor) for actor in actors)
     move_player_start(actors)
     add_entrance_terrain(subsystem, actors)
-    return cleared, disable_fixture_shadows(actors), limit_fixture_draw_distance(actors)
+    return {
+        "ClearedImportTemplates": cleared,
+        "FixtureShadowsDisabled": disable_fixture_shadows(actors),
+        "FixtureDrawLimitsApplied": limit_fixture_draw_distance(actors),
+        "SurfaceMaterialsRepaired": restore_surface_materials(actors),
+    }
 
 
 def load_source_map():
@@ -378,10 +385,7 @@ def finish_saved_map(output, report_path):
         raise RuntimeError("Generate the first-floor geometry before running --finish")
     unreal.SystemLibrary.execute_console_command(world, "Editor.AsyncStaticMeshCompilationFinishAll")
     report["RoomMarkers"] = add_room_markers(world)
-    cleared_templates, disabled_shadows, limited_fixtures = finish_map(report["SourceRoomIds"])
-    report["ClearedImportTemplates"] = cleared_templates
-    report["FixtureShadowsDisabled"] = disabled_shadows
-    report["FixtureDrawLimitsApplied"] = limited_fixtures
+    report.update(finish_map(report["SourceRoomIds"]))
     if not unreal.EditorLoadingAndSavingUtils.save_map(world, output):
         raise RuntimeError("Could not save room markers; use p4 edit if the map is versioned")
     report.update({"Complete": True, "DryRun": False})

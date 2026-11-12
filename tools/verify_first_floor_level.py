@@ -14,6 +14,7 @@ from create_first_floor_level import (
     missing_material_assets, read_build_report, write_report,
 )
 from first_floor_destinations import check_room_markers
+from first_floor_materials import checkerboard_slots
 
 
 MAP = OUTPUT_MAP
@@ -133,6 +134,9 @@ def verification_report(world, actors, visited, paths):
     missing_materials = missing_material_assets()
     if missing_materials:
         errors.append("Missing material dependencies; sync both shared plugins and the project material assets")
+    checkerboard_count = sum(1 for _ in checkerboard_slots(actors))
+    if checkerboard_count:
+        errors.append(f"{checkerboard_count} mapped surfaces still use the checkerboard material")
     if not any(actor.get_actor_label() == MAIN_HALLWAY_FLOOR for actor in actors):
         errors.append("Missing the original main hallway floor")
     if any(actor.get_actor_label() == CAMPUS_ROAD_OVERLAY for actor in actors):
@@ -148,6 +152,7 @@ def verification_report(world, actors, visited, paths):
         "Classes": dict(classes),
         "DependencyPackages": len(visited),
         "MissingMaterialDependencies": missing_materials,
+        "MappedCheckerboardSlots": checkerboard_count,
         "ShadowCastingFixtures": shadowed_fixtures,
         "FixturesWithDrawLimits": len(fixtures) - fixtures_without_limits,
         "FullTwinDependencies": forbidden,
