@@ -2,6 +2,7 @@
 #include "PFTDestinations.h"
 #include "PFTExploration.h"
 #include "PFTExplorePawn.h"
+#include "PFTRoomMarker.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Button.h"
@@ -204,9 +205,23 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
     {
         auto* Panel = FindNavigator(World);
         if (!Panel) return true;
+        auto* Details = Panel->WidgetTree->FindWidget(TEXT("RoomDetails"));
+        if (TestNotNull(TEXT("Selected room details exist"), Details))
+        {
+            const auto& DetailsGeometry = Details->GetCachedGeometry();
+            const auto& PanelGeometry = Panel->WidgetTree->RootWidget->GetCachedGeometry();
+            const float DetailsBottom = DetailsGeometry.LocalToAbsolute(FVector2D(0, DetailsGeometry.GetLocalSize().Y)).Y;
+            const float PanelBottom = PanelGeometry.LocalToAbsolute(FVector2D(0, PanelGeometry.GetLocalSize().Y)).Y;
+            TestTrue(TEXT("A single search result leaves the selected details in view"), DetailsBottom <= PanelBottom);
+        }
         TestTrue(TEXT("View room is clickable"), ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("ViewRoomButton"))));
         TestNotNull(TEXT("The preview possesses the exploration pawn"), Cast<APFTExplorePawn>(Player->GetPawn()));
         TestTrue(TEXT("The preview keeps the cursor available"), Player->bShowMouseCursor);
+        auto* Marker = World->GetSubsystem<UPFTDestinations>()->ActiveMarker.Get();
+        if (TestNotNull(TEXT("The preview keeps the room selected"), Marker))
+        {
+            TestTrue(TEXT("The preview keeps the room marker out of view"), Marker->IsHidden());
+        }
         return true;
     }));
     ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));

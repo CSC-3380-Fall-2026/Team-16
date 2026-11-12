@@ -70,7 +70,7 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     Floors->OnSelectionChanged.AddDynamic(this, &UPFTNavigatorWidget::FloorChanged);
     Column->AddChild(Floors);
     auto* ListSize = WidgetTree->ConstructWidget<USizeBox>();
-    ListSize->SetHeightOverride(180);
+    ListSize->SetMaxDesiredHeight(180);
     Results = WidgetTree->ConstructWidget<UScrollBox>();
     ListSize->SetContent(Results);
     Column->AddChild(ListSize);
@@ -174,7 +174,7 @@ void UPFTNavigatorWidget::ChooseRoom(const FString& RoomId)
     ViewButton->SetIsEnabled(bSelected);
     ClearButton->SetIsEnabled(true);
     FString Message = TEXT("Map location not available yet.");
-    if (bHasLocation) Message = bSelected ? TEXT("Room marker shown.") : Destinations->Error;
+    if (bHasLocation) Message = bSelected ? TEXT("Room selected.") : Destinations->Error;
     Status->SetText(FText::FromString(Message));
 }
 

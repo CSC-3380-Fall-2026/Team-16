@@ -58,6 +58,12 @@ void UPFTDestinations::ClearSelection()
     ActiveMarker = nullptr;
 }
 
+void UPFTDestinations::SetRoomPreviewActive(bool bActive)
+{
+    bRoomPreviewActive = bActive;
+    if (IsValid(ActiveMarker)) ActiveMarker->SetSelected(!bRoomPreviewActive);
+}
+
 // Checks if we know where a room is on the map, either from a marker placed in the level or from room_bindings.json.
 // The panel uses this to tell "we just don't have this room's location yet" apart from a real error
 // Params: RoomId - the room to check
@@ -98,7 +104,7 @@ bool UPFTDestinations::SelectRoom(const FString& RoomId)
         ActiveMarker->RoomId = RoomId;
         SpawnedMarkers.Add(ActiveMarker);
     }
-    ActiveMarker->SetSelected(true);
+    ActiveMarker->SetSelected(!bRoomPreviewActive);
     Error.Empty();
     return true;
 }
