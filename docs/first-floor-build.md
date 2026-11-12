@@ -38,6 +38,8 @@ foundation slabs, and nearby paving. It uses existing building materials on the
 demo's mesh components and preserves material assignments that already work.
 Retained upper-floor meshes also get matching finishes on the floor pieces,
 chairs, cushions, couches, and lab benches where slots are blank or checkered.
+Grouped window and elevator meshes get matching metal finishes for unassigned
+slots. The verifier scans all static mesh components, including grouped actors.
 The finishing pass disables shadows on point, spot, and rect fixtures to reduce
 render-thread work while retaining their light and the sun's directional shadow.
 It also gives typical fixtures a 60-metre draw limit with a 12-metre fade. Wider
@@ -114,7 +116,8 @@ directory.
 Results are written to `Saved/FirstFloorVerification.json`. This checks loading,
 room preview coverage, camera clearance and sightlines, references, fixture
 shadows and draw limits, checkerboard and unassigned static-mesh slots, and
-material dependencies.
+material dependencies. Its `FallbackMaterialSlots` field identifies the actor,
+component, mesh, and slot for each missing surface.
 Rendered gameplay and packaging need separate checks.
 
 For a selection preview, run `create_first_floor_level.py --dry-run` with

@@ -15,7 +15,7 @@ from create_first_floor_level import (
     disable_fixture_shadows, limit_fixture_draw_distance, load_selected_actors, missing_material_assets,
     map_report_path, read_build_report, read_map_build_report, select_actors, valid_output_map, write_report,
 )
-from first_floor_materials import MESHES, SHARED, WORLD_GRID, restore_surface_materials
+from first_floor_materials import MESHES, REVIT, SHARED, WORLD_GRID, restore_surface_materials
 from verify_first_floor_level import MAP, SOURCE, find_dependencies
 
 
@@ -193,24 +193,37 @@ class FirstFloorCompatibilityTests(unittest.TestCase):
                 )
                 self.static_mesh_component = component
 
+            def get_components_by_class(self, _):
+                return [self.static_mesh_component]
+
         table = f"{MESHES}/Shared/Furniture/SM_SecondFloor_CommonArea_Table"
         checkerboard = MeshActor(table, WORLD_GRID)
         unassigned = MeshActor(f"{MESHES}/Shared/Furniture/SM_Cushion", None)
-        authored = MeshActor(table, f"{SHARED}/Metals/MI_Gray_01Metal")
+        mullion_mesh = f"{REVIT}/Curtain_Wall_Mullions_Rectangular_Mullion_TriFab_-_Horizontal_-_Front_captured_4"
+        mullion = MeshActor(mullion_mesh, None)
+        elevator = MeshActor(f"{REVIT}/Specialty_Equipment_Elevator_Cab-Traction_Reed_6_x_7_5", None)
+        authored = MeshActor(mullion_mesh, f"{SHARED}/Metals/MI_Gray_04Metal")
+        grouped = SimpleNamespace(get_components_by_class=lambda _: [
+            mullion.static_mesh_component, elevator.static_mesh_component, authored.static_mesh_component,
+        ])
         unrelated = MeshActor(f"{MESHES}/Shared/Furniture/SM_UnlistedTable", WORLD_GRID)
         replacement = SimpleNamespace()
         load_asset = mock.Mock(return_value=replacement)
         with mock.patch.multiple(
-            sys.modules["unreal"], create=True, StaticMeshActor=MeshActor,
+            sys.modules["unreal"], create=True, StaticMeshComponent=object,
             MaterialInterface=SimpleNamespace, load_asset=load_asset,
         ):
-            self.assertEqual(restore_surface_materials([checkerboard, unassigned, authored, unrelated]), 2)
+            self.assertEqual(restore_surface_materials([checkerboard, unassigned, grouped, unrelated]), 4)
 
-        self.assertEqual(load_asset.call_count, 2)
+        self.assertEqual(load_asset.call_count, 4)
         load_asset.assert_any_call(f"{SHARED}/Metals/MI_GrayGlossy")
         load_asset.assert_any_call(f"{SHARED}/Walls/MI_Gray_01")
+        load_asset.assert_any_call(f"{SHARED}/Metals/MI_Gray_03Metal")
+        load_asset.assert_any_call(f"{SHARED}/Metals/MI_Gray_01Metal")
         checkerboard.static_mesh_component.set_material.assert_called_once_with(1, replacement)
         unassigned.static_mesh_component.set_material.assert_called_once_with(1, replacement)
+        mullion.static_mesh_component.set_material.assert_called_once_with(0, replacement)
+        elevator.static_mesh_component.set_material.assert_called_once_with(0, replacement)
         authored.static_mesh_component.set_material.assert_not_called()
         unrelated.static_mesh_component.set_material.assert_not_called()
 
