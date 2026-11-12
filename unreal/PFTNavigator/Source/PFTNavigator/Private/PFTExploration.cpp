@@ -27,7 +27,7 @@ void UPFTExploration::Tick(float DeltaTime)
     Widget = CreateWidget<UPFTNavigatorWidget>(Player, UPFTNavigatorWidget::StaticClass());
     Widget->AddToViewport(20);
     Widget->SetPositionInViewport(FVector2D(24, 108));
-    Widget->SetDesiredSizeInViewport(FVector2D(360, 500));
+    Widget->SetDesiredSizeInViewport(FVector2D(400, 575));
     Player->bShowMouseCursor = true;
     FInputModeGameAndUI Mode;
     Mode.SetHideCursorDuringCapture(false);
