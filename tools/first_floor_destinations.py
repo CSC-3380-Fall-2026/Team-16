@@ -100,17 +100,12 @@ def sample_room_floor(world, room, focus):
     return sorted(positions, key=lambda position: math.hypot(position.x - x, position.y - y))
 
 
-def framed_marker(world, room, brush, camera, yaw):
+def framed_marker(world, brush, camera, yaw):
     """Place a marker in the preferred direction if the room and sightline allow it."""
-    center, extent = room.get_actor_bounds(False)
     angle = math.radians(yaw)
+    direction = unreal.Vector(math.cos(angle), math.sin(angle), -0.14)
     for distance in (300, 250, 200, 150, 100, 85, 70):
-        x = camera.x + distance * math.cos(angle)
-        y = camera.y + distance * math.sin(angle)
-        floor = floor_point(world, x, y, center.z - extent.z)
-        if floor is None or abs(floor.z + CAMERA_HEIGHT - camera.z) > 40:
-            continue
-        marker = floor + unreal.Vector(0, 0, MARKER_HEIGHT)
+        marker = camera + direction * distance
         if (inside_room(brush, marker)
                 and clear_view(world, marker, marker + unreal.Vector(0, 0, 1), MARKER_RADIUS)
                 and clear_view(world, camera, marker, SIGHTLINE_RADIUS)):
@@ -118,11 +113,11 @@ def framed_marker(world, room, brush, camera, yaw):
     return None
 
 
-def preferred_room_view(world, room, brush, camera, cameras, yaw):
+def preferred_room_view(world, brush, camera, cameras, yaw):
     """Try the default camera first, then the closest clear alternatives."""
     nearby = sorted(cameras, key=lambda position: math.dist(position.to_tuple(), camera.to_tuple()))
     for position in nearby:
-        marker = framed_marker(world, room, brush, position, yaw)
+        marker = framed_marker(world, brush, position, yaw)
         if marker is not None:
             return marker, position
     return None
@@ -149,7 +144,7 @@ def find_room_view(world, room, focus=None, preferred_yaw=None):
                     and clear_view(world, camera, marker, SIGHTLINE_RADIUS)):
                 continue
             if preferred_yaw is not None:
-                preferred = preferred_room_view(world, room, brush, camera, cameras, preferred_yaw)
+                preferred = preferred_room_view(world, brush, camera, cameras, preferred_yaw)
                 return preferred or (marker, camera)
             return marker, camera
     return None
