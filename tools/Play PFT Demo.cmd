@@ -8,7 +8,7 @@ if not exist "%~dp0PFTDigitalTwin.exe" (
 pushd "%~dp0" || exit /b 1
 set "DemoMap=/Game/Level/PFTFirstFloorComplete"
 set "DemoArgs=-d3d11 -windowed -ResX=1280 -ResY=720 -nosplash"
-set "DemoSettings=r.SetRes 1280x720w,r.VSync 0,sg.ShadowQuality 1,sg.GlobalIlluminationQuality 0,sg.ReflectionQuality 0,sg.PostProcessQuality 1,sg.EffectsQuality 1,r.ScreenPercentage 100,t.MaxFPS 30,r.LightMaxDrawDistanceScale 1"
+set "DemoSettings=r.SetRes 1280x720w,r.VSync 0,sg.ShadowQuality 1,sg.GlobalIlluminationQuality 0,sg.ReflectionQuality 0,sg.PostProcessQuality 1,sg.EffectsQuality 1,r.ScreenPercentage 100,t.MaxFPS 30,r.LightMaxDrawDistanceScale 0.5"
 if /i "%~1"=="walkthrough" goto walkthrough
 
 start "" "PFTDigitalTwin.exe" %DemoMap% %DemoArgs% -ExecCmds="%DemoSettings%"
