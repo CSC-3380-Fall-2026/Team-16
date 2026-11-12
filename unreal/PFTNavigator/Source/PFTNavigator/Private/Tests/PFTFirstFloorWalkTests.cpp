@@ -8,6 +8,8 @@
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 #include "ProfilingDebugging/CsvProfiler.h"
 
 namespace
@@ -100,9 +102,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPFTFirstFloorWalkTest, "PFTFirstFloor.WalkPast
 bool FPFTFirstFloorWalkTest::RunTest(const FString& Parameters)
 {
     UWorld* World = GEngine && GEngine->GameViewport ? GEngine->GameViewport->GetWorld() : nullptr;
-    if (!World || World->GetPackage()->GetName() != TEXT("/Game/Level/PFTFirstFloorComplete"))
+    FString ExpectedMap = TEXT("/Game/Level/PFTFirstFloorComplete");
+    FParse::Value(FCommandLine::Get(), TEXT("PFTWalkMap="), ExpectedMap);
+    if (!World || World->GetPackage()->GetName() != ExpectedMap)
     {
-        AddError(TEXT("Start the standalone first-floor demo before running this route"));
+        AddError(FString::Printf(TEXT("Start %s before running this route"), *ExpectedMap));
         return false;
     }
     APlayerController* Player = World->GetFirstPlayerController();
