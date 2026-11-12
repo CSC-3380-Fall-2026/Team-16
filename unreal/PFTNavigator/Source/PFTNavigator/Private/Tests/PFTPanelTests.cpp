@@ -229,7 +229,7 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
     {
         auto* Panel = FindNavigator(World);
         if (!Panel) return true;
-        TestTrue(TEXT("Return to original player is clickable"),
+        TestTrue(TEXT("Return is clickable"),
             ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("ExploreButton"))));
         TestEqual(TEXT("The original pawn is restored"), Player->GetPawn(), OriginalPawn);
         TestTrue(TEXT("Clear is clickable"), ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("ClearRoomButton"))));

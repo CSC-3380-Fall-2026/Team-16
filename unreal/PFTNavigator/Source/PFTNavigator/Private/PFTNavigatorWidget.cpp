@@ -212,7 +212,7 @@ void UPFTNavigatorWidget::ToggleExplore()
     auto* Exploration = GetWorld()->GetSubsystem<UPFTExploration>();
     const bool bWasExploring = IsValid(Exploration->ExplorePawn);
     const bool bSuccess = bWasExploring ? Exploration->EndExplore() : Exploration->BeginExplore();
-    ExploreLabel->SetText(FText::FromString(Exploration->ExplorePawn ? TEXT("Return to original player") : TEXT("Explore")));
+    ExploreLabel->SetText(FText::FromString(Exploration->ExplorePawn ? TEXT("Return") : TEXT("Explore")));
     const FString Message = bWasExploring ? TEXT("Returned to the original player.") : TEXT("WASD/QE move. Tab opens the mouse.");
     Status->SetText(FText::FromString(bSuccess ? Message : Exploration->Error));
 }
@@ -224,7 +224,7 @@ void UPFTNavigatorWidget::Fly()
     else
     {
         Exploration->SetCursor(false);
-        ExploreLabel->SetText(FText::FromString(TEXT("Return to original player")));
+        ExploreLabel->SetText(FText::FromString(TEXT("Return")));
         Status->SetText(FText::FromString(TEXT("WASD/QE move. Tab opens the mouse.")));
     }
 }
@@ -235,7 +235,7 @@ void UPFTNavigatorWidget::ViewRoom()
     if (!Exploration->ViewRoom()) Status->SetText(FText::FromString(Exploration->Error));
     else
     {
-        ExploreLabel->SetText(FText::FromString(TEXT("Return to original player")));
+        ExploreLabel->SetText(FText::FromString(TEXT("Return")));
         Status->SetText(FText::FromString(TEXT("Room preview is open.")));
     }
 }
