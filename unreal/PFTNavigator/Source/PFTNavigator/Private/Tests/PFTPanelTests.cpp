@@ -258,7 +258,7 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
     ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
     ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Player]()
     {
-        TestTrue(TEXT("Enter activates the focused preview button"), PressEnter());
+        TestTrue(TEXT("Enter is handled for the selected result"), PressEnter());
         TestNotNull(TEXT("The second Enter opens the preview"), Cast<APFTExplorePawn>(Player->GetPawn()));
         return true;
     }));

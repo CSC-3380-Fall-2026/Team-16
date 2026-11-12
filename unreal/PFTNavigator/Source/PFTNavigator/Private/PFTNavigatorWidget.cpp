@@ -253,12 +253,15 @@ FReply UPFTNavigatorWidget::NativeOnPreviewKeyDown(const FGeometry& Geometry, co
 {
     if (Event.GetKey() == EKeys::Enter && (Search->HasKeyboardFocus() || Search->HasFocusedDescendants()))
     {
-        if (!Event.IsRepeat() && Results->GetChildrenCount() == 1)
+        if (Event.IsRepeat() || Results->GetChildrenCount() != 1) return FReply::Handled();
+        auto* Result = CastChecked<UPFTSearchButton>(Results->GetChildAt(0));
+        if (SelectedRoomId == Result->RoomId && ViewButton->GetIsEnabled())
         {
-            auto* Result = CastChecked<UPFTSearchButton>(Results->GetChildAt(0));
-            ChooseRoom(Result->RoomId);
-            if (ViewButton->GetIsEnabled()) ViewButton->SetKeyboardFocus();
+            ViewRoom();
+            return FReply::Handled();
         }
+        ChooseRoom(Result->RoomId);
+        if (ViewButton->GetIsEnabled()) Status->SetText(FText::FromString(TEXT("Room selected. Press Enter to preview.")));
         return FReply::Handled();
     }
     auto* Exploration = GetWorld()->GetSubsystem<UPFTExploration>();
