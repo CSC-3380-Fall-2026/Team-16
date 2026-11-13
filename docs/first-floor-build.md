@@ -192,6 +192,9 @@ It records the selected map and its SHA-256 hash, the Unreal version, the
 cook mode, and whether the packaged checks passed. Builds run from the Git
 checkout also record the packaging tools' commit and whether those files had
 local changes. The test report paths are relative to the package folder.
+The archive includes Unreal's bundled Microsoft Visual C++ x64 installer and
+first-run instructions in `Read Me - PFT Demo.txt`. Extract the entire package
+before running the launcher.
 The project settings on Perforce shelf `42426` use the Unreal 5.8 include order
 and keep local `UserEngine.ini` overrides out of the Windows package.
 
