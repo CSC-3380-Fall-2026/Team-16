@@ -9,9 +9,9 @@
   {
     "Name": "PFT_1120",
     "RoomNumber": "1120",
-    "DisplayName": "PFT 1120",
+    "DisplayName": "PFT 1120 - Chemical Engineering High Bay",
     "Floor": 1,
-    "RoomType": "TBD"
+    "RoomType": "High Bay"
   },
   {
     "Name": "PFT_1140",

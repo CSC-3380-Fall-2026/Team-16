@@ -70,7 +70,7 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     Floors->OnSelectionChanged.AddDynamic(this, &UPFTNavigatorWidget::FloorChanged);
     Column->AddChild(Floors);
     auto* ListSize = WidgetTree->ConstructWidget<USizeBox>();
-    ListSize->SetHeightOverride(180);
+    ListSize->SetMaxDesiredHeight(180);
     Results = WidgetTree->ConstructWidget<UScrollBox>();
     ListSize->SetContent(Results);
     Column->AddChild(ListSize);
@@ -174,7 +174,7 @@ void UPFTNavigatorWidget::ChooseRoom(const FString& RoomId)
     ViewButton->SetIsEnabled(bSelected);
     ClearButton->SetIsEnabled(true);
     FString Message = TEXT("Map location not available yet.");
-    if (bHasLocation) Message = bSelected ? TEXT("Room marker shown.") : Destinations->Error;
+    if (bHasLocation) Message = bSelected ? TEXT("Room selected.") : Destinations->Error;
     Status->SetText(FText::FromString(Message));
 }
 
@@ -212,7 +212,7 @@ void UPFTNavigatorWidget::ToggleExplore()
     auto* Exploration = GetWorld()->GetSubsystem<UPFTExploration>();
     const bool bWasExploring = IsValid(Exploration->ExplorePawn);
     const bool bSuccess = bWasExploring ? Exploration->EndExplore() : Exploration->BeginExplore();
-    ExploreLabel->SetText(FText::FromString(Exploration->ExplorePawn ? TEXT("Return to original player") : TEXT("Explore")));
+    ExploreLabel->SetText(FText::FromString(Exploration->ExplorePawn ? TEXT("Return") : TEXT("Explore")));
     const FString Message = bWasExploring ? TEXT("Returned to the original player.") : TEXT("WASD/QE move. Tab opens the mouse.");
     Status->SetText(FText::FromString(bSuccess ? Message : Exploration->Error));
 }
@@ -224,7 +224,7 @@ void UPFTNavigatorWidget::Fly()
     else
     {
         Exploration->SetCursor(false);
-        ExploreLabel->SetText(FText::FromString(TEXT("Return to original player")));
+        ExploreLabel->SetText(FText::FromString(TEXT("Return")));
         Status->SetText(FText::FromString(TEXT("WASD/QE move. Tab opens the mouse.")));
     }
 }
@@ -235,7 +235,7 @@ void UPFTNavigatorWidget::ViewRoom()
     if (!Exploration->ViewRoom()) Status->SetText(FText::FromString(Exploration->Error));
     else
     {
-        ExploreLabel->SetText(FText::FromString(TEXT("Return to original player")));
+        ExploreLabel->SetText(FText::FromString(TEXT("Return")));
         Status->SetText(FText::FromString(TEXT("Room preview is open.")));
     }
 }

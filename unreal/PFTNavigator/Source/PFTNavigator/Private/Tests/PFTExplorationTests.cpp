@@ -100,6 +100,7 @@ bool FPFTExplorationTest::RunTest(const FString& Parameters)
     }
     TestEqual(TEXT("Course search produces one button"), ResultCount, 1);
     TestTrue(TEXT("Click selects course destination"), World->GetSubsystem<UPFTDestinations>()->ActiveMarker == Marker);
+    TestFalse(TEXT("Selecting a room shows its marker"), Marker->IsHidden());
     TestTrue(TEXT("Selected details show floor"), Details->GetText().ToString().Contains(TEXT("Floor 1")));
     TestTrue(TEXT("Selected details show course"), Details->GetText().ToString().Contains(TEXT("CSC 1350")));
     TestTrue(TEXT("Bound room enables view"), ViewButton->GetIsEnabled());
@@ -111,7 +112,13 @@ bool FPFTExplorationTest::RunTest(const FString& Parameters)
     }
     TestEqual(TEXT("Camera uses the room preview offset"), Exploration->ExplorePawn->GetActorLocation(), Marker->GetActorLocation() + Marker->ViewOffset);
     TestTrue(TEXT("Room view opens mouse controls"), Exploration->bCursorShown);
+    TestTrue(TEXT("The marker is hidden during the preview"), Marker->IsHidden());
+    TestTrue(TEXT("The room stays selected during the preview"), World->GetSubsystem<UPFTDestinations>()->ActiveMarker == Marker);
+    Exploration->ExplorePawn->ToggleMouse();
+    TestFalse(TEXT("Resuming flight shows the marker"), Marker->IsHidden());
+    TestTrue(TEXT("The room can be previewed again"), Exploration->ViewRoom());
     TestTrue(TEXT("Return after room view"), Exploration->EndExplore());
+    TestFalse(TEXT("Returning shows the marker"), Marker->IsHidden());
     ClearButton->OnClicked.Broadcast();
     TestNull(TEXT("Clear removes active marker"), World->GetSubsystem<UPFTDestinations>()->ActiveMarker.Get());
     TestTrue(TEXT("Clear hides previous marker"), Marker->IsHidden());

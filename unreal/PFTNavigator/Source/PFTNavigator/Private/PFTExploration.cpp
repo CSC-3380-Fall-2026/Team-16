@@ -27,7 +27,7 @@ void UPFTExploration::Tick(float DeltaTime)
     Widget = CreateWidget<UPFTNavigatorWidget>(Player, UPFTNavigatorWidget::StaticClass());
     Widget->AddToViewport(20);
     Widget->SetPositionInViewport(FVector2D(24, 108));
-    Widget->SetDesiredSizeInViewport(FVector2D(360, 500));
+    Widget->SetDesiredSizeInViewport(FVector2D(400, 575));
     Player->bShowMouseCursor = true;
     FInputModeGameAndUI Mode;
     Mode.SetHideCursorDuringCapture(false);
@@ -85,6 +85,11 @@ void UPFTExploration::SetCursor(bool bShow)
 {
     auto* Player = GetWorld()->GetFirstPlayerController();
     if (!Player || !IsValid(ExplorePawn)) return;
+    if (!bShow)
+    {
+        auto* Destinations = GetWorld()->GetSubsystem<UPFTDestinations>();
+        if (Destinations) Destinations->SetRoomPreviewActive(false);
+    }
     if (bCursorShown != bShow)
     {
         Player->SetIgnoreMoveInput(bShow);
@@ -103,12 +108,14 @@ void UPFTExploration::SetCursor(bool bShow)
 
 bool UPFTExploration::ViewRoom()
 {
-    auto* Marker = GetWorld()->GetSubsystem<UPFTDestinations>()->ActiveMarker.Get();
+    auto* Destinations = GetWorld()->GetSubsystem<UPFTDestinations>();
+    auto* Marker = Destinations->ActiveMarker.Get();
     Error = TEXT("Select a room with a bound location first");
     if (!IsValid(Marker) || !BeginExplore()) return false;
     const FVector Position = Marker->GetActorLocation() + Marker->ViewOffset;
     ExplorePawn->SetActorLocation(Position);
     GetWorld()->GetFirstPlayerController()->SetControlRotation((Marker->GetActorLocation() - Position).Rotation());
+    Destinations->SetRoomPreviewActive(true);
     SetCursor(true);
     Error.Empty();
     return true;

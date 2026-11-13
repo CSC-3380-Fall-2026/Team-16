@@ -74,7 +74,10 @@ The room and exploration buttons appear above the room details. Click
 - Mouse movement looks around.
 - Tab releases the mouse and pauses movement so the panel is usable.
 - Fly captures the mouse again.
-- Return to original player restores the previous pawn, rotation, and cursor.
+- Return restores the previous pawn, rotation, and cursor.
+
+Opening a room preview hides its marker while the room stays selected. Fly
+and Return show the selected room marker again.
 
 Exploration uses UE's spectator movement and can pass through walls. It is a
 standalone/local-host prototype, not multiplayer navigation or a walking guide.
