@@ -169,7 +169,7 @@ function Publish-DemoArchive {
 }
 
 function Get-ToolsRevision {
-    $git = Get-Command git -CommandType Application -ErrorAction SilentlyContinue
+    $git = Get-Command git -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if (!$git) { return $null }
     $files = @('package_first_floor_demo.ps1', 'Play PFT Demo.cmd', 'measure_demo_frames.ps1', 'check_demo_assets.ps1')
     $tracked = & $git.Source -C $PSScriptRoot ls-files -- @files 2>$null
