@@ -3,24 +3,17 @@
 #include "PFTExploration.h"
 #include "PFTExplorePawn.h"
 #include "PFTRoomMarker.h"
-#include "Blueprint/WidgetBlueprintLibrary.h"
-#include "Blueprint/WidgetTree.h"
 #include "Components/Button.h"
 #include "Components/ComboBoxString.h"
 #include "Components/EditableTextBox.h"
 #include "Components/TextBlock.h"
-#include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
-#include "Engine/GameViewportClient.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
-#include "Framework/Application/SlateApplication.h"
 #include "GameFramework/PlayerController.h"
-#include "InputCoreTypes.h"
-#include "Layout/WidgetPath.h"
 #include "Misc/AutomationTest.h"
 #include "Tests/AutomationCommon.h"
-#include "Widgets/SWindow.h"
+#include "PFTViewportTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPFTSelectedTagTest, "PFTNavigator.Panel.SelectedTag", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -124,28 +117,7 @@ bool FPFTSelectedTagTest::RunTest(const FString& Parameters)
 
 namespace
 {
-    // Use the real viewport hit path so clipped or covered controls fail the test.
-    bool ClickVisibleWidget(UWidget* Widget)
-    {
-        auto Window = GEngine->GameViewport->GetWindow();
-        auto SlateWidget = Widget ? Widget->GetCachedWidget() : nullptr;
-        if (!Window || !SlateWidget || !Widget->GetIsEnabled()) return false;
-
-        const FGeometry& Geometry = Widget->GetCachedGeometry();
-        const FVector2D Center = Geometry.LocalToAbsolute(Geometry.GetLocalSize() * 0.5);
-        auto& Slate = FSlateApplication::Get();
-        const FWidgetPath Hit = Slate.LocateWindowUnderMouse(Center, { Window.ToSharedRef() });
-        if (!Hit.ContainsWidget(SlateWidget.Get())) return false;
-
-        const TSet<FKey> Pressed = { EKeys::LeftMouseButton };
-        const TSet<FKey> Released;
-        const FPointerEvent Move(0, Center, Slate.GetCursorPos(), Released, EKeys::Invalid, 0, FModifierKeysState());
-        const FPointerEvent Down(0, Center, Center, Pressed, EKeys::LeftMouseButton, 0, FModifierKeysState());
-        const FPointerEvent Up(0, Center, Center, Released, EKeys::LeftMouseButton, 0, FModifierKeysState());
-        Slate.RoutePointerMoveEvent(Hit, Move, false);
-        Slate.RoutePointerDownEvent(Hit, Down);
-        return Slate.RoutePointerUpEvent(Hit, Up).IsEventHandled();
-    }
+    using PFTViewportTest::ClickVisibleWidget;
 
     bool PressEnter()
     {
@@ -174,15 +146,11 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
     if (!TestNotNull(TEXT("The packaged demo has a local player"), Player)) return false;
     TestNull(TEXT("The welcome screen opens before the Navigator"), FindNavigator(World));
 
-    TArray<UUserWidget*> Widgets;
-    UWidgetBlueprintLibrary::GetAllWidgetsOfClass(World, Widgets, UUserWidget::StaticClass(), true);
-    UWidget* SkipButton = nullptr;
-    for (UUserWidget* Widget : Widgets)
-    {
-        if (Widget->WidgetTree) SkipButton = Widget->WidgetTree->FindWidget(TEXT("SkipButton"));
-        if (SkipButton) break;
-    }
-    if (!TestTrue(TEXT("Skip tour is clickable"), ClickVisibleWidget(SkipButton))) return false;
+    TestTrue(TEXT("Walking is locked on the welcome screen"), Player->IsMoveInputIgnored());
+    TestTrue(TEXT("Looking is locked on the welcome screen"), Player->IsLookInputIgnored());
+    if (!TestTrue(TEXT("Skip tour is clickable"), PFTViewportTest::SkipWelcome(World))) return false;
+    TestFalse(TEXT("Walking is unlocked after Skip tour"), Player->IsMoveInputIgnored());
+    TestFalse(TEXT("Looking is unlocked after Skip tour"), Player->IsLookInputIgnored());
 
     ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.4f));
     ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World, Player]()
