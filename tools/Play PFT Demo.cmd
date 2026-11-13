@@ -15,6 +15,7 @@ if /i "%~1"=="profile" if /i "%~2"=="smooth" set "DemoFPS=45"
 set "DemoSettings=%DemoSettings%,t.MaxFPS %DemoFPS%"
 if /i "%~1"=="walkthrough" goto checks
 if /i "%~1"=="verify" goto verify
+if /i "%~1"=="crossbuilding" goto crossbuilding
 if /i "%~1"=="profile" goto profile
 
 start "" "PFTDigitalTwin.exe" %DemoMap% %DemoArgs% -ExecCmds="%DemoSettings%"
@@ -23,6 +24,12 @@ exit /b
 
 :checks
 call :run_check FirstFloorWalk PFTFirstFloor.WalkPastZone1200 WalkPastZone1200
+goto checks_done
+
+:crossbuilding
+call :run_check C1007Walk PFTFirstFloor.WalkToC1007 WalkToC1007
+if errorlevel 1 goto checks_done
+call :check_assets
 goto checks_done
 
 :verify
