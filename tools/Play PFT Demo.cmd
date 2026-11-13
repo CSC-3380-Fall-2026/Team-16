@@ -28,7 +28,11 @@ goto checks_done
 :verify
 call :run_check CommonsWalk PFTFirstFloor.WalkToCommons WalkToCommons
 if errorlevel 1 goto checks_done
+call :check_assets
+if errorlevel 1 goto checks_done
 call :run_check Navigator PFTNavigator.Panel.AfterOnboarding AfterOnboarding -RenderOffscreen
+if errorlevel 1 goto checks_done
+call :check_assets
 goto checks_done
 
 :profile
@@ -53,3 +57,7 @@ set "Result=%errorlevel%"
 :check_done
 if not "%Result%"=="0" echo %~2 failed. Check "%TestLog%".
 exit /b %Result%
+
+:check_assets
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0check_demo_assets.ps1" -Log "%TestLog%"
+exit /b %errorlevel%
