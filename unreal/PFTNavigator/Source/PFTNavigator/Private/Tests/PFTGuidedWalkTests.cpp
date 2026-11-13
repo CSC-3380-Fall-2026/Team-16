@@ -25,11 +25,12 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
     auto* Routes = World->GetSubsystem<UPFTRoutes>();
     if (!TestTrue(TEXT("Skip tour is clickable"), PFTViewportTest::SkipWelcome(World))) return false;
 
-    ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.5f));
-    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World, Player, Character, Routes]()
+    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World, Player, Character, Routes,
+        ReadyBy = FPlatformTime::Seconds() + 10.0]()
     {
         TArray<UUserWidget*> Widgets;
         UWidgetBlueprintLibrary::GetAllWidgetsOfClass(World, Widgets, UPFTNavigatorWidget::StaticClass(), true);
+        if (Widgets.IsEmpty() && FPlatformTime::Seconds() < ReadyBy) return false;
         if (!TestEqual(TEXT("Navigator is visible"), Widgets.Num(), 1)) return true;
         auto* Tree = Widgets[0]->WidgetTree.Get();
         auto* Search = Cast<UEditableTextBox>(Tree->FindWidget(TEXT("RoomSearch")));
