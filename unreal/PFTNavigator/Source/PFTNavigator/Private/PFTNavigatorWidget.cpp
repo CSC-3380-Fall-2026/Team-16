@@ -131,7 +131,11 @@ void UPFTNavigatorWidget::RefreshResults()
 {
     Results->ClearChildren();
     const auto* Directory = GetGameInstance()->GetSubsystem<UPFTDirectory>();
+    const auto* Destinations = GetWorld()->GetSubsystem<UPFTDestinations>();
     const auto Entries = Directory->BrowseRooms(Search->GetText().ToString(), FCString::Atoi(*Floors->GetSelectedOption()));
+    FString Message = FString::Printf(TEXT("%d results."), Entries.Num());
+    if (Entries.Num() > 50) Message = FString::Printf(TEXT("Showing 50 of %d results."), Entries.Num());
+    if (Entries.IsEmpty()) Message = TEXT("No matches. Try another floor or search.");
     for (int32 Index = 0; Index < FMath::Min(Entries.Num(), 50); ++Index)
     {
         auto* Button = WidgetTree->ConstructWidget<UPFTSearchButton>();
@@ -139,7 +143,14 @@ void UPFTNavigatorWidget::RefreshResults()
         Button->Panel = this;
         auto* Label = WidgetTree->ConstructWidget<UTextBlock>();
         const auto* Room = Directory->FindRoom(Entries[Index].RoomId);
-        Button->ResultText = FString::Printf(TEXT("%s | Floor %d"), *Entries[Index].Label, Room->Floor);
+        const bool bHasPreview = Destinations->HasLocation(Button->RoomId);
+        const TCHAR* Availability = bHasPreview ? TEXT("Preview") : TEXT("Details only");
+        Button->ResultText = FString::Printf(TEXT("%s | Floor %d | %s"), *Entries[Index].Label, Room->Floor, Availability);
+        if (Entries.Num() == 1)
+        {
+            Message = bHasPreview ? TEXT("Press Enter in search to preview the room.")
+                : TEXT("Press Enter in search to see room details.");
+        }
         Button->Label = Label;
         Label->SetText(FText::FromString(Button->ResultText));
         Label->SetAutoWrapText(true);
@@ -150,9 +161,6 @@ void UPFTNavigatorWidget::RefreshResults()
         Results->AddChild(Button);
     }
     UpdateSelectedTags();
-    FString Message = FString::Printf(TEXT("%d results (up to 50 shown)."), Entries.Num());
-    if (Entries.IsEmpty()) Message = TEXT("No matches. Try another floor or search.");
-    if (Entries.Num() == 1) Message = TEXT("Press Enter in search to open the result.");
     if (!Directory->Error.IsEmpty()) Message = Directory->Error;
     Status->SetText(FText::FromString(Message));
 }
@@ -176,7 +184,7 @@ void UPFTNavigatorWidget::ChooseRoom(const FString& RoomId)
     Details->SetText(FText::FromString(Directory->GetRoomDetails(RoomId)));
     ViewButton->SetIsEnabled(bSelected);
     ClearButton->SetIsEnabled(true);
-    FString Message = TEXT("Map location not available yet.");
+    FString Message = TEXT("Room preview is unavailable on this map.");
     if (bHasLocation) Message = bSelected ? TEXT("Room selected.") : Destinations->Error;
     Status->SetText(FText::FromString(Message));
 }

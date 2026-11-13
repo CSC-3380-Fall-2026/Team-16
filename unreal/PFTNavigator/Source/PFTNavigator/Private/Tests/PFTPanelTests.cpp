@@ -203,6 +203,7 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
         for (auto* Result : GetResults(Panel))
         {
             if (Result->RoomId != TEXT("PFT_1200")) continue;
+            TestTrue(TEXT("The mapped result advertises its preview"), Result->ResultText.EndsWith(TEXT(" | Preview")));
             TestTrue(TEXT("The course result is clickable"), ClickVisibleWidget(Result));
             break;
         }
@@ -263,6 +264,25 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
         TestTrue(TEXT("Clear is clickable during a preview"), ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("ClearRoomButton"))));
         TestEqual(TEXT("Clear restores the original pawn"), Player->GetPawn(), OriginalPawn);
         TestNull(TEXT("Clear removes the active destination"), World->GetSubsystem<UPFTDestinations>()->ActiveMarker.Get());
+        SetSearch(Panel, TEXT("3307"));
+        return true;
+    }));
+    ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
+    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World, Player, OriginalPawn = Player->GetPawn()]()
+    {
+        auto* Panel = FindNavigator(World);
+        if (!Panel) return true;
+        const auto Results = GetResults(Panel);
+        if (!TestEqual(TEXT("PFT 3307 returns one result"), Results.Num(), 1)) return true;
+        TestTrue(TEXT("The upper-floor result advertises details only"), Results[0]->ResultText.EndsWith(TEXT(" | Details only")));
+        TestTrue(TEXT("The details-only result is clickable"), ClickVisibleWidget(Results[0]));
+        TestTrue(TEXT("The upper-floor result can be selected"), GetTaggedRooms(Panel).Contains(TEXT("PFT_3307")));
+        TestEqual(TEXT("The details-only selection keeps the walking pawn"), Player->GetPawn(), OriginalPawn);
+        const auto* ViewButton = Panel->WidgetTree->FindWidget(TEXT("ViewRoomButton"));
+        if (TestNotNull(TEXT("The preview button exists"), ViewButton))
+        {
+            TestFalse(TEXT("The preview button is disabled for details-only rooms"), ViewButton->GetIsEnabled());
+        }
         return true;
     }));
     return true;
