@@ -134,7 +134,34 @@ def read_build_report(report_path):
 
 def write_report(report_path, report):
     """Write a report dictionary as readable UTF-8 JSON; return nothing."""
+    report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+
+
+def map_report_path(output, filename):
+    """Keep the default map's report location and give each candidate its own reports."""
+    saved = Path(unreal.Paths.project_saved_dir())
+    if output.casefold() == OUTPUT_MAP.casefold():
+        return saved / filename
+    return saved / "FirstFloorBuilds" / output.removeprefix("/Game/") / filename
+
+
+def read_map_build_report(output):
+    """Read the matching build report, including reports saved before map-specific folders."""
+    path = map_report_path(output, "FirstFloorBuild.json")
+    if not path.exists():
+        path = map_report_path(OUTPUT_MAP, "FirstFloorBuild.json")
+    if path.exists():
+        report = read_build_report(path)
+        if report.get("Output", "").casefold() == output.casefold():
+            return report
+    return {}
+
+
+def valid_output_map(output):
+    """Accept an asset package below /Game, excluding the full source map."""
+    return (re.fullmatch(r"/Game/(?:[\w-]+/)*[\w-]+", output) is not None
+            and output.casefold() != SOURCE_MAP.casefold())
 
 
 def missing_material_assets():
@@ -377,9 +404,9 @@ def finish_saved_map(output, report_path):
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from first_floor_destinations import add_room_markers
 
-    report = read_build_report(report_path)
-    if report["Output"] != output:
-        raise RuntimeError("The generation report belongs to a different output map")
+    report = read_map_build_report(output)
+    if not report or report.get("DryRun"):
+        raise RuntimeError(f"Missing saved geometry report for {output}")
     world = unreal.EditorLoadingAndSavingUtils.load_map(output)
     if not world:
         raise RuntimeError("Generate the first-floor geometry before running --finish")
@@ -397,18 +424,20 @@ def main():
     """Read CLI options and run one generation pass; raise on invalid editor settings."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", default=OUTPUT_MAP)
-    parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--finish", action="store_true", help="Finish geometry in a fresh editor process")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--dry-run", action="store_true")
+    mode.add_argument("--finish", action="store_true", help="Finish geometry in a fresh editor process")
     args = parser.parse_args()
     if "-run=" in unreal.SystemLibrary.get_command_line().lower():
         raise RuntimeError("Use -ExecutePythonScript, not -run=PythonScript; duplication needs the editor")
-    if not args.output.startswith("/Game/") or args.output == SOURCE_MAP:
-        raise RuntimeError("Output must be a new map under /Game/")
+    if not valid_output_map(args.output):
+        raise RuntimeError("Output must be a first-floor map package under /Game/")
     if not args.dry_run:
         missing_assets = missing_material_assets()
         if missing_assets:
             raise RuntimeError("Sync the missing material assets before building: " + ", ".join(missing_assets))
-    report_path = Path(unreal.Paths.project_saved_dir()) / "FirstFloorBuild.json"
+    filename = "FirstFloorSelection.json" if args.dry_run else "FirstFloorBuild.json"
+    report_path = map_report_path(args.output, filename)
     if args.finish:
         finish_saved_map(args.output, report_path)
     else:

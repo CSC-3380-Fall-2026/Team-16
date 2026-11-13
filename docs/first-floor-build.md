@@ -64,34 +64,26 @@ twin are removed from the lightweight copy.
 
 ## Create or update the lightweight map
 
-The generator, verifier, and selection tests are under the Unreal project's
-`Tools` directory. Use `p4 edit` before replacing any versioned scripts there.
-
-Run from the project directory with Unreal Editor closed:
+Build `PFTDigitalTwinEditor Win64 Development` with the Navigator plugin
+installed and sync the imported material plugins. Close the project in Unreal
+Editor, then run this from the project directory with a fresh map name.
 
 ```powershell
-& 'C:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' `
-  "$PWD\PFTDigitalTwin.uproject" /Engine/Maps/Entry `
-  "-ExecutePythonScript=$PWD\Tools\create_first_floor_level.py --dry-run" `
-  -unattended -nullrhi -RenderOffscreen -nosplash -nop4 -nosound
+& .\Tools\rebuild_first_floor.ps1 -Project .\PFTDigitalTwin.uproject `
+  -MapName PFTFirstFloorUpdated
 ```
 
-Read `Saved/FirstFloorBuild.json` to review the selected counts and height range.
-Report fields use PascalCase, including `SelectedActors` and `SourceRoomIds`.
-The tools also accept build reports produced with the earlier snake_case fields.
-Remove `--dry-run` to create the geometry. After that editor process exits, run
-the same command with `--finish` instead of `--dry-run` to add the destinations.
-Build the Navigator plugin with the room preview changes before running this pass.
-The two passes use separate editor processes so Unreal can release the temporary
-world used for copying. Use `-ExecutePythonScript`; the Python commandlet does
-not support the editor's actor duplication operation.
+The script copies the geometry, adds the destinations and material repairs,
+then verifies the saved map. It runs each step in a fresh Unreal process and
+prints the map and report paths after verification. Build and verification
+reports and step logs are under `Saved/FirstFloorBuilds/Level/PFTFirstFloorUpdated`.
+Pass `-EngineRoot` when Unreal is installed elsewhere.
 
-The generator refuses to overwrite an existing map. To rebuild after source
-changes, use `--output /Game/Level/PFTFirstFloorUpdated`, inspect that map, and
-update `EditorStartupMap`, `GameDefaultMap`, and `MapsToCook` to the new path.
-Add the generated `.umap` to the project changelist with `p4 add`.
-Use `p4 edit` before changing existing configuration or map files, including
-rerunning `--finish` on a versioned map.
+If a later step fails, use the same command with `-Resume` once the error is
+fixed. Resume uses the saved geometry and its build report. Open the new map
+in Unreal to review it before updating `EditorStartupMap`, `GameDefaultMap`,
+and `MapsToCook`. Use `p4 add` for the selected new map and `p4 edit` before
+changing any versioned map, script, or configuration.
 
 Select `/Game/Level/PatrickFTaylorHall` manually to work on the complete building.
 To package the complete twin again, change the startup maps and packaging map
@@ -104,7 +96,8 @@ Run the selection tests from the project directory:
 python -m unittest discover -s Tools -p test_first_floor_level.py
 ```
 
-Check the saved map and its dependency graph without opening the full twin:
+To verify the current demo map by itself, run the verifier from the project
+directory.
 
 ```powershell
 & 'C:\Program Files\Epic Games\UE_5.8\Engine\Binaries\Win64\UnrealEditor-Cmd.exe' `
@@ -117,6 +110,11 @@ Results are written to `Saved/FirstFloorVerification.json`. This checks loading,
 room preview coverage and positions, references, fixture shadows and draw limits,
 known checkerboard slots, and material dependencies. Rendered gameplay and
 packaging need separate checks.
+
+For a selection preview, run `create_first_floor_level.py --dry-run` with
+`-ExecutePythonScript` in the editor. Read `FirstFloorSelection.json` in the
+same report directory as the build. Pass `--output /Game/Level/PFTFirstFloorUpdated`
+to either Python script to select a candidate map.
 
 Sync `BasicMasterMaterials` and `DTGenericCatalog` through the project's Perforce
 stream imports before visual or packaged-build verification. A custom client

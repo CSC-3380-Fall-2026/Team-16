@@ -13,8 +13,7 @@ sys.modules.setdefault("unreal", types.ModuleType("unreal"))
 from create_first_floor_level import (
     CAMPUS_ROAD_OVERLAY, FLOOR_LAYER, MAIN_HALLWAY_FLOOR, REQUIRED_MATERIAL_ASSETS, clear_import_templates,
     disable_fixture_shadows, limit_fixture_draw_distance, load_selected_actors, missing_material_assets,
-    read_build_report,
-    select_actors, write_report,
+    map_report_path, read_build_report, read_map_build_report, select_actors, valid_output_map, write_report,
 )
 from first_floor_materials import MESHES, SHARED, WORLD_GRID, restore_surface_materials
 from verify_first_floor_level import MAP, SOURCE, find_dependencies
@@ -228,6 +227,28 @@ class FirstFloorCompatibilityTests(unittest.TestCase):
             write_report(path, original)
             self.assertEqual(read_build_report(path), original)
 
+    def test_candidate_reports_are_kept_with_their_map(self):
+        candidate = "/Game/Level/PFTFirstFloorReview"
+        other = "/Game/Other/PFTFirstFloorReview"
+        with tempfile.TemporaryDirectory() as folder, mock.patch.object(
+            sys.modules["unreal"], "Paths", SimpleNamespace(project_saved_dir=lambda: folder), create=True,
+        ):
+            default_report = map_report_path(MAP, "FirstFloorBuild.json")
+            candidate_report = map_report_path(candidate, "FirstFloorBuild.json")
+            self.assertEqual(default_report, Path(folder) / "FirstFloorBuild.json")
+            self.assertNotEqual(candidate_report, map_report_path(other, "FirstFloorBuild.json"))
+            write_report(default_report, {"Output": MAP, "SourceRoomIds": {"Room1120": "default"}})
+            write_report(candidate_report, {"Output": candidate, "SourceRoomIds": {"Room1120": "review"}})
+            self.assertEqual(read_map_build_report(MAP)["SourceRoomIds"]["Room1120"], "default")
+            self.assertEqual(read_map_build_report(candidate)["SourceRoomIds"]["Room1120"], "review")
+            self.assertEqual(read_map_build_report(other), {})
+
+    def test_output_map_must_be_a_package_outside_the_source_twin(self):
+        self.assertTrue(valid_output_map("/Game/Level/PFTFirstFloorReview"))
+        self.assertFalse(valid_output_map("/Game/Level/patrickftaylorhall"))
+        self.assertFalse(valid_output_map("/Game/Level/../../outside"))
+        self.assertFalse(valid_output_map("/Game/Level/Review.Review"))
+
     def test_metadata_cleanup_preserves_values_and_other_user_data(self):
         """Remove import links from copies while retaining source metadata and unrelated data."""
         source = MetadataData()
@@ -263,6 +284,17 @@ class FirstFloorCompatibilityTests(unittest.TestCase):
             visited, paths = find_dependencies(registry)
         self.assertEqual(visited, {MAP, shared, SOURCE})
         self.assertEqual(paths[SOURCE], [MAP, shared, SOURCE])
+
+    def test_candidate_dependency_walk_starts_at_the_candidate(self):
+        candidate = "/Game/Level/PFTFirstFloorReview"
+        graph = {candidate: [SOURCE], SOURCE: []}
+        registry = SimpleNamespace(get_dependencies=lambda package, options: graph[package])
+        with mock.patch.object(
+            sys.modules["unreal"], "AssetRegistryDependencyOptions", return_value=object(), create=True,
+        ):
+            visited, paths = find_dependencies(registry, candidate)
+        self.assertEqual(visited, {candidate, SOURCE})
+        self.assertEqual(paths[SOURCE], [candidate, SOURCE])
 
 
 if __name__ == "__main__":
