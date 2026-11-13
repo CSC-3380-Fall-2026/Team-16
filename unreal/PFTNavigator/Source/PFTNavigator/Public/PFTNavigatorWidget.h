@@ -29,6 +29,7 @@ class PFTNAVIGATOR_API UPFTNavigatorWidget : public UUserWidget
     GENERATED_BODY()
 public:
     void ChooseRoom(const FString& RoomId);
+    void UpdateCameraControls(bool bFreeCamera, bool bCursorShown, bool bRoomPreview);
 protected:
     virtual TSharedRef<SWidget> RebuildWidget() override;
     virtual FReply NativeOnPreviewKeyDown(const FGeometry& Geometry, const FKeyEvent& Event) override;
@@ -38,8 +39,7 @@ private:
     UFUNCTION() void ClearRoom();
     void RefreshResults();
     void UpdateSelectedTags();
-    UFUNCTION() void ToggleExplore();
-    UFUNCTION() void Fly();
+    UFUNCTION() void ToggleFreeCamera();
     UFUNCTION() void ViewRoom();
     UPROPERTY() TObjectPtr<UTextBlock> Status;
     UPROPERTY() TObjectPtr<UTextBlock> Details;
@@ -47,7 +47,8 @@ private:
     UPROPERTY() TObjectPtr<UComboBoxString> Floors;
     UPROPERTY() TObjectPtr<UButton> ViewButton;
     UPROPERTY() TObjectPtr<UButton> ClearButton;
-    UPROPERTY() TObjectPtr<UTextBlock> ExploreLabel;
+    UPROPERTY() TObjectPtr<UTextBlock> CameraLabel;
+    UPROPERTY() TObjectPtr<UTextBlock> CameraHelp;
     UPROPERTY() TObjectPtr<UScrollBox> Results;
     // Room that's currently picked, empty when nothing is selected
     FString SelectedRoomId;

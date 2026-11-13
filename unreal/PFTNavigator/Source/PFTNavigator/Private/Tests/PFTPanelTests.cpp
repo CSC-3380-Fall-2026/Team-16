@@ -119,12 +119,12 @@ namespace
 {
     using PFTViewportTest::ClickVisibleWidget;
 
-    bool PressEnter()
+    bool PressKey(FKey Key)
     {
         auto& Slate = FSlateApplication::Get();
-        const FKeyEvent Enter(EKeys::Enter, FModifierKeysState(), Slate.GetUserIndexForKeyboard(), false, 0, 0);
-        const bool bHandled = Slate.ProcessKeyDownEvent(Enter);
-        Slate.ProcessKeyUpEvent(Enter);
+        const FKeyEvent Event(Key, FModifierKeysState(), Slate.GetUserIndexForKeyboard(), false, 0, 0);
+        const bool bHandled = Slate.ProcessKeyDownEvent(Event);
+        Slate.ProcessKeyUpEvent(Event);
         return bHandled;
     }
 
@@ -133,6 +133,12 @@ namespace
         TArray<UUserWidget*> Widgets;
         UWidgetBlueprintLibrary::GetAllWidgetsOfClass(World, Widgets, UPFTNavigatorWidget::StaticClass(), true);
         return Widgets.Num() == 1 ? Cast<UPFTNavigatorWidget>(Widgets[0]) : nullptr;
+    }
+
+    FString GetCameraHelp(UPFTNavigatorWidget* Panel)
+    {
+        const auto* Help = Cast<UTextBlock>(Panel->WidgetTree->FindWidget(TEXT("CameraHelp")));
+        return Help ? Help->GetText().ToString() : FString();
     }
 }
 
@@ -159,6 +165,7 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
         if (TestNotNull(TEXT("Navigator opens after Skip tour"), Panel))
         {
             TestTrue(TEXT("The cursor is available"), Player->bShowMouseCursor);
+            TestFalse(TEXT("The walking view hides flight shortcuts"), GetCameraHelp(Panel).Contains(TEXT("Q down")));
             SetSearch(Panel, TEXT("CSC 1350"));
         }
         return true;
@@ -195,6 +202,7 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
         TestTrue(TEXT("View room is clickable"), ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("ViewRoomButton"))));
         TestNotNull(TEXT("The preview possesses the exploration pawn"), Cast<APFTExplorePawn>(Player->GetPawn()));
         TestTrue(TEXT("The preview keeps the cursor available"), Player->bShowMouseCursor);
+        TestTrue(TEXT("Preview explains how to leave its fixed view"), GetCameraHelp(Panel).StartsWith(TEXT("Room preview")));
         auto* Marker = World->GetSubsystem<UPFTDestinations>()->ActiveMarker.Get();
         if (TestNotNull(TEXT("The preview keeps the room selected"), Marker))
         {
@@ -208,18 +216,18 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
         auto* Panel = FindNavigator(World);
         if (!Panel) return true;
         TestTrue(TEXT("Return is clickable"),
-            ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("ExploreButton"))));
+            ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("CameraModeButton"))));
         TestEqual(TEXT("The original pawn is restored"), Player->GetPawn(), OriginalPawn);
         TestTrue(TEXT("Clear is clickable"), ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("ClearRoomButton"))));
         TestEqual(TEXT("Clear removes the room tag"), GetTaggedRooms(Panel).Num(), 0);
         SetSearch(Panel, TEXT("CSC"));
         TestTrue(TEXT("The search box is clickable"), ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("RoomSearch"))));
         TestTrue(TEXT("A broad search has multiple results"), GetResults(Panel).Num() > 1);
-        TestTrue(TEXT("The search handles Enter"), PressEnter());
+        TestTrue(TEXT("The search handles Enter"), PressKey(EKeys::Enter));
         TestEqual(TEXT("Enter leaves multiple matches unselected"), GetTaggedRooms(Panel).Num(), 0);
 
         SetSearch(Panel, TEXT("CSC 1350"));
-        TestTrue(TEXT("Enter opens the single result"), PressEnter());
+        TestTrue(TEXT("Enter opens the single result"), PressKey(EKeys::Enter));
         TestTrue(TEXT("The keyboard selects PFT 1200"), GetTaggedRooms(Panel).Contains(TEXT("PFT_1200")));
         TestNotNull(TEXT("Enter opens the room preview"), Cast<APFTExplorePawn>(Player->GetPawn()));
         return true;
@@ -251,6 +259,34 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
         {
             TestFalse(TEXT("The preview button is disabled for details-only rooms"), ViewButton->GetIsEnabled());
         }
+        return true;
+    }));
+    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World, Player]()
+    {
+        auto* Panel = FindNavigator(World);
+        if (!Panel) return true;
+        TestTrue(TEXT("Free camera is clickable"), ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("CameraModeButton"))));
+        TestNotNull(TEXT("Free camera possesses the exploration pawn"), Cast<APFTExplorePawn>(Player->GetPawn()));
+        TestFalse(TEXT("Free camera captures the cursor"), Player->bShowMouseCursor);
+        TestTrue(TEXT("Flight shortcuts are visible"), GetCameraHelp(Panel).Contains(TEXT("Q down")));
+        return true;
+    }));
+    ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
+    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([]()
+    {
+        PressKey(EKeys::Tab);
+        return true;
+    }));
+    ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
+    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World, Player, OriginalPawn = Player->GetPawn()]()
+    {
+        auto* Panel = FindNavigator(World);
+        if (!Panel) return true;
+        TestTrue(TEXT("Tab releases the cursor"), Player->bShowMouseCursor);
+        TestTrue(TEXT("The paused camera shows how to resume"), GetCameraHelp(Panel).StartsWith(TEXT("Camera paused")));
+        TestTrue(TEXT("Return is clickable after Tab"), ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("CameraModeButton"))));
+        TestEqual(TEXT("Returning restores the walking pawn"), Player->GetPawn(), OriginalPawn);
+        TestFalse(TEXT("Returning hides flight shortcuts"), GetCameraHelp(Panel).Contains(TEXT("Q down")));
         return true;
     }));
     return true;

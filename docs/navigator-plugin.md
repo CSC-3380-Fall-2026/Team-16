@@ -70,19 +70,19 @@ For a room without a map location, Enter shows its directory details.
 **View selected room** moves the exploration camera near that marker. Unbound
 rooms show an explanation and never move the camera to an invented location.
 
-The room and exploration buttons appear above the room details. Click
-**Explore** or **Fly** to use the separate exploration pawn:
+The room and camera buttons appear above the room details. Click **Free camera**
+to fly around the building.
 
-- WASD or arrow keys move; Q/E move down/up.
+- WASD moves. Q moves down and E moves up.
 - Mouse movement looks around.
-- Tab releases the mouse and pauses movement so the panel is usable.
-- Fly captures the mouse again.
-- Return restores the previous pawn, rotation, and cursor.
+- Tab switches between flying and using the panel. The panel shows the controls
+  for the active camera mode.
+- **Return to player** restores the previous pawn, rotation, and cursor.
 
-Opening a room preview hides its marker while the room stays selected. Fly
-and Return show the selected room marker again. Clear closes the preview and
-returns you to the original player. Selecting a different room
-also closes the previous preview.
+Opening a room preview hides its marker while the room stays selected. Tab lets
+you fly from the preview. Flying or returning to the player shows the marker
+again. Clear closes the preview and returns you to the original player.
+Selecting a different room also closes the previous preview.
 
 Exploration uses UE's spectator movement and can pass through walls. It is a
 standalone/local-host prototype, not multiplayer navigation or a walking guide.
