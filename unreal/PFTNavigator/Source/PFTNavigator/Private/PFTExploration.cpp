@@ -101,7 +101,7 @@ bool UPFTExploration::ViewRoom()
     auto* Marker = GetWorld()->GetSubsystem<UPFTDestinations>()->ActiveMarker.Get();
     Error = TEXT("Select a room with a bound location first");
     if (!IsValid(Marker) || !BeginExplore()) return false;
-    const FVector Position = Marker->GetActorLocation() + FVector(-500, -500, 250);
+    const FVector Position = Marker->GetActorLocation() + Marker->ViewOffset;
     ExplorePawn->SetActorLocation(Position);
     GetWorld()->GetFirstPlayerController()->SetControlRotation((Marker->GetActorLocation() - Position).Rotation());
     SetCursor(true);

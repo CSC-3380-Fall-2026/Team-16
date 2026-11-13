@@ -62,6 +62,7 @@ bool FPFTExplorationTest::RunTest(const FString& Parameters)
     TestTrue(TEXT("Original cursor restored"), Player->bShowMouseCursor);
     auto* Marker = World->SpawnActor<APFTRoomMarker>(FVector(200, 300, 400), FRotator::ZeroRotator);
     Marker->RoomId = TEXT("PFT_1200");
+    Marker->ViewOffset = FVector(-180, 120, 45);
     auto* Panel = CreateWidget<UPFTNavigatorWidget>(Player, UPFTNavigatorWidget::StaticClass());
     Panel->TakeWidget();
     auto* FloorFilter = Cast<UComboBoxString>(Panel->WidgetTree->FindWidget(TEXT("FloorFilter")));
@@ -108,7 +109,7 @@ bool FPFTExplorationTest::RunTest(const FString& Parameters)
         Cleanup();
         return false;
     }
-    TestTrue(TEXT("Camera moves near destination"), FVector::Dist(Exploration->ExplorePawn->GetActorLocation(), Marker->GetActorLocation()) < 800);
+    TestEqual(TEXT("Camera uses the room preview offset"), Exploration->ExplorePawn->GetActorLocation(), Marker->GetActorLocation() + Marker->ViewOffset);
     TestTrue(TEXT("Room view opens mouse controls"), Exploration->bCursorShown);
     TestTrue(TEXT("Return after room view"), Exploration->EndExplore());
     ClearButton->OnClicked.Broadcast();

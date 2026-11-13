@@ -44,8 +44,12 @@ Its textures are stored with the mesh, and its `NoCollision` profile leaves
 walking collision to the original building meshes. The generator excludes the
 elevated `SM_road_full_block` overlay from the standalone map.
 The output is a standalone map, so opening it does not scan the full twin's
-World Partition actors. Existing room destinations are copied into the map as
-markers. Pixel Streaming reloads the active map when the last viewer leaves.
+World Partition actors. The finishing pass places first-floor destination
+markers and preview cameras using the room volumes. It checks the floor, camera
+clearance, and sightline to each marker. Room 1140 is viewed from its hallway
+because the storage room is too narrow. The Commons uses the C1008 atrium
+volume. [LSU's first-floor plan](https://www.lsu.edu/eng/images/pft_floorplan_guide2_webupdated2021.pdf)
+Pixel Streaming reloads the active map when the last viewer leaves.
 Copied room volumes keep their source room IDs for the existing room-data service.
 Datasmith metadata is retained, while reimport templates that reference the full
 twin are removed from the lightweight copy.
@@ -69,6 +73,7 @@ Report fields use PascalCase, including `SelectedActors` and `SourceRoomIds`.
 The tools also accept build reports produced with the earlier snake_case fields.
 Remove `--dry-run` to create the geometry. After that editor process exits, run
 the same command with `--finish` instead of `--dry-run` to add the destinations.
+Build the Navigator plugin with the room preview changes before running this pass.
 The two passes use separate editor processes so Unreal can release the temporary
 world used for copying. Use `-ExecutePythonScript`; the Python commandlet does
 not support the editor's actor duplication operation.
@@ -101,8 +106,8 @@ Check the saved map and its dependency graph without opening the full twin:
 ```
 
 Results are written to `Saved/FirstFloorVerification.json`. This checks loading,
-room markers, references, fixture shadows, and the material dependencies that
-previously went missing. Rendered gameplay and packaging need separate checks.
+room preview coverage and positions, references, fixture shadows, and material
+dependencies. Rendered gameplay and packaging need separate checks.
 
 Sync `BasicMasterMaterials` and `DTGenericCatalog` through the project's Perforce
 stream imports before visual or packaged-build verification. A custom client
@@ -143,7 +148,8 @@ Keep the files under `Saved` local to the workspace.
 
 Open the archived `PFTDigitalTwin.exe`. From the C1003 spawn, check the floor in
 front of the glass entrance and walk past the Zone 1200 sign around the corner.
-Search for `CSC 1350`, select room 1200, and check that its destination is visible.
+Search for `CSC 1350`, select room 1200, and use **View selected room** to check
+the camera. Try room 1202 and the Commons to check the added destinations.
 
 On the GTX 1080 test machine, launching with `-d3d11` avoided the DirectX 12
 shader precache errors observed during startup. The package includes both
