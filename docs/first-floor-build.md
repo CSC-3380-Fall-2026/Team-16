@@ -34,6 +34,10 @@ collision through C1003.
 The player starts in C1003 facing the Zone 1200 signs.
 The finishing pass disables shadows on point, spot, and rect fixtures to reduce
 render-thread work while retaining their light and the sun's directional shadow.
+It also gives typical fixtures a 60-metre draw limit with a 12-metre fade. Wider
+fixtures get a longer limit based on their attenuation radius, and shorter
+authored limits are kept. The Windows launcher uses these distances even with
+its low shadow quality setting.
 The selection retains ambiguous upper-floor meshes and drops known furnishing
 and equipment categories outside the first-floor height band. It also omits
 the source map's unloaded MEP and cinematic layers, distant campus meshes,
@@ -106,8 +110,8 @@ Check the saved map and its dependency graph without opening the full twin:
 ```
 
 Results are written to `Saved/FirstFloorVerification.json`. This checks loading,
-room preview coverage and positions, references, fixture shadows, and material
-dependencies. Rendered gameplay and packaging need separate checks.
+room preview coverage and positions, references, fixture shadows and draw limits,
+and material dependencies. Rendered gameplay and packaging need separate checks.
 
 Sync `BasicMasterMaterials` and `DTGenericCatalog` through the project's Perforce
 stream imports before visual or packaged-build verification. A custom client
