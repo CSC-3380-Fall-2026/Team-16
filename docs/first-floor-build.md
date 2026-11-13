@@ -40,6 +40,8 @@ Retained upper-floor meshes also get matching finishes on the floor pieces,
 chairs, cushions, couches, and lab benches where slots are blank or checkered.
 Grouped window and elevator meshes get matching metal finishes for unassigned
 slots. The verifier scans all static mesh components, including grouped actors.
+Blank exit-sign housings get a white finish and red EXIT lettering on both sides
+at their original positions. The verifier checks both faces on finished maps.
 The finishing pass disables shadows on point, spot, and rect fixtures to reduce
 render-thread work while retaining their light and the sun's directional shadow.
 It also gives typical fixtures a 60-metre draw limit with a 12-metre fade. Wider
