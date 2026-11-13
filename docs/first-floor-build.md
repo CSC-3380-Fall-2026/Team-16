@@ -32,6 +32,10 @@ meshes are included so the building stays visible through entrances and atriums.
 The source `Floor_MainHallway` group keeps its original floor meshes and walking
 collision through C1003.
 The player starts in C1003 facing the Zone 1200 signs.
+The finishing pass replaces checkerboard slots on the lounge seating and tables,
+the C1003 wall, floor pieces in rooms 1221 and 1363, the Panera soda fountain,
+foundation slabs, and nearby paving. It uses existing building materials on the
+demo's mesh components and preserves material assignments that already work.
 The finishing pass disables shadows on point, spot, and rect fixtures to reduce
 render-thread work while retaining their light and the sun's directional shadow.
 It also gives typical fixtures a 60-metre draw limit with a 12-metre fade. Wider
@@ -111,7 +115,8 @@ Check the saved map and its dependency graph without opening the full twin:
 
 Results are written to `Saved/FirstFloorVerification.json`. This checks loading,
 room preview coverage and positions, references, fixture shadows and draw limits,
-and material dependencies. Rendered gameplay and packaging need separate checks.
+known checkerboard slots, and material dependencies. Rendered gameplay and
+packaging need separate checks.
 
 Sync `BasicMasterMaterials` and `DTGenericCatalog` through the project's Perforce
 stream imports before visual or packaged-build verification. A custom client
