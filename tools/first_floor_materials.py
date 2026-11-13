@@ -7,6 +7,7 @@ WORLD_GRID = "/Engine/EngineMaterials/WorldGridMaterial.WorldGridMaterial"
 SHARED = "/Game/MaterialInstances/Shared"
 HARDSCAPING = "/Game/MaterialInstances/Outdoors/Hardscaping"
 MESHES = "/Game/StaticMeshes"
+REVIT = f"{MESHES}/RevitBuildoutModels"
 COUCHES = f"{MESHES}/Shared/Furniture/DeanSuiteFurniture/CommonAreaCouch"
 UPPER_FLOOR_CARPET = f"{SHARED}/Flooring/MI_GrayCarpet_Dark_2_WS"
 
@@ -50,18 +51,25 @@ MATERIALS = {
     f"{MESHES}/Shared/Furniture/DeanSuiteFurniture/SM_DeansSuiteCouch": {
         1: f"{SHARED}/Plastic/MI_GrayPlastic3",
     },
-    f"{MESHES}/RevitBuildoutModels/Casework_Lab_Bench_-_TB_TB-60": {
+    f"{REVIT}/Casework_Lab_Bench_-_TB_TB-60": {
         0: f"{SHARED}/Walls/MI_Gray_01",
+    },
+    f"{REVIT}/Curtain_Wall_Mullions_Rectangular_Mullion_TriFab_-_Horizontal_-_Front_captured_4": {
+        0: f"{SHARED}/Metals/MI_Gray_03Metal",
+    },
+    f"{REVIT}/Specialty_Equipment_Elevator_Cab-Traction_Reed_6_x_7_5": {
+        0: f"{SHARED}/Metals/MI_Gray_01Metal",
     },
 }
 
 
 def fallback_material_slots(actors):
     """Yield the component, mesh path, index, and material for each fallback slot."""
-    for actor in actors:
-        if not isinstance(actor, unreal.StaticMeshActor):
-            continue
-        component = actor.static_mesh_component
+    components = (
+        component for actor in actors
+        for component in actor.get_components_by_class(unreal.StaticMeshComponent)
+    )
+    for component in components:
         mesh = component.get_editor_property("static_mesh")
         if not mesh:
             continue

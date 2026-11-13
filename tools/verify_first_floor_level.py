@@ -160,6 +160,16 @@ def verification_report(world, actors, visited, paths, map_path=MAP):
         ),
         "CheckerboardMaterialSlots": checkerboard_count,
         "UnassignedMaterialSlots": unassigned_count,
+        "FallbackMaterialSlots": [
+            {
+                "Actor": component.get_owner().get_actor_label(),
+                "Component": component.get_name(),
+                "Mesh": mesh_path,
+                "Slot": index,
+                "Material": material.get_path_name() if material else None,
+            }
+            for component, mesh_path, index, material in fallbacks
+        ],
         "ShadowCastingFixtures": shadowed_fixtures,
         "FixturesWithDrawLimits": len(fixtures) - fixtures_without_limits,
         "FullTwinDependencies": forbidden,
