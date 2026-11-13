@@ -1,7 +1,8 @@
 param(
     [Parameter(Mandatory)] [string]$Project,
     [string]$EngineRoot = $env:UE_ROOT,
-    [switch]$FullCook
+    [switch]$FullCook,
+    [string]$ArchiveDirectory
 )
 
 $ErrorActionPreference = 'Stop'
@@ -15,6 +16,9 @@ if ($projectFile.PSIsContainer -or $projectFile.Extension -ne '.uproject') {
 $projectRoot = $projectFile.DirectoryName
 $mapFile = Join-Path $projectRoot 'Content\Level\PFTFirstFloorComplete.umap'
 $archiveRoot = Join-Path $projectRoot 'Saved\FirstFloorWindows'
+if ($ArchiveDirectory) {
+    $archiveRoot = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ArchiveDirectory)
+}
 $automationTool = Join-Path $EngineRoot 'Engine\Build\BatchFiles\RunUAT.bat'
 $launcher = Join-Path $PSScriptRoot 'Play PFT Demo.cmd'
 if (!(Test-Path -LiteralPath $mapFile -PathType Leaf)) {

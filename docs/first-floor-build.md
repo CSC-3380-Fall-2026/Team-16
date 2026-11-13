@@ -152,6 +152,14 @@ again or `-EngineRoot` if UE 5.8 is installed in a different directory. The scri
 copies the launcher into `Saved\FirstFloorWindows\Windows` after packaging succeeds.
 Keep the files under `Saved` local to the workspace.
 
+To keep a playable build while packaging a review copy, set a separate archive
+directory. Relative archive paths are resolved from the current directory.
+
+```powershell
+& .\Tools\package_first_floor_demo.ps1 -Project .\PFTDigitalTwin.uproject `
+  -ArchiveDirectory '.\Saved\FirstFloor Review'
+```
+
 Open `Play PFT Demo.cmd` in the Windows package. From the C1003 spawn, check the floor in
 front of the glass entrance and walk past the Zone 1200 sign around the corner.
 Search for `CSC 1350`, select room 1200, and use **View selected room** to check
