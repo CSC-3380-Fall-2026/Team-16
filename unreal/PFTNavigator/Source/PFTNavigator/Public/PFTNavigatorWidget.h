@@ -31,6 +31,7 @@ class PFTNAVIGATOR_API UPFTNavigatorWidget : public UUserWidget
 public:
     void ChooseRoom(const FString& RoomId);
     void UpdateCameraControls(bool bFreeCamera, bool bCursorShown, bool bRoomPreview);
+    void UpdateRouteControls();
 protected:
     virtual TSharedRef<SWidget> RebuildWidget() override;
     virtual FReply NativeOnPreviewKeyDown(const FGeometry& Geometry, const FKeyEvent& Event) override;
@@ -45,6 +46,7 @@ private:
     void UpdateSelectedTags();
     UFUNCTION() void ToggleFreeCamera();
     UFUNCTION() void ViewRoom();
+    UFUNCTION() void ToggleRoute();
     UPROPERTY() TObjectPtr<UTextBlock> Status;
     UPROPERTY() TObjectPtr<UTextBlock> Details;
     UPROPERTY() TObjectPtr<UEditableTextBox> Search;
@@ -52,6 +54,9 @@ private:
     UPROPERTY() TObjectPtr<UCheckBox> PreviewOnly;
     UPROPERTY() TObjectPtr<UButton> ViewButton;
     UPROPERTY() TObjectPtr<UButton> ClearButton;
+    UPROPERTY() TObjectPtr<UButton> RouteButton;
+    UPROPERTY() TObjectPtr<UTextBlock> RouteLabel;
+    UPROPERTY() TObjectPtr<UTextBlock> RouteHint;
     UPROPERTY() TObjectPtr<UTextBlock> CameraLabel;
     UPROPERTY() TObjectPtr<UTextBlock> CameraHelp;
     UPROPERTY() TObjectPtr<UScrollBox> Results;
