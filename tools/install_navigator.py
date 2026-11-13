@@ -7,7 +7,34 @@ import subprocess
 import validate_data
 
 
-def install(project, changelist=None):
+def navigator_files(root, project):
+    """Yield each Git source and its matching destination in the Unreal project."""
+    source = root / "unreal" / "PFTNavigator"
+    destination = project.parent / "Plugins" / "PFTNavigator"
+    for path in sorted(source.rglob("*")):
+        relative = path.relative_to(source)
+        if path.is_file() and not set(relative.parts) & {"Binaries", "Intermediate", "Saved"}:
+            yield path, destination / relative
+    for path in sorted((root / "data").glob("*.json")):
+        yield path, destination / "Content" / "Data" / path.name
+
+
+def check_install(project, settings, files):
+    """Return the files that differ from Git and any plugin enablement error."""
+    problems = []
+    for source, destination in files:
+        relative = destination.relative_to(project.parent)
+        if not destination.is_file():
+            problems.append(f"Missing {relative}")
+        elif destination.read_bytes() != source.read_bytes():
+            problems.append(f"Changed {relative}")
+    if not any(plugin.get("Name") == "PFTNavigator" and plugin.get("Enabled") is True
+               for plugin in settings.get("Plugins", [])):
+        problems.append("PFTNavigator is not enabled in the project file")
+    return problems
+
+
+def install(project, changelist=None, *, check=False):
     project = Path(project).resolve()
     root = Path(__file__).resolve().parents[1]
     if not project.is_file() or project.suffix != ".uproject":
@@ -19,6 +46,13 @@ def install(project, changelist=None):
     errors = validate_data.validate(root / "data")
     if errors:
         raise ValueError("\n".join(errors))
+    files = list(navigator_files(root, project))
+    if check:
+        problems = check_install(project, settings, files)
+        if problems:
+            raise ValueError("\n".join(problems))
+        print(f"PFTNavigator matches this checkout ({len(files)} files).")
+        return
     p4 = shutil.which("p4") or r"C:\Program Files\Perforce\p4.exe"
 
     def write_file(path, content):
@@ -34,13 +68,8 @@ def install(project, changelist=None):
         if changelist is not None and not exists:
             subprocess.run([p4, "add", "-c", str(changelist), str(path)], cwd=project.parent, check=True)
 
-    source = root / "unreal" / "PFTNavigator"
-    destination = project.parent / "Plugins" / "PFTNavigator"
-    for path in source.rglob("*"):
-        if path.is_file() and not set(path.relative_to(source).parts) & {"Binaries", "Intermediate", "Saved"}:
-            write_file(destination / path.relative_to(source), path.read_bytes())
-    for path in (root / "data").glob("*.json"):
-        write_file(destination / "Content" / "Data" / path.name, path.read_bytes())
+    for source, destination in files:
+        write_file(destination, source.read_bytes())
     plugins = settings.setdefault("Plugins", [])
     entry = next((plugin for plugin in plugins if plugin["Name"] == "PFTNavigator"), None)
     if entry is None:
@@ -54,12 +83,18 @@ def install(project, changelist=None):
     if b"\r\n" in original:
         text = text.replace("\n", "\r\n")
     write_file(project, text.encode())
+    destination = project.parent / "Plugins" / "PFTNavigator"
     print(f"Installed PFTNavigator in {destination}. Build and restart Unreal to load it.")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("project", type=Path)
-    parser.add_argument("--changelist", type=int)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--changelist", type=int)
+    mode.add_argument("--check", action="store_true", help="Compare installed files without changing the project")
     args = parser.parse_args()
-    install(args.project, args.changelist)
+    try:
+        install(args.project, args.changelist, check=args.check)
+    except (OSError, ValueError) as error:
+        parser.exit(1, f"{error}\n")
