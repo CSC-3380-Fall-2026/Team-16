@@ -42,8 +42,8 @@ The finishing pass disables shadows on point, spot, and rect fixtures to reduce
 render-thread work while retaining their light and the sun's directional shadow.
 It also gives typical fixtures a 60-metre draw limit with a 12-metre fade. Wider
 fixtures get a longer limit based on their attenuation radius, and shorter
-authored limits are kept. The Windows launcher uses these distances even with
-its low shadow quality setting.
+authored limits are kept. The Windows launcher uses half of those draw
+distances to reduce the number of distant lights rendered during the walkthrough.
 The selection retains ambiguous upper-floor meshes and drops known furnishing
 and equipment categories outside the first-floor height band. It also omits
 the source map's unloaded MEP and cinematic layers, distant campus meshes,
@@ -184,8 +184,8 @@ front of the glass entrance and walk past the Zone 1200 sign around the corner.
 Search for `CSC 1350`, select room 1200, and use **View selected room** to check
 the camera. Try room 1202 and the Commons to check the added destinations.
 
-The launcher opens the demo at 720p with DirectX 11 and a 30 FPS cap. The package
-includes both DirectX renderers.
+The launcher opens the demo at native 720p with DirectX 11 and a 30 FPS cap.
+The package includes both DirectX renderers.
 
 ## Check the Zone 1200 walkthrough
 
