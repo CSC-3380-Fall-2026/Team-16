@@ -244,5 +244,9 @@ run the shorter Zone 1200 route on its own. The game exits after each test.
 Logs are in `PFTDigitalTwin\Saved\Logs`. The `CommonsWalk` and `Navigator`
 folders under `PFTDigitalTwin\Saved\Automation` each contain an `index.json`
 with the test result. The shorter walkthrough writes to `FirstFloorWalk`.
-Use `FrameTime` in the new CSV under `PFTDigitalTwin\Saved\Profiling\CSV`
-to check frame pacing.
+Run `& '.\Play PFT Demo.cmd' profile` from the Windows package to measure frame
+pacing on the Commons route. It prints frame-time percentiles, the slowest frame,
+and counts above 50 ms and 100 ms. The text report sits beside the test log and
+links to the exact CSV under `PFTDigitalTwin\Saved\Profiling\CSV`. Close other
+copies of the demo when comparing runs. The report measures the walk after
+onboarding, and its timing does not affect the pass or fail result of `verify`.
