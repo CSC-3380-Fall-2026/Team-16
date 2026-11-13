@@ -229,8 +229,13 @@ void UPFTNavigatorWidget::ChooseRoom(const FString& RoomId)
     const auto* Directory = GetGameInstance()->GetSubsystem<UPFTDirectory>();
     const auto* Room = Directory->FindRoom(RoomId);
     auto* Destinations = GetWorld()->GetSubsystem<UPFTDestinations>();
-    ClearRoom();
-    if (Destinations->IsRoomPreviewActive()) return;
+    const bool bHasLocation = Room && Destinations->HasLocation(RoomId);
+    const bool bSwitchPreview = bHasLocation && Destinations->IsRoomPreviewActive();
+    if (!bSwitchPreview)
+    {
+        ClearRoom();
+        if (Destinations->IsRoomPreviewActive()) return;
+    }
     if (!Room)
     {
         Status->SetText(FText::FromString(TEXT("This room is no longer in the directory.")));
@@ -238,14 +243,15 @@ void UPFTNavigatorWidget::ChooseRoom(const FString& RoomId)
     }
     SelectedRoomId = RoomId;
     UpdateSelectedTags();
-    const bool bHasLocation = Destinations->HasLocation(RoomId);
     const bool bSelected = bHasLocation && Destinations->SelectRoom(RoomId);
+    if (bSwitchPreview && !bSelected) ToggleFreeCamera();
     Details->SetText(FText::FromString(Directory->GetRoomDetails(RoomId)));
     ViewButton->SetIsEnabled(bSelected);
     ClearButton->SetIsEnabled(true);
     FString Message = TEXT("Room preview is unavailable on this map.");
     if (bHasLocation) Message = bSelected ? TEXT("Room selected.") : Destinations->Error;
     Status->SetText(FText::FromString(Message));
+    if (bSwitchPreview && bSelected) ViewRoom();
 }
 
 void UPFTNavigatorWidget::ClearRoom()
@@ -318,7 +324,8 @@ FReply UPFTNavigatorWidget::NativeOnPreviewKeyDown(const FGeometry& Geometry, co
         if (Event.IsRepeat() || Results->GetChildrenCount() != 1) return FReply::Handled();
         const FString RoomId = CastChecked<UPFTSearchButton>(Results->GetChildAt(0))->RoomId;
         ChooseRoom(RoomId);
-        if (SelectedRoomId == RoomId && ViewButton->GetIsEnabled()) ViewRoom();
+        const auto* Destinations = GetWorld()->GetSubsystem<UPFTDestinations>();
+        if (SelectedRoomId == RoomId && ViewButton->GetIsEnabled() && !Destinations->IsRoomPreviewActive()) ViewRoom();
         return FReply::Handled();
     }
     auto* Exploration = GetWorld()->GetSubsystem<UPFTExploration>();
