@@ -168,6 +168,42 @@ function Publish-DemoArchive {
     }
 }
 
+function Get-ToolsRevision {
+    $git = Get-Command git -CommandType Application -ErrorAction SilentlyContinue
+    if (!$git) { return $null }
+    $files = @('package_first_floor_demo.ps1', 'Play PFT Demo.cmd', 'measure_demo_frames.ps1', 'check_demo_assets.ps1')
+    $tracked = & $git.Source -C $PSScriptRoot ls-files -- @files 2>$null
+    if ($LASTEXITCODE -ne 0 -or @($tracked).Count -ne $files.Count) { return $null }
+    $commit = & $git.Source -C $PSScriptRoot rev-parse HEAD 2>$null
+    if ($LASTEXITCODE -ne 0) { return $null }
+    $modified = & $git.Source -C $PSScriptRoot status --porcelain -- @files 2>$null
+    if ($LASTEXITCODE -ne 0) { return $null }
+    [ordered]@{ Commit = $commit; Modified = [bool]$modified }
+}
+
+function Write-BuildRecord($mapHash, $cookMode, $verification, $toolsRevision) {
+    $enginePath = Join-Path $EngineRoot 'Engine\Build\Build.version'
+    $engine = if (Test-Path -LiteralPath $enginePath -PathType Leaf) {
+        Get-Content -LiteralPath $enginePath -Raw | ConvertFrom-Json
+    }
+    $tests = [ordered]@{}
+    if ($verification -eq 'Passed') {
+        $tests.CommonsWalk = 'PFTDigitalTwin/Saved/Automation/CommonsWalk/index.json'
+        $tests.Navigator = 'PFTDigitalTwin/Saved/Automation/Navigator/index.json'
+    }
+    [ordered]@{
+        BuildId = $buildId
+        PackagedAtUtc = [DateTime]::UtcNow.ToString('o')
+        Map = $map
+        MapSha256 = $mapHash
+        Engine = $engine
+        Tools = $toolsRevision
+        CookMode = $cookMode
+        Verification = $verification
+        TestReports = $tests
+    } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $candidate 'PFTDemoBuild.json') -Encoding UTF8
+}
+
 $builds = Join-Path $projectRoot 'Saved\FirstFloorBuilds'
 $mapBuild = Join-Path $builds "Level\$MapName"
 $receipt = Join-Path $mapBuild 'WindowsCook.json'
@@ -202,6 +238,8 @@ try {
     Confirm-DemoArchive $package
     [IO.Directory]::CreateDirectory($candidate) > $null
     Write-Host "Building the replacement demo in $candidate."
+    $mapHash = (Get-FileHash -LiteralPath $mapFile).Hash
+    $toolsRevision = Get-ToolsRevision
     $inputs = Get-CookInputs
     $saved = $null
     if ($ReuseCook -and (Test-Path -LiteralPath $receipt -PathType Leaf)) {
@@ -220,10 +258,13 @@ try {
         }
     }
     $usingSavedCook = $ReuseCook -and !$reuseIssue
+    $cookMode = 'Incremental'
     if ($usingSavedCook) {
+        $cookMode = 'Reused'
         Write-Host "Reusing the saved Windows cook for $map."
         $arguments += '-skipcook'
     } else {
+        if ($FullCook) { $cookMode = 'Full' }
         if ($ReuseCook) { Write-Host "$reuseIssue for $map. Cooking assets." }
         if (Test-Path -LiteralPath $receipt -PathType Leaf) { [IO.File]::WriteAllText($receipt, '') }
         $arguments += '-cook'
@@ -241,6 +282,9 @@ try {
     $finalInputs = Get-CookInputs
     $changed = @(Get-ChangedCookInputs $inputs $finalInputs)
     $finalCookHash = Get-CookStoreHash $cookDirectory
+    if ((Get-FileHash -LiteralPath $mapFile).Hash -ne $mapHash) {
+        throw 'The selected map changed during packaging. Run again to package the updated map.'
+    }
     if ($usingSavedCook -and ($changed.Count -or $finalCookHash -ne $cookHash)) {
         throw 'The saved cook or its inputs changed during packaging. Run again with a fresh cook.'
     }
@@ -259,12 +303,15 @@ try {
     [IO.File]::WriteAllText($packageLauncher, $launcherText.Replace($defaultMap, $map))
     Copy-Item -LiteralPath $frameReport -Destination $candidate
     Copy-Item -LiteralPath $assetCheck -Destination $candidate
+    $verification = 'Not requested'
     if ($Verify) {
         & $packageLauncher verify
         if ($LASTEXITCODE -ne 0) {
             throw "Windows demo verification failed. Read the logs under $candidate\PFTDigitalTwin\Saved\Logs."
         }
+        $verification = 'Passed'
     }
+    Write-BuildRecord $mapHash $cookMode $verification $toolsRevision
     Publish-DemoArchive
     Write-Output (Join-Path $package 'Play PFT Demo.cmd')
 } finally {
