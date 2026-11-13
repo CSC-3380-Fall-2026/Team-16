@@ -7,6 +7,8 @@ import unreal
 
 HOUSING = "/Game/MaterialInstances/Shared/Metals/MI_WhiteMetal"
 BLANK = "/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"
+SIDES = (("Front", 53, 0), ("Back", -53, 180))
+LETTER_COLOR = {"r": 200, "g": 15, "b": 25, "a": 255}
 
 
 def exit_housings(actors):
@@ -28,7 +30,7 @@ def finish_exit_signs(subsystem, actors):
         current = mesh.get_material(0)
         if not current or current.get_path_name() == BLANK:
             mesh.set_material(0, material)
-        for side, yaw in (("Front", 0), ("Back", 180)):
+        for side, offset, yaw in SIDES:
             label = f"{housing.get_actor_label()}_Text{side}"
             sign = by_label.get(label)
             if sign is None:
@@ -38,8 +40,8 @@ def finish_exit_signs(subsystem, actors):
                 sign.set_actor_label(label)
             sign.attach_to_actor(housing, "", unreal.AttachmentRule.KEEP_WORLD,
                                  unreal.AttachmentRule.KEEP_WORLD, unreal.AttachmentRule.KEEP_WORLD, False)
-            # The housing is a 100 cm cube scaled down to the authored sign dimensions.
-            sign.set_actor_relative_location(unreal.Vector(53 if side == "Front" else -53, 0, 0), False, True)
+            # Keep the lettering outside the scaled cube and below the ceiling edge.
+            sign.set_actor_relative_location(unreal.Vector(offset, 0, -10), False, True)
             sign.set_actor_relative_rotation(unreal.Rotator(yaw=yaw), False, True)
             text = sign.get_component_by_class(unreal.TextRenderComponent)
             text.set_absolute(False, False, True)
@@ -48,7 +50,7 @@ def finish_exit_signs(subsystem, actors):
             text.set_horizontal_alignment(unreal.HorizTextAligment.EHTA_CENTER)
             text.set_vertical_alignment(unreal.VerticalTextAligment.EVRTA_TEXT_CENTER)
             text.set_world_size(16.0)
-            text.set_text_render_color(unreal.Color(200, 15, 25, 255))
+            text.set_text_render_color(unreal.Color(**LETTER_COLOR))
     return len(housings)
 
 
@@ -65,9 +67,11 @@ def check_exit_signs(actors, expected_count):
         material = mesh.get_material(0) if mesh else None
         if not material or material.get_path_name() == BLANK:
             errors.append(f"Blank exit sign housing: {label}")
-        for side in ("Front", "Back"):
+        for side, _, _ in SIDES:
             sign = by_label.get(f"{label}_Text{side}")
             text = sign.get_component_by_class(unreal.TextRenderComponent) if sign else None
             if not text or str(text.get_editor_property("text")) != "EXIT" or sign.get_attach_parent_actor() != housing:
                 errors.append(f"Missing exit sign lettering: {label} {side}")
+            elif text.get_editor_property("text_render_color") != unreal.Color(**LETTER_COLOR):
+                errors.append(f"Incorrect exit sign lettering color: {label} {side}")
     return errors
