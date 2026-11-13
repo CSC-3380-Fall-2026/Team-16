@@ -182,16 +182,20 @@ class FirstFloorCompatibilityTests(unittest.TestCase):
         wide.set_editor_property.assert_any_call("max_draw_distance", 21200)
         authored.set_editor_property.assert_not_called()
 
-    def test_surface_repairs_only_replace_mapped_checkerboard_slots(self):
+    def test_surface_repairs_only_replace_mapped_fallback_slots(self):
         class MeshActor:
             def __init__(self, mesh_path, material_path):
                 component = mock.Mock()
                 component.get_editor_property.return_value = SimpleNamespace(get_path_name=lambda: mesh_path)
-                component.get_material.return_value = SimpleNamespace(get_path_name=lambda: material_path)
+                component.get_num_materials.return_value = 2
+                component.get_material.return_value = (
+                    SimpleNamespace(get_path_name=lambda: material_path) if material_path else None
+                )
                 self.static_mesh_component = component
 
         table = f"{MESHES}/Shared/Furniture/SM_SecondFloor_CommonArea_Table"
         checkerboard = MeshActor(table, WORLD_GRID)
+        unassigned = MeshActor(f"{MESHES}/Shared/Furniture/SM_Cushion", None)
         authored = MeshActor(table, f"{SHARED}/Metals/MI_Gray_01Metal")
         unrelated = MeshActor(f"{MESHES}/Shared/Furniture/SM_UnlistedTable", WORLD_GRID)
         replacement = SimpleNamespace()
@@ -200,10 +204,13 @@ class FirstFloorCompatibilityTests(unittest.TestCase):
             sys.modules["unreal"], create=True, StaticMeshActor=MeshActor,
             MaterialInterface=SimpleNamespace, load_asset=load_asset,
         ):
-            self.assertEqual(restore_surface_materials([checkerboard, authored, unrelated]), 1)
+            self.assertEqual(restore_surface_materials([checkerboard, unassigned, authored, unrelated]), 2)
 
-        load_asset.assert_called_once_with(f"{SHARED}/Metals/MI_GrayGlossy")
+        self.assertEqual(load_asset.call_count, 2)
+        load_asset.assert_any_call(f"{SHARED}/Metals/MI_GrayGlossy")
+        load_asset.assert_any_call(f"{SHARED}/Walls/MI_Gray_01")
         checkerboard.static_mesh_component.set_material.assert_called_once_with(1, replacement)
+        unassigned.static_mesh_component.set_material.assert_called_once_with(1, replacement)
         authored.static_mesh_component.set_material.assert_not_called()
         unrelated.static_mesh_component.set_material.assert_not_called()
 
