@@ -2,6 +2,7 @@ param(
     [Parameter(Mandatory)] [string]$Project,
     [string]$EngineRoot = $env:UE_ROOT,
     [switch]$FullCook,
+    [switch]$ReuseCook,
     [switch]$Verify,
     [string]$ArchiveDirectory,
     [ValidatePattern('^[A-Za-z0-9_]+$')] [string]$MapName = 'PFTFirstFloorComplete'
@@ -9,6 +10,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 if (!$EngineRoot) { $EngineRoot = 'C:\Program Files\Epic Games\UE_5.8' }
+if ($FullCook -and $ReuseCook) { throw 'Choose either -FullCook or -ReuseCook.' }
 
 $projectFile = Get-Item -LiteralPath $Project
 if ($projectFile.PSIsContainer -or $projectFile.Extension -ne '.uproject') {
@@ -40,15 +42,79 @@ if (!(Test-Path -LiteralPath $launcher -PathType Leaf)) { throw 'Play PFT Demo.c
 $launcherText = Get-Content -LiteralPath $launcher -Raw
 if (!$launcherText.Contains($defaultMap)) { throw 'The launcher is missing its first-floor map setting.' }
 
+function Get-CombinedHash($entries) {
+    $entries.Sort([StringComparer]::Ordinal)
+    $bytes = [Text.Encoding]::UTF8.GetBytes($entries -join "`n")
+    $stream = [IO.MemoryStream]::new($bytes)
+    try { (Get-FileHash -InputStream $stream).Hash } finally { $stream.Dispose() }
+}
+
+function Get-CookInputHash {
+    $recursive = [IO.SearchOption]::AllDirectories
+    $assetFolders = @("$projectRoot/Content", "$projectRoot/Config", "$projectRoot/Shaders")
+    $sourceFolders = @("$projectRoot/Source")
+    $descriptors = @($projectFile, (Get-Item -LiteralPath $mapFile))
+    $engineVersion = Join-Path $EngineRoot 'Engine\Build\Build.version'
+    if (Test-Path -LiteralPath $engineVersion -PathType Leaf) {
+        $descriptors += Get-Item -LiteralPath $engineVersion
+    }
+    $plugins = Join-Path $projectRoot 'Plugins'
+    if ([IO.Directory]::Exists($plugins)) {
+        foreach ($plugin in [IO.DirectoryInfo]::new($plugins).EnumerateFiles('*.uplugin', $recursive)) {
+            $descriptors += $plugin
+            $assetFolders += @("$($plugin.DirectoryName)/Content", "$($plugin.DirectoryName)/Config", "$($plugin.DirectoryName)/Shaders")
+            $sourceFolders += "$($plugin.DirectoryName)/Source"
+        }
+    }
+
+    $entries = [Collections.Generic.List[string]]::new()
+    foreach ($folder in $assetFolders | Where-Object { [IO.Directory]::Exists($_) }) {
+        foreach ($file in [IO.DirectoryInfo]::new($folder).EnumerateFiles('*', $recursive)) {
+            $entries.Add("$($file.FullName)|$($file.Length)|$($file.LastWriteTimeUtc.Ticks)")
+        }
+    }
+    foreach ($folder in $sourceFolders | Where-Object { [IO.Directory]::Exists($_) }) {
+        foreach ($file in [IO.DirectoryInfo]::new($folder).EnumerateFiles('*', $recursive)) {
+            if ($file.Extension -in '.h', '.hpp', '.inl', '.cs') {
+                $entries.Add("$($file.FullName)|$($file.Length)|$($file.LastWriteTimeUtc.Ticks)")
+            }
+        }
+    }
+    foreach ($file in $descriptors) {
+        $entries.Add("$($file.FullName)|$((Get-FileHash -LiteralPath $file.FullName).Hash)")
+    }
+    Get-CombinedHash $entries
+}
+
+function Get-CookStoreHash($directory) {
+    $metadata = Join-Path $directory "$($projectFile.BaseName)\Metadata"
+    $files = @(
+        (Join-Path $directory 'ue.projectstore'),
+        (Join-Path $metadata 'CookedIniVersion.txt'),
+        (Join-Path $metadata 'CookMetadata.ucookmeta'),
+        (Join-Path $metadata 'DevelopmentAssetRegistry.bin'),
+        (Join-Path $metadata 'zenfs.manifest')
+    )
+    $entries = [Collections.Generic.List[string]]::new()
+    foreach ($file in $files) {
+        if (!(Test-Path -LiteralPath $file -PathType Leaf)) { return $null }
+        $entries.Add("$file|$((Get-FileHash -LiteralPath $file).Hash)")
+    }
+    Get-CombinedHash $entries
+}
+
+$builds = Join-Path $projectRoot 'Saved\FirstFloorBuilds'
+$mapBuild = Join-Path $builds "Level\$MapName"
+$receipt = Join-Path $mapBuild 'WindowsCook.json'
+$cookDirectory = Join-Path $projectRoot 'Saved\Cooked\Windows'
 $arguments = @(
     'BuildCookRun', "-project=$($projectFile.FullName)", '-platform=Win64', '-clientconfig=Development',
-    '-build', '-cook', '-stage', '-pak', '-iostore', '-archive', "-archivedirectory=$package",
+    '-build', '-stage', '-pak', '-iostore', '-archive', "-archivedirectory=$package",
     "-map=$map", '-unattended', '-nop4', '-utf8output', '-ubtargs=-NoHotReloadFromIDE'
 )
-if (!$FullCook) { $arguments += '-AdditionalCookerOptions=-CookIncremental' }
 if ($map -ne $defaultMap) {
     # Keep the candidate's cooked packages and metadata separate from the standard demo.
-    $cookDirectory = Join-Path $projectRoot "Saved\FirstFloorBuilds\Level\$MapName\Cooked\Windows"
+    $cookDirectory = Join-Path $mapBuild 'Cooked\Windows'
     $cacheSuffix = $MapName.ToLowerInvariant()
     $arguments += @(
         "-CookOutputDir=$cookDirectory",
@@ -57,26 +123,64 @@ if ($map -ne $defaultMap) {
     )
 }
 
-& $automationTool @arguments
-if ($LASTEXITCODE -ne 0) { throw "Unreal packaging failed with exit code $LASTEXITCODE." }
-
-if (!(Test-Path -LiteralPath (Join-Path $package 'PFTDigitalTwin.exe') -PathType Leaf)) {
-    throw 'Packaging finished without producing the Windows demo executable.'
+$null = New-Item -ItemType Directory -Path $mapBuild -Force
+# Standard and candidate builds use the same staging directory.
+try {
+    $lock = [IO.File]::Open((Join-Path $builds 'WindowsPackage.lock'), 'OpenOrCreate', 'ReadWrite', 'None')
+} catch [IO.IOException] {
+    throw "Could not lock Windows packaging for $projectRoot. Check for another packaging command."
 }
-
-$reportTemplate = Join-Path $EngineRoot 'Engine\Content\Automation\Report-Template.html'
-if (Test-Path -LiteralPath $reportTemplate -PathType Leaf) {
-    $reportFolder = Join-Path $package 'Engine\Content\Automation'
-    $null = New-Item -ItemType Directory -Path $reportFolder -Force
-    Copy-Item -LiteralPath $reportTemplate -Destination $reportFolder
-}
-
-$packageLauncher = Join-Path $package 'Play PFT Demo.cmd'
-[IO.File]::WriteAllText($packageLauncher, $launcherText.Replace($defaultMap, $map))
-if ($Verify) {
-    & $packageLauncher verify
-    if ($LASTEXITCODE -ne 0) {
-        throw "Windows demo verification failed. Read the logs under $package\PFTDigitalTwin\Saved\Logs."
+try {
+    $inputHash = Get-CookInputHash
+    $saved = $null
+    if ($ReuseCook -and (Test-Path -LiteralPath $receipt -PathType Leaf)) {
+        try { $saved = Get-Content -LiteralPath $receipt -Raw | ConvertFrom-Json } catch { $saved = $null }
     }
+    $cookHash = if ($ReuseCook) { Get-CookStoreHash $cookDirectory }
+    $usingSavedCook = $saved -and $saved.Map -eq $map -and $saved.Inputs -eq $inputHash -and
+        $cookHash -and $saved.Store -eq $cookHash
+    if ($usingSavedCook) {
+        Write-Host "Reusing the saved Windows cook for $map."
+        $arguments += '-skipcook'
+    } else {
+        if ($ReuseCook) { Write-Host "No matching saved Windows cook for $map. Cooking assets." }
+        if (Test-Path -LiteralPath $receipt -PathType Leaf) { [IO.File]::WriteAllText($receipt, '') }
+        $arguments += '-cook'
+        if (!$FullCook) { $arguments += '-AdditionalCookerOptions=-CookIncremental' }
+    }
+
+    & $automationTool @arguments
+    if ($LASTEXITCODE -ne 0) { throw "Unreal packaging failed with exit code $LASTEXITCODE." }
+
+    if (!(Test-Path -LiteralPath (Join-Path $package 'PFTDigitalTwin.exe') -PathType Leaf)) {
+        throw 'Packaging finished without producing the Windows demo executable.'
+    }
+
+    $finalInputHash = Get-CookInputHash
+    $finalCookHash = Get-CookStoreHash $cookDirectory
+    if ($usingSavedCook -and ($finalInputHash -ne $inputHash -or $finalCookHash -ne $cookHash)) {
+        throw 'The saved cook or its inputs changed during packaging. Run again with a fresh cook.'
+    }
+    if ($finalInputHash -eq $inputHash -and $finalCookHash) {
+        @{Map = $map; Inputs = $inputHash; Store = $finalCookHash} | ConvertTo-Json | Set-Content -LiteralPath $receipt
+    }
+
+    $reportTemplate = Join-Path $EngineRoot 'Engine\Content\Automation\Report-Template.html'
+    if (Test-Path -LiteralPath $reportTemplate -PathType Leaf) {
+        $reportFolder = Join-Path $package 'Engine\Content\Automation'
+        $null = New-Item -ItemType Directory -Path $reportFolder -Force
+        Copy-Item -LiteralPath $reportTemplate -Destination $reportFolder
+    }
+
+    $packageLauncher = Join-Path $package 'Play PFT Demo.cmd'
+    [IO.File]::WriteAllText($packageLauncher, $launcherText.Replace($defaultMap, $map))
+    if ($Verify) {
+        & $packageLauncher verify
+        if ($LASTEXITCODE -ne 0) {
+            throw "Windows demo verification failed. Read the logs under $package\PFTDigitalTwin\Saved\Logs."
+        }
+    }
+    Write-Output $packageLauncher
+} finally {
+    $lock.Dispose()
 }
-Write-Output $packageLauncher

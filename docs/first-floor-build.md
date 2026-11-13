@@ -159,6 +159,17 @@ Keep the files under `Saved` local to the workspace.
 Pass `-Verify` to run the Zone 1200 walkthrough and the Navigator click test
 after packaging. The command exits with an error if either test fails.
 
+For C++ implementation edits, pass `-ReuseCook` to rebuild the executable and
+package the saved Windows cook. The script checks the selected map, project and
+plugin files, headers, and cook metadata. A missing or stale cook falls back to
+incremental cooking. Use a regular cook after changing asset defaults or
+serialization in C++.
+
+```powershell
+& .\Tools\package_first_floor_demo.ps1 -Project .\PFTDigitalTwin.uproject `
+  -ReuseCook -Verify
+```
+
 To keep a playable build while packaging a review copy, set a separate archive
 directory. Relative archive paths are resolved from the current directory.
 
