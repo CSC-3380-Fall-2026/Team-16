@@ -64,6 +64,8 @@ tag on the local player controller and clearing it when the screen closes.
 Search by room number, course code/title, or department, then select a result to show its room
 info (name, type, floor, offices, and classes) and its marker. Rooms with no map
 location yet still show their info with "Map location not available yet."
+Press Enter in the search box when there is one result to open its preview.
+For a room without a map location, Enter shows its directory details.
 **View selected room** moves the exploration camera near that marker. Unbound
 rooms show an explanation and never move the camera to an invented location.
 
@@ -77,7 +79,9 @@ The room and exploration buttons appear above the room details. Click
 - Return restores the previous pawn, rotation, and cursor.
 
 Opening a room preview hides its marker while the room stays selected. Fly
-and Return show the selected room marker again.
+and Return show the selected room marker again. Clear closes the preview and
+returns you to the original player. Selecting a different room
+also closes the previous preview.
 
 Exploration uses UE's spectator movement and can pass through walls. It is a
 standalone/local-host prototype, not multiplayer navigation or a walking guide.

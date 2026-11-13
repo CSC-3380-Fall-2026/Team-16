@@ -27,6 +27,7 @@ public:
     UFUNCTION(BlueprintCallable) bool HasLocation(const FString& RoomId) const;
     UFUNCTION(BlueprintCallable) void ClearSelection();
     void SetRoomPreviewActive(bool bActive);
+    bool IsRoomPreviewActive() const { return bRoomPreviewActive; }
     UPROPERTY(BlueprintReadOnly) FString Error;
     UPROPERTY(BlueprintReadOnly) TObjectPtr<APFTRoomMarker> ActiveMarker;
 private:
