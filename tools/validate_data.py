@@ -11,10 +11,15 @@ import math
 import os
 import sys
 
+from typing import Any
+
+# One row from a data file, ex: {"Name": "PFT_1200", "Floor": 1, ...}
+Row = dict[str, Any]
+
 DATA_FOLDER = os.path.join(os.path.dirname(__file__), "..", "data")
 
 # The fields every row in each file needs to have
-REQUIRED_FIELDS = {
+REQUIRED_FIELDS: dict[str, list[str]] = {
     "rooms.json": ["Name", "RoomNumber", "DisplayName", "Floor", "RoomType"],
     "faculty.json": ["Name", "FullName", "DepartmentId", "OfficeRoomId"],
     "courses.json": ["Name", "CourseCode", "CourseTitle", "DepartmentId", "RoomId"],
@@ -22,7 +27,7 @@ REQUIRED_FIELDS = {
 }
 
 
-def load_file(folder, file_name):
+def load_file(folder: str | os.PathLike[str], file_name: str) -> Any:
     """Loads one of the data files.
     Params: folder - the data folder, file_name - the file to load
     Returns: the list of rows, or None if the file is missing or isn't valid JSON
@@ -35,7 +40,7 @@ def load_file(folder, file_name):
         return None
 
 
-def get_ids(rows):
+def get_ids(rows: list[Row]) -> set[Any]:
     """Gets all the IDs (the "Name" field) from a file's rows.
     Params: rows - the rows from one file
     Returns: a set of the IDs, used to check if a reference exists
@@ -43,12 +48,12 @@ def get_ids(rows):
     return {row.get("Name") for row in rows}
 
 
-def check_required_fields(file_name, rows):
+def check_required_fields(file_name: str, rows: list[Row]) -> list[str]:
     """Makes sure every row has all of its required fields and none are empty.
     Params: file_name - which file the rows are from, rows - the rows to check
     Returns: a list of errors (empty if everything is fine)
     """
-    errors = []
+    errors: list[str] = []
     for row in rows:
         row_id = row.get("Name", "(row with no Name)")
         for field in REQUIRED_FIELDS[file_name]:
@@ -58,8 +63,8 @@ def check_required_fields(file_name, rows):
     return errors
 
 
-def check_field_types(file_name, rows):
-    errors = []
+def check_field_types(file_name: str, rows: list[Row]) -> list[str]:
+    errors: list[str] = []
     for row in rows:
         for field in REQUIRED_FIELDS[file_name]:
             value = row.get(field)
@@ -74,14 +79,14 @@ def check_field_types(file_name, rows):
     return errors
 
 
-def check_duplicate_ids(file_name, rows):
+def check_duplicate_ids(file_name: str, rows: list[Row]) -> list[str]:
     """Makes sure no two rows in a file have the same ID.
     Unreal uses the Name as the row name in a DataTable, so it has to be unique.
     Params: file_name - which file the rows are from, rows - the rows to check
     Returns: a list of errors (empty if everything is fine)
     """
-    errors = []
-    seen = set()
+    errors: list[str] = []
+    seen: set[Any] = set()
     for row in rows:
         row_id = row.get("Name")
         if row_id in seen:
@@ -90,7 +95,7 @@ def check_duplicate_ids(file_name, rows):
     return errors
 
 
-def check_references(data):
+def check_references(data: dict[str, list[Row]]) -> list[str]:
     """Makes sure every room or department a row points to actually exists.
     Every search ends up at a room, so a bad reference would be a search
     result that leads nowhere.
@@ -109,7 +114,7 @@ def check_references(data):
         ("departments.json", "OfficeRoomId", room_ids),
     ]
 
-    errors = []
+    errors: list[str] = []
     for file_name, field, valid_ids in references:
         for row in data[file_name]:
             value = row.get(field)
@@ -119,13 +124,13 @@ def check_references(data):
     return errors
 
 
-def validate(folder):
+def validate(folder: str | os.PathLike[str]) -> list[str]:
     """Runs all the checks on the data folder.
     Params: folder - the folder with the JSON files
     Returns: a list of every error found (empty if the data is good)
     """
-    errors = []
-    data = {}
+    errors: list[str] = []
+    data: dict[str, list[Row]] = {}
 
     for file_name in REQUIRED_FIELDS:
         rows = load_file(folder, file_name)
@@ -156,10 +161,11 @@ def validate(folder):
     return errors
 
 
-def check_bindings(rows, room_ids):
+def check_bindings(rows: Any, room_ids: set[Any]) -> list[str]:
     if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
         return ["room_bindings.json: expected a list of objects"]
-    errors, keys = [], set()
+    errors: list[str] = []
+    keys: set[tuple[str, str]] = set()
     for row in rows:
         room_id, map_path, location = row.get("RoomId"), row.get("Map"), row.get("Location")
         if not isinstance(room_id, str) or room_id not in room_ids or not isinstance(map_path, str) or not map_path.startswith("/Game/"):
@@ -174,7 +180,7 @@ def check_bindings(rows, room_ids):
     return errors
 
 
-def main():
+def main() -> None:
     folder = DATA_FOLDER
     if len(sys.argv) > 1:
         folder = sys.argv[1]
