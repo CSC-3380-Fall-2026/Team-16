@@ -174,7 +174,8 @@ The candidate also gets its own cook cache in that map's build folder. Use its
 launcher to play and test the selected map before choosing it as the project
 startup map.
 
-Open `Play PFT Demo.cmd` in the Windows package. From the C1003 spawn, check the floor in
+Open `Play PFT Demo.cmd` in the Windows package. Choose **Skip tour** to open the
+Navigator. From the C1003 spawn, check the floor in
 front of the glass entrance and walk past the Zone 1200 sign around the corner.
 Search for `CSC 1350`, select room 1200, and use **View selected room** to check
 the camera. Try room 1202 and the Commons to check the added destinations.

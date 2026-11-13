@@ -2,10 +2,13 @@
 #include "PFTDirectory.h"
 #include "PFTDestinations.h"
 #include "PFTExploration.h"
+#include "PFTExplorePawn.h"
 #include "PFTPalette.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/EditableTextBox.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
 #include "Components/ScrollBox.h"
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
@@ -72,9 +75,7 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     ListSize->SetContent(Results);
     Column->AddChild(ListSize);
     Status = AddText(TEXT("Select a result to mark its room."));
-    Details = AddText(TEXT("Select a room to see its details."));
-    Details->Rename(TEXT("RoomDetails"));
-    auto AddButton = [&](const FString& Text, UTextBlock*& Label)
+    auto AddButton = [&](UHorizontalBox* Row, const FString& Text, UTextBlock*& Label)
     {
         auto* Button = WidgetTree->ConstructWidget<UButton>();
         Label = WidgetTree->ConstructWidget<UTextBlock>();
@@ -84,21 +85,31 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
         Label->SetColorAndOpacity(FSlateColor(FLinearColor::White));
         Button->SetBackgroundColor(FLinearColor(PFTPalette::Purple));
         Button->SetContent(Label);
-        Column->AddChild(Button);
+        auto* Slot = Row->AddChildToHorizontalBox(Button);
+        Slot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+        Slot->SetPadding(FMargin(0, 0, 4, 0));
         return Button;
     };
+    auto* RoomActions = WidgetTree->ConstructWidget<UHorizontalBox>();
+    Column->AddChild(RoomActions);
     UTextBlock* Label;
-    AddButton(TEXT("Explore"), Label)->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ToggleExplore);
-    ExploreLabel = Label;
-    ViewButton = AddButton(TEXT("View selected room"), Label);
+    ViewButton = AddButton(RoomActions, TEXT("View selected room"), Label);
     ViewButton->Rename(TEXT("ViewRoomButton"));
     ViewButton->SetIsEnabled(false);
     ViewButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ViewRoom);
-    ClearButton = AddButton(TEXT("Clear selected room"), Label);
+    ClearButton = AddButton(RoomActions, TEXT("Clear"), Label);
     ClearButton->Rename(TEXT("ClearRoomButton"));
     ClearButton->SetIsEnabled(false);
     ClearButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ClearRoom);
-    AddButton(TEXT("Fly (Tab returns to mouse)"), Label)->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::Fly);
+    auto* ExploreActions = WidgetTree->ConstructWidget<UHorizontalBox>();
+    Column->AddChild(ExploreActions);
+    auto* ExploreButton = AddButton(ExploreActions, TEXT("Explore"), Label);
+    ExploreButton->Rename(TEXT("ExploreButton"));
+    ExploreButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ToggleExplore);
+    ExploreLabel = Label;
+    AddButton(ExploreActions, TEXT("Fly"), Label)->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::Fly);
+    Details = AddText(TEXT("Select a room to see its details."));
+    Details->Rename(TEXT("RoomDetails"));
     AddText(TEXT("WASD move | Q down | E up\nMouse look | Tab switches mouse"));
     for (auto* Child : Column->GetAllChildren())
         Cast<UVerticalBoxSlot>(Child->Slot)->SetPadding(FMargin(0, 0, 0, 6));
@@ -199,9 +210,11 @@ void UPFTNavigatorWidget::UpdateSelectedTags()
 void UPFTNavigatorWidget::ToggleExplore()
 {
     auto* Exploration = GetWorld()->GetSubsystem<UPFTExploration>();
-    const bool bSuccess = Exploration->ExplorePawn ? Exploration->EndExplore() : Exploration->BeginExplore();
+    const bool bWasExploring = IsValid(Exploration->ExplorePawn);
+    const bool bSuccess = bWasExploring ? Exploration->EndExplore() : Exploration->BeginExplore();
     ExploreLabel->SetText(FText::FromString(Exploration->ExplorePawn ? TEXT("Return to original player") : TEXT("Explore")));
-    Status->SetText(FText::FromString(bSuccess ? TEXT("WASD/QE move. Tab opens the mouse.") : Exploration->Error));
+    const FString Message = bWasExploring ? TEXT("Returned to the original player.") : TEXT("WASD/QE move. Tab opens the mouse.");
+    Status->SetText(FText::FromString(bSuccess ? Message : Exploration->Error));
 }
 
 void UPFTNavigatorWidget::Fly()
@@ -212,6 +225,7 @@ void UPFTNavigatorWidget::Fly()
     {
         Exploration->SetCursor(false);
         ExploreLabel->SetText(FText::FromString(TEXT("Return to original player")));
+        Status->SetText(FText::FromString(TEXT("WASD/QE move. Tab opens the mouse.")));
     }
 }
 
@@ -219,7 +233,11 @@ void UPFTNavigatorWidget::ViewRoom()
 {
     auto* Exploration = GetWorld()->GetSubsystem<UPFTExploration>();
     if (!Exploration->ViewRoom()) Status->SetText(FText::FromString(Exploration->Error));
-    else ExploreLabel->SetText(FText::FromString(TEXT("Return to original player")));
+    else
+    {
+        ExploreLabel->SetText(FText::FromString(TEXT("Return to original player")));
+        Status->SetText(FText::FromString(TEXT("Room preview is open.")));
+    }
 }
 
 FReply UPFTNavigatorWidget::NativeOnPreviewKeyDown(const FGeometry& Geometry, const FKeyEvent& Event)

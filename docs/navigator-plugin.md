@@ -56,15 +56,19 @@ metadata already available in the Perforce map; it does not guess missing rooms.
 
 ## Task 6 exploration and UI
 
-After installing, building, and restarting Unreal, press Play. The Navigator
-panel appears below the twin's top bar for the local player. Search by room
-number, course code/title, or department, then select a result to show its room
+After installing, building, and restarting Unreal, press Play. Finish or skip
+the twin's welcome screen to open the Navigator with the cursor available.
+The project-side welcome screen code is in Perforce shelf 41648. A host can
+defer the panel during its welcome screen by setting the `PFTOnboardingActive`
+tag on the local player controller and clearing it when the screen closes.
+Search by room number, course code/title, or department, then select a result to show its room
 info (name, type, floor, offices, and classes) and its marker. Rooms with no map
 location yet still show their info with "Map location not available yet."
 **View selected room** moves the exploration camera near that marker. Unbound
 rooms show an explanation and never move the camera to an invented location.
 
-Click **Explore** or **Fly** to use the separate exploration pawn:
+The room and exploration buttons appear above the room details. Click
+**Explore** or **Fly** to use the separate exploration pawn:
 
 - WASD or arrow keys move; Q/E move down/up.
 - Mouse movement looks around.
@@ -81,7 +85,7 @@ map-derived destinations.
 
 ## Room browser
 
-The panel lists rooms as soon as Play starts. Leave the search blank to browse
+The panel lists rooms as soon as the welcome screen closes. Leave the search blank to browse
 all rooms, or choose a floor to narrow the list. Floor choices come from the
 loaded room data. Searches for rooms and courses also respect the selected floor;
 course results use the floor of their assigned room. Department and faculty

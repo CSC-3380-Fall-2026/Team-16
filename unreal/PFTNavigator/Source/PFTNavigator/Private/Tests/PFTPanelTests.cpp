@@ -1,4 +1,8 @@
 #include "PFTNavigatorWidget.h"
+#include "PFTDestinations.h"
+#include "PFTExploration.h"
+#include "PFTExplorePawn.h"
+#include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Button.h"
 #include "Components/ComboBoxString.h"
@@ -6,10 +10,16 @@
 #include "Components/TextBlock.h"
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
+#include "Engine/GameViewportClient.h"
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
+#include "Framework/Application/SlateApplication.h"
 #include "GameFramework/PlayerController.h"
+#include "InputCoreTypes.h"
+#include "Layout/WidgetPath.h"
 #include "Misc/AutomationTest.h"
+#include "Tests/AutomationCommon.h"
+#include "Widgets/SWindow.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPFTSelectedTagTest, "PFTNavigator.Panel.SelectedTag", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
@@ -108,6 +118,109 @@ bool FPFTSelectedTagTest::RunTest(const FString& Parameters)
     SetSearch(Panel, TEXT(""));
     TestEqual(TEXT("Tag stays off after the list is rebuilt"), GetTaggedRooms(Panel).Num(), 0);
     Cleanup();
+    return true;
+}
+
+namespace
+{
+    // Use the real viewport hit path so clipped or covered controls fail the test.
+    bool ClickVisibleWidget(UWidget* Widget)
+    {
+        auto Window = GEngine->GameViewport->GetWindow();
+        auto SlateWidget = Widget ? Widget->GetCachedWidget() : nullptr;
+        if (!Window || !SlateWidget || !Widget->GetIsEnabled()) return false;
+
+        const FGeometry& Geometry = Widget->GetCachedGeometry();
+        const FVector2D Center = Geometry.LocalToAbsolute(Geometry.GetLocalSize() * 0.5);
+        auto& Slate = FSlateApplication::Get();
+        const FWidgetPath Hit = Slate.LocateWindowUnderMouse(Center, { Window.ToSharedRef() });
+        if (!Hit.ContainsWidget(SlateWidget.Get())) return false;
+
+        const TSet<FKey> Pressed = { EKeys::LeftMouseButton };
+        const TSet<FKey> Released;
+        const FPointerEvent Move(0, Center, Slate.GetCursorPos(), Released, EKeys::Invalid, 0, FModifierKeysState());
+        const FPointerEvent Down(0, Center, Center, Pressed, EKeys::LeftMouseButton, 0, FModifierKeysState());
+        const FPointerEvent Up(0, Center, Center, Released, EKeys::LeftMouseButton, 0, FModifierKeysState());
+        Slate.RoutePointerMoveEvent(Hit, Move, false);
+        Slate.RoutePointerDownEvent(Hit, Down);
+        return Slate.RoutePointerUpEvent(Hit, Up).IsEventHandled();
+    }
+
+    UPFTNavigatorWidget* FindNavigator(UWorld* World)
+    {
+        TArray<UUserWidget*> Widgets;
+        UWidgetBlueprintLibrary::GetAllWidgetsOfClass(World, Widgets, UPFTNavigatorWidget::StaticClass(), true);
+        return Widgets.Num() == 1 ? Cast<UPFTNavigatorWidget>(Widgets[0]) : nullptr;
+    }
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPFTNavigatorAfterOnboardingTest, "PFTNavigator.Panel.AfterOnboarding",
+    EAutomationTestFlags::ClientContext | EAutomationTestFlags::EngineFilter)
+
+bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
+{
+    UWorld* World = GEngine && GEngine->GameViewport ? GEngine->GameViewport->GetWorld() : nullptr;
+    APlayerController* Player = World ? World->GetFirstPlayerController() : nullptr;
+    if (!TestNotNull(TEXT("The packaged demo has a local player"), Player)) return false;
+    TestNull(TEXT("The welcome screen opens before the Navigator"), FindNavigator(World));
+
+    TArray<UUserWidget*> Widgets;
+    UWidgetBlueprintLibrary::GetAllWidgetsOfClass(World, Widgets, UUserWidget::StaticClass(), true);
+    UWidget* SkipButton = nullptr;
+    for (UUserWidget* Widget : Widgets)
+    {
+        if (Widget->WidgetTree) SkipButton = Widget->WidgetTree->FindWidget(TEXT("SkipButton"));
+        if (SkipButton) break;
+    }
+    if (!TestTrue(TEXT("Skip tour is clickable"), ClickVisibleWidget(SkipButton))) return false;
+
+    ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.4f));
+    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World, Player]()
+    {
+        auto* Panel = FindNavigator(World);
+        if (TestNotNull(TEXT("Navigator opens after Skip tour"), Panel))
+        {
+            TestTrue(TEXT("The cursor is available"), Player->bShowMouseCursor);
+            SetSearch(Panel, TEXT("CSC 1350"));
+        }
+        return true;
+    }));
+    ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
+    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World]()
+    {
+        auto* Panel = FindNavigator(World);
+        if (!Panel) return true;
+        for (auto* Result : GetResults(Panel))
+        {
+            if (Result->RoomId != TEXT("PFT_1200")) continue;
+            TestTrue(TEXT("The course result is clickable"), ClickVisibleWidget(Result));
+            break;
+        }
+        TestTrue(TEXT("The course selects PFT 1200"), GetTaggedRooms(Panel).Contains(TEXT("PFT_1200")));
+        return true;
+    }));
+    ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
+    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World, Player]()
+    {
+        auto* Panel = FindNavigator(World);
+        if (!Panel) return true;
+        TestTrue(TEXT("View room is clickable"), ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("ViewRoomButton"))));
+        TestNotNull(TEXT("The preview possesses the exploration pawn"), Cast<APFTExplorePawn>(Player->GetPawn()));
+        TestTrue(TEXT("The preview keeps the cursor available"), Player->bShowMouseCursor);
+        return true;
+    }));
+    ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
+    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World, Player, OriginalPawn = Player->GetPawn()]()
+    {
+        auto* Panel = FindNavigator(World);
+        if (!Panel) return true;
+        TestTrue(TEXT("Return to original player is clickable"),
+            ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("ExploreButton"))));
+        TestEqual(TEXT("The original pawn is restored"), Player->GetPawn(), OriginalPawn);
+        TestTrue(TEXT("Clear is clickable"), ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("ClearRoomButton"))));
+        TestEqual(TEXT("Clear removes the room tag"), GetTaggedRooms(Panel).Num(), 0);
+        return true;
+    }));
     return true;
 }
 #endif
