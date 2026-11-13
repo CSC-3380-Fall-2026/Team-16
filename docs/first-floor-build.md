@@ -158,14 +158,27 @@ directory. Relative archive paths are resolved from the current directory.
   -ArchiveDirectory '.\Saved\FirstFloor Review'
 ```
 
+To package a rebuilt candidate, pass the same map name you gave the rebuild
+script.
+
+```powershell
+& .\Tools\package_first_floor_demo.ps1 -Project .\PFTDigitalTwin.uproject `
+  -MapName PFTFirstFloorUpdated
+```
+
+The candidate archive goes in
+`Saved/FirstFloorBuilds/Level/PFTFirstFloorUpdated/WindowsDemo` by default.
+The candidate also gets its own cook cache in that map's build folder. Use its
+launcher to play and test the selected map before choosing it as the project
+startup map.
+
 Open `Play PFT Demo.cmd` in the Windows package. From the C1003 spawn, check the floor in
 front of the glass entrance and walk past the Zone 1200 sign around the corner.
 Search for `CSC 1350`, select room 1200, and use **View selected room** to check
 the camera. Try room 1202 and the Commons to check the added destinations.
 
 The launcher opens the demo at 720p with DirectX 11 and a 30 FPS cap. The package
-includes both DirectX renderers. Opening `PFTDigitalTwin.exe` directly uses the
-project's default settings.
+includes both DirectX renderers.
 
 ## Check the Zone 1200 walkthrough
 
