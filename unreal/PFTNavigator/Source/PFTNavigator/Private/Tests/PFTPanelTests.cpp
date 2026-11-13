@@ -1,5 +1,6 @@
 #include "PFTNavigatorWidget.h"
 #include "PFTDestinations.h"
+#include "PFTDirectory.h"
 #include "PFTExploration.h"
 #include "PFTExplorePawn.h"
 #include "PFTRoomMarker.h"
@@ -166,8 +167,35 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
         {
             TestTrue(TEXT("The cursor is available"), Player->bShowMouseCursor);
             TestFalse(TEXT("The walking view hides flight shortcuts"), GetCameraHelp(Panel).Contains(TEXT("Q down")));
-            SetSearch(Panel, TEXT("CSC 1350"));
+            const auto* Directory = World->GetGameInstance()->GetSubsystem<UPFTDirectory>();
+            const auto Matches = Directory->BrowseRooms(TEXT(""));
+            TestTrue(TEXT("The demo directory has a second page"), Matches.Num() > 50);
+            TestEqual(TEXT("The room browser starts with 50 rooms"), GetResults(Panel).Num(), 50);
+            TestTrue(TEXT("Show more rooms is clickable"), ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("MoreRoomsButton"))));
+            const auto Results = GetResults(Panel);
+            if (TestEqual(TEXT("Show more rooms adds the remaining matches"), Results.Num(), Matches.Num()))
+            {
+                for (int32 Index = 0; Index < Results.Num(); ++Index)
+                {
+                    TestEqual(TEXT("Room order is preserved"), Results[Index]->RoomId, Matches[Index].RoomId);
+                }
+            }
         }
+        return true;
+    }));
+    ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
+    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World]()
+    {
+        auto* Panel = FindNavigator(World);
+        if (!Panel) return true;
+        const auto Results = GetResults(Panel);
+        if (Results.IsValidIndex(50))
+        {
+            TestTrue(TEXT("The first newly loaded room is clickable"), ClickVisibleWidget(Results[50]));
+            TestTrue(TEXT("The newly loaded room is selected"), GetTaggedRooms(Panel).Contains(Results[50]->RoomId));
+        }
+        SetSearch(Panel, TEXT("CSC 1350"));
+        TestEqual(TEXT("Changing the search resets the result list"), GetResults(Panel).Num(), 1);
         return true;
     }));
     ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));

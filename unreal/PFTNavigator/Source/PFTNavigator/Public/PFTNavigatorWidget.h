@@ -37,7 +37,9 @@ private:
     UFUNCTION() void SearchChanged(const FText& Text);
     UFUNCTION() void FloorChanged(FString Floor, ESelectInfo::Type SelectionType);
     UFUNCTION() void ClearRoom();
+    UFUNCTION() void ShowMoreRooms();
     void RefreshResults();
+    void AddResultPage();
     void UpdateSelectedTags();
     UFUNCTION() void ToggleFreeCamera();
     UFUNCTION() void ViewRoom();
@@ -50,6 +52,7 @@ private:
     UPROPERTY() TObjectPtr<UTextBlock> CameraLabel;
     UPROPERTY() TObjectPtr<UTextBlock> CameraHelp;
     UPROPERTY() TObjectPtr<UScrollBox> Results;
+    UPROPERTY() TObjectPtr<UButton> MoreRoomsButton;
     // Room that's currently picked, empty when nothing is selected
     FString SelectedRoomId;
 };

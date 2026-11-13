@@ -17,6 +17,11 @@
 #include "InputCoreTypes.h"
 #include "Styling/CoreStyle.h"
 
+namespace
+{
+    constexpr int32 RoomsPerPage = 50;
+}
+
 void UPFTSearchButton::SelectRoom()
 {
     if (Panel) Panel->ChooseRoom(RoomId);
@@ -90,9 +95,14 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
         Slot->SetPadding(FMargin(0, 0, 4, 0));
         return Button;
     };
+    UTextBlock* Label;
+    auto* MoreRoomsRow = WidgetTree->ConstructWidget<UHorizontalBox>();
+    Column->AddChild(MoreRoomsRow);
+    MoreRoomsButton = AddButton(MoreRoomsRow, TEXT("Show more rooms"), Label);
+    MoreRoomsButton->Rename(TEXT("MoreRoomsButton"));
+    MoreRoomsButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ShowMoreRooms);
     auto* RoomActions = WidgetTree->ConstructWidget<UHorizontalBox>();
     Column->AddChild(RoomActions);
-    UTextBlock* Label;
     ViewButton = AddButton(RoomActions, TEXT("View selected room"), Label);
     ViewButton->Rename(TEXT("ViewRoomButton"));
     ViewButton->SetIsEnabled(false);
@@ -130,13 +140,34 @@ void UPFTNavigatorWidget::FloorChanged(FString Floor, ESelectInfo::Type Selectio
 void UPFTNavigatorWidget::RefreshResults()
 {
     Results->ClearChildren();
+    Results->ScrollToStart();
+    AddResultPage();
+}
+
+void UPFTNavigatorWidget::ShowMoreRooms()
+{
+    const int32 FirstNewResult = Results->GetChildrenCount();
+    AddResultPage();
+    if (UWidget* FirstNewRoom = Results->GetChildAt(FirstNewResult))
+    {
+        Results->ScrollWidgetIntoView(FirstNewRoom, false, EDescendantScrollDestination::TopOrLeft);
+    }
+}
+
+void UPFTNavigatorWidget::AddResultPage()
+{
     const auto* Directory = GetGameInstance()->GetSubsystem<UPFTDirectory>();
     const auto* Destinations = GetWorld()->GetSubsystem<UPFTDestinations>();
     const auto Entries = Directory->BrowseRooms(Search->GetText().ToString(), FCString::Atoi(*Floors->GetSelectedOption()));
+    const int32 FirstResult = Results->GetChildrenCount();
+    const int32 VisibleCount = FMath::Min(FirstResult + RoomsPerPage, Entries.Num());
     FString Message = FString::Printf(TEXT("%d results."), Entries.Num());
-    if (Entries.Num() > 50) Message = FString::Printf(TEXT("Showing 50 of %d results."), Entries.Num());
+    if (VisibleCount < Entries.Num())
+    {
+        Message = FString::Printf(TEXT("Showing %d of %d results."), VisibleCount, Entries.Num());
+    }
     if (Entries.IsEmpty()) Message = TEXT("No matches. Try another floor or search.");
-    for (int32 Index = 0; Index < FMath::Min(Entries.Num(), 50); ++Index)
+    for (int32 Index = FirstResult; Index < VisibleCount; ++Index)
     {
         auto* Button = WidgetTree->ConstructWidget<UPFTSearchButton>();
         Button->RoomId = Entries[Index].RoomId;
@@ -163,6 +194,7 @@ void UPFTNavigatorWidget::RefreshResults()
     UpdateSelectedTags();
     if (!Directory->Error.IsEmpty()) Message = Directory->Error;
     Status->SetText(FText::FromString(Message));
+    MoreRoomsButton->GetParent()->SetVisibility(VisibleCount < Entries.Num() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 }
 
 void UPFTNavigatorWidget::ChooseRoom(const FString& RoomId)
