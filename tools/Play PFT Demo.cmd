@@ -15,6 +15,7 @@ if /i "%~1"=="profile" if /i "%~2"=="smooth" set "DemoFPS=45"
 set "DemoSettings=%DemoSettings%,t.MaxFPS %DemoFPS%"
 if /i "%~1"=="walkthrough" goto checks
 if /i "%~1"=="verify" goto verify
+if /i "%~1"=="verifyextended" goto verify
 if /i "%~1"=="crossbuilding" goto crossbuilding
 if /i "%~1"=="profile" goto profile
 
@@ -27,10 +28,14 @@ call :run_check FirstFloorWalk PFTFirstFloor.WalkPastZone1200 WalkPastZone1200
 goto checks_done
 
 :crossbuilding
-call :run_check C1007Walk PFTFirstFloor.WalkToC1007 WalkToC1007
-if errorlevel 1 goto checks_done
-call :check_assets
+call :walk_to_c1007
 goto checks_done
+
+:walk_to_c1007
+call :run_check C1007Walk PFTFirstFloor.WalkToC1007 WalkToC1007
+if errorlevel 1 exit /b %errorlevel%
+call :check_assets
+exit /b %errorlevel%
 
 :verify
 call :run_check CommonsWalk PFTFirstFloor.WalkToCommons WalkToCommons
@@ -40,6 +45,8 @@ if errorlevel 1 goto checks_done
 call :run_check Navigator PFTNavigator.Panel.AfterOnboarding AfterOnboarding -RenderOffscreen
 if errorlevel 1 goto checks_done
 call :check_assets
+if errorlevel 1 goto checks_done
+if /i "%~1"=="verifyextended" call :walk_to_c1007
 goto checks_done
 
 :profile
