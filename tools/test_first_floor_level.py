@@ -17,7 +17,7 @@ from create_first_floor_level import (
     map_report_path, read_build_report, read_map_build_report, select_actors, valid_output_map, write_report,
 )
 from first_floor_materials import MESHES, REVIT, SHARED, WORLD_GRID, restore_surface_materials
-from verify_first_floor_level import MAP, SOURCE, check_location_tags, find_dependencies
+from verify_first_floor_level import MAP, SOURCE, check_location_tags, check_room_ids, find_dependencies
 
 
 def actor(label, layer="", kind="StaticMeshActor", low=0, high=100, editor_only=False, x=0):
@@ -32,6 +32,22 @@ def actor(label, layer="", kind="StaticMeshActor", low=0, high=100, editor_only=
             min=SimpleNamespace(x=x, y=0, z=low), max=SimpleNamespace(x=x + 100, y=100, z=high),
         ),
     )
+
+
+class RoomIdTests(unittest.TestCase):
+    @staticmethod
+    def room(label, source_id):
+        return SimpleNamespace(get_actor_label=lambda: label, get_editor_property=lambda name: source_id)
+
+    def test_duplicate_source_ids_are_reported_without_a_build_report(self):
+        rooms = [self.room("Room1200", "shared-id"), self.room("HallwayC1003", "shared-id")]
+        self.assertEqual(["Copied room volumes have duplicate source IDs"], check_room_ids(rooms, {}))
+
+    def test_missing_room_is_detected_against_the_build_report(self):
+        source = {"Room1200": "room-id", "HallwayC1003": "hallway-id"}
+        rooms = [self.room("Room1200", "room-id"), self.room("HallwayC1003", "hallway-id")]
+        self.assertEqual([], check_room_ids(rooms, source))
+        self.assertEqual(["Copied room IDs differ from the source twin"], check_room_ids(rooms[:1], source))
 
 
 class LocationTagsTests(unittest.TestCase):
