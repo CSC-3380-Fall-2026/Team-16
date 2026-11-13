@@ -2,10 +2,12 @@ import json
 import math
 from pathlib import Path
 import re
+from typing import Any
 
 
-def build_bindings(rooms, actors, map_path):
-    bindings, unresolved = [], []
+def build_bindings(rooms: list[dict[str, Any]], actors: list[dict[str, Any]], map_path: str) -> tuple[list[dict[str, Any]], list[str]]:
+    bindings: list[dict[str, Any]] = []
+    unresolved: list[str] = []
     for room in rooms:
         pattern = r"(?<!\d)" + re.escape(room["RoomNumber"]) + r"(?![A-Za-z0-9])"
         matches = [actor for actor in actors if re.search(pattern, actor["Label"], re.IGNORECASE)]
@@ -21,14 +23,14 @@ def build_bindings(rooms, actors, map_path):
     return bindings, unresolved
 
 
-def export_bindings():
+def export_bindings() -> None:
     import unreal
 
     root = Path(__file__).resolve().parents[1]
     map_path = "/Game/Level/PatrickFTaylorHall"
     if not unreal.EditorLoadingAndSavingUtils.load_map(map_path):
         raise RuntimeError("Cannot load the PFT map")
-    actors = []
+    actors: list[dict[str, Any]] = []
     for actor in unreal.WorldPartitionBlueprintLibrary.get_actor_descs():
         if actor.native_class and "AreaTrigger" in actor.native_class.get_name():
             actors.append({"Label": str(actor.label), "Min": [actor.bounds.min.x, actor.bounds.min.y, actor.bounds.min.z], "Max": [actor.bounds.max.x, actor.bounds.max.y, actor.bounds.max.z]})
