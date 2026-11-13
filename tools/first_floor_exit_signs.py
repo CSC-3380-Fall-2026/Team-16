@@ -8,7 +8,7 @@ import unreal
 HOUSING = "/Game/MaterialInstances/Shared/Metals/MI_WhiteMetal"
 BLANK = "/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"
 SIDES = (("Front", 53, 0), ("Back", -53, 180))
-LETTER_COLOR = {"r": 200, "g": 15, "b": 25, "a": 255}
+LETTER_COLOR = (200, 15, 25, 255)
 
 
 def exit_housings(actors):
@@ -50,7 +50,8 @@ def finish_exit_signs(subsystem, actors):
             text.set_horizontal_alignment(unreal.HorizTextAligment.EHTA_CENTER)
             text.set_vertical_alignment(unreal.VerticalTextAligment.EVRTA_TEXT_CENTER)
             text.set_world_size(16.0)
-            text.set_text_render_color(unreal.Color(**LETTER_COLOR))
+            red, green, blue, alpha = LETTER_COLOR
+            text.set_text_render_color(unreal.Color(r=red, g=green, b=blue, a=alpha))
     return len(housings)
 
 
@@ -72,6 +73,8 @@ def check_exit_signs(actors, expected_count):
             text = sign.get_component_by_class(unreal.TextRenderComponent) if sign else None
             if not text or str(text.get_editor_property("text")) != "EXIT" or sign.get_attach_parent_actor() != housing:
                 errors.append(f"Missing exit sign lettering: {label} {side}")
-            elif text.get_editor_property("text_render_color") != unreal.Color(**LETTER_COLOR):
+                continue
+            color = text.get_editor_property("text_render_color")
+            if (color.r, color.g, color.b, color.a) != LETTER_COLOR:
                 errors.append(f"Incorrect exit sign lettering color: {label} {side}")
     return errors
