@@ -11,12 +11,13 @@ from unittest import mock
 
 sys.modules.setdefault("unreal", types.ModuleType("unreal"))
 from create_first_floor_level import (
-    CAMPUS_ROAD_OVERLAY, FLOOR_LAYER, MAIN_HALLWAY_FLOOR, REQUIRED_MATERIAL_ASSETS, clear_import_templates,
+    CAMPUS_ROAD_OVERLAY, FLOOR_LAYER, LOCAL_LOCATION_TAG, MAIN_HALLWAY_FLOOR, REQUIRED_MATERIAL_ASSETS,
+    ROOM_NUMBER_TAG, clear_import_templates,
     disable_fixture_shadows, limit_fixture_draw_distance, load_selected_actors, missing_material_assets,
     map_report_path, read_build_report, read_map_build_report, select_actors, valid_output_map, write_report,
 )
 from first_floor_materials import MESHES, REVIT, SHARED, WORLD_GRID, restore_surface_materials
-from verify_first_floor_level import MAP, SOURCE, find_dependencies
+from verify_first_floor_level import MAP, SOURCE, check_location_tags, find_dependencies
 
 
 def actor(label, layer="", kind="StaticMeshActor", low=0, high=100, editor_only=False, x=0):
@@ -31,6 +32,25 @@ def actor(label, layer="", kind="StaticMeshActor", low=0, high=100, editor_only=
             min=SimpleNamespace(x=x, y=0, z=low), max=SimpleNamespace(x=x + 100, y=100, z=high),
         ),
     )
+
+
+class LocationTagsTests(unittest.TestCase):
+    def test_maps_without_local_locations_can_still_be_verified(self):
+        settings = SimpleNamespace(get_editor_property=lambda name: [])
+        world = SimpleNamespace(get_world_settings=lambda: settings)
+        self.assertEqual([], check_location_tags(world, []))
+        self.assertEqual(["Missing local first-floor location setting"], check_location_tags(world, [], 1))
+
+    def test_local_location_matches_source_label(self):
+        settings = SimpleNamespace(get_editor_property=lambda name: [LOCAL_LOCATION_TAG])
+        world = SimpleNamespace(get_world_settings=lambda: settings)
+        room = SimpleNamespace(
+            get_actor_label=lambda: "HallwayC1003",
+            get_editor_property=lambda name: [ROOM_NUMBER_TAG + "C1003"],
+        )
+        self.assertEqual([], check_location_tags(world, [room], 1))
+        room.get_editor_property = lambda name: [ROOM_NUMBER_TAG + "C1008"]
+        self.assertEqual(["Incorrect local location number for HallwayC1003"], check_location_tags(world, [room], 1))
 
 
 class FirstFloorSelectionTests(unittest.TestCase):

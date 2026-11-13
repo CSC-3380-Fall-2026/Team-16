@@ -51,12 +51,11 @@ def find_dependencies(registry, map_path=MAP):
     return visited, paths
 
 
-def check_room_ids(rooms, map_path):
+def check_room_ids(rooms, room_ids):
     """Return room-ID errors, comparing source IDs when a saved build report is available."""
     errors = []
     if any(not actor.get_editor_property("source_room_id") for actor in rooms):
         errors.append("Copied room volumes are missing source IDs")
-    room_ids = read_map_build_report(map_path).get("SourceRoomIds", {})
     for actor in rooms:
         source_id = actor.get_editor_property("source_room_id")
         if room_ids and source_id != room_ids.get(actor.get_actor_label()):
@@ -65,10 +64,14 @@ def check_room_ids(rooms, map_path):
     return errors
 
 
-def check_location_tags(world, rooms):
+def check_location_tags(world, rooms, expected_count=None):
     """Check the saved runtime number for each first-floor room and hallway."""
     tags = {str(tag) for tag in world.get_world_settings().get_editor_property("tags")}
-    errors = [] if LOCAL_LOCATION_TAG in tags else ["Missing local first-floor location setting"]
+    if LOCAL_LOCATION_TAG not in tags:
+        return [] if expected_count is None else ["Missing local first-floor location setting"]
+    errors = []
+    if expected_count is not None and len(rooms) != expected_count:
+        errors.append("Local location volume count differs from the build report")
     for room in rooms:
         label = room.get_actor_label()
         number = location_number(label)
@@ -160,8 +163,9 @@ def verification_report(world, actors, visited, paths, map_path=MAP):
         errors.append("Output includes the elevated campus road overlay")
     errors.extend(check_entrance_terrain(actors, visited))
     errors.extend(check_room_markers(world, actors, markers))
-    errors.extend(check_room_ids(rooms, map_path))
-    errors.extend(check_location_tags(world, rooms))
+    build_report = read_map_build_report(map_path)
+    errors.extend(check_room_ids(rooms, build_report.get("SourceRoomIds", {})))
+    errors.extend(check_location_tags(world, rooms, build_report.get("LocalLocationVolumes")))
     return {
         "Name": "FirstFloorVerification",
         "Map": map_path,

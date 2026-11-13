@@ -306,13 +306,15 @@ def finish_map(world, room_ids):
 
     subsystem = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
     actors = subsystem.get_all_level_actors()
+    rooms = [actor for actor in actors if isinstance(actor, unreal.PFTAreaTriggers)]
     restore_room_ids(actors, room_ids)
-    set_location_tags(world, [actor for actor in actors if isinstance(actor, unreal.PFTAreaTriggers)])
+    set_location_tags(world, rooms)
     cleared = sum(clear_import_templates(actor) for actor in actors)
     move_player_start(actors)
     add_entrance_terrain(subsystem, actors)
     return {
         "ClearedImportTemplates": cleared,
+        "LocalLocationVolumes": len(rooms),
         "FixtureShadowsDisabled": disable_fixture_shadows(actors),
         "FixtureDrawLimitsApplied": limit_fixture_draw_distance(actors),
         "SurfaceMaterialsRepaired": restore_surface_materials(actors),
