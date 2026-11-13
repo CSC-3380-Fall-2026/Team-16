@@ -17,7 +17,9 @@ from create_first_floor_level import (
     map_report_path, read_build_report, read_map_build_report, select_actors, valid_output_map, write_report,
 )
 from first_floor_materials import MESHES, REVIT, SHARED, WORLD_GRID, restore_surface_materials
-from verify_first_floor_level import MAP, SOURCE, check_location_tags, check_room_ids, find_dependencies
+from verify_first_floor_level import (
+    MAP, SOURCE, check_location_tags, check_room_ids, find_dependencies, find_missing_required_packages,
+)
 
 
 def actor(label, layer="", kind="StaticMeshActor", low=0, high=100, editor_only=False, x=0):
@@ -351,6 +353,30 @@ class FirstFloorCompatibilityTests(unittest.TestCase):
             visited, paths = find_dependencies(registry, candidate)
         self.assertEqual(visited, {candidate, SOURCE})
         self.assertEqual(paths[SOURCE], [candidate, SOURCE])
+
+    def test_missing_required_texture_keeps_its_reference_path(self):
+        material = "/Game/Material"
+        texture = "/BasicMasterMaterials/MissingTexture"
+        editor_icon = "/Engine/EditorResources/OptionalIcon"
+        graph = {MAP: [material, "/Script/Engine"], material: [texture]}
+
+        def dependencies(package, options):
+            result = graph.get(package, [])
+            if package == MAP and options["include_soft_package_references"]:
+                return result + [editor_icon]
+            return result
+
+        registry = SimpleNamespace(
+            get_dependencies=dependencies,
+            get_assets_by_package_name=lambda package, on_disk: [MAP] if package == MAP else [],
+        )
+        assets = SimpleNamespace(does_asset_exist=lambda package: package == material)
+        with mock.patch.object(
+            sys.modules["unreal"], "AssetRegistryDependencyOptions", create=True,
+            side_effect=lambda **options: options,
+        ):
+            self.assertIn(editor_icon, find_dependencies(registry)[0])
+            self.assertEqual(find_missing_required_packages(registry, assets, MAP), [[MAP, material, texture]])
 
 
 if __name__ == "__main__":

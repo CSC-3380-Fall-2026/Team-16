@@ -24,11 +24,11 @@ MAP = OUTPUT_MAP
 SOURCE = "/Game/Level/PatrickFTaylorHall"
 
 
-def find_dependencies(registry, map_path=MAP):
+def find_dependencies(registry, map_path=MAP, include_soft=True):
     """Return the map's reachable packages and reference paths, handling dependency cycles."""
     options = unreal.AssetRegistryDependencyOptions(
         include_hard_package_references=True,
-        include_soft_package_references=True,
+        include_soft_package_references=include_soft,
         include_searchable_names=False,
         include_hard_management_references=False,
         include_soft_management_references=False,
@@ -43,13 +43,24 @@ def find_dependencies(registry, map_path=MAP):
         visited.add(package)
         if package.startswith(("/Script/", "/Memory/")):
             continue
-        for dependency in registry.get_dependencies(package, options):
+        for dependency in registry.get_dependencies(package, options) or []:
             dependency = str(dependency)
             if dependency not in paths:
                 paths[dependency] = paths[package] + [dependency]
             if dependency not in visited:
                 pending.append(dependency)
     return visited, paths
+
+
+def find_missing_required_packages(registry, asset_editor, map_path):
+    """Return reference paths for missing hard dependencies of the saved map."""
+    packages, paths = find_dependencies(registry, map_path, include_soft=False)
+    return [
+        paths[package] for package in sorted(packages)
+        if not package.startswith(("/Script/", "/Memory/"))
+        and not registry.get_assets_by_package_name(package, True)
+        and not asset_editor.does_asset_exist(package)
+    ]
 
 
 def check_room_ids(rooms, room_ids):
@@ -122,7 +133,7 @@ def check_entrance_terrain(actors, visited):
     return []
 
 
-def verification_report(world, actors, visited, paths, map_path=MAP):
+def verification_report(world, actors, visited, paths, map_path=MAP, missing_packages=()):
     """Return counts, source dependency paths, and validation errors for the loaded map."""
     classes = collections.Counter(actor.get_class().get_name() for actor in actors)
     starts = [actor for actor in actors if isinstance(actor, unreal.PlayerStart)]
@@ -134,6 +145,8 @@ def verification_report(world, actors, visited, paths, map_path=MAP):
         or package.startswith("/Game/__ExternalActors__/Level/PatrickFTaylorHall/")
     ]
     errors = check_map(world, classes, forbidden, starts, markers)
+    if missing_packages:
+        errors.append(f"{len(missing_packages)} required asset packages are missing. See MissingRequiredPackages in the report")
     start_locations = [list(actor.get_actor_location().to_tuple()) for actor in starts]
     start_yaws = [actor.get_actor_rotation().yaw for actor in starts]
     if len(starts) == 1:
@@ -180,6 +193,7 @@ def verification_report(world, actors, visited, paths, map_path=MAP):
         "Classes": dict(classes),
         "DependencyPackages": len(visited),
         "MissingMaterialDependencies": missing_materials,
+        "MissingRequiredPackages": list(missing_packages),
         "MappedCheckerboardSlots": sum(
             material is not None and replacement_material(mesh_path, index) is not None
             for _, mesh_path, index, material in fallbacks
@@ -223,8 +237,11 @@ def main():
     unreal.SystemLibrary.execute_console_command(world, "Editor.AsyncStaticMeshCompilationFinishAll")
     actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem).get_all_level_actors()
     registry = unreal.AssetRegistryHelpers.get_asset_registry()
+    registry.wait_for_completion()
     visited, paths = find_dependencies(registry, map_path)
-    report = verification_report(world, actors, visited, paths, map_path)
+    assets = unreal.get_editor_subsystem(unreal.EditorAssetSubsystem)
+    missing_packages = find_missing_required_packages(registry, assets, map_path)
+    report = verification_report(world, actors, visited, paths, map_path, missing_packages)
     write_report(map_report_path(map_path, "FirstFloorVerification.json"), report)
     if report["Errors"]:
         raise RuntimeError("; ".join(report["Errors"]))
