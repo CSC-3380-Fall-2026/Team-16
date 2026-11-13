@@ -54,3 +54,7 @@ Our UE 5.8 plugin adds local room/course search, destination markers, and flying
 exploration controls. See [plugin installation and controls](docs/navigator-plugin.md)
 and [task branches and remaining checks](docs/task-progress.md). The original
 digital twin stays in Perforce; GitHub contains our separate plugin source.
+
+For a lighter startup and packaged map, see the [first-floor build instructions](docs/first-floor-build.md).
+The generation and verification tools are in this repository; the Unreal project
+changes and generated map are shelved in Perforce changelist 42426.

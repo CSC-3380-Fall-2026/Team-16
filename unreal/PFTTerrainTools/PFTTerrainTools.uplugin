@@ -1,0 +1,13 @@
+{
+	"FileVersion": 3,
+	"FriendlyName": "PFT Terrain Tools",
+	"Description": "Bake source terrain for the first-floor map.",
+	"EnabledByDefault": true,
+	"Modules": [
+		{
+			"Name": "PFTTerrainTools",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
+		}
+	]
+}
