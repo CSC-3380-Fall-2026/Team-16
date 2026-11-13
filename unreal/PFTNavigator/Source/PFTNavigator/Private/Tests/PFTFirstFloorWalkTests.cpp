@@ -14,11 +14,13 @@
 
 namespace
 {
-    class FWalkPastZone1200 : public IAutomationLatentCommand
+    class FWalkFirstFloor : public IAutomationLatentCommand
     {
     public:
-        FWalkPastZone1200(FAutomationTestBase& InTest, APlayerController* InPlayer, ACharacter* InCharacter)
-            : Test(InTest), Player(InPlayer), Character(InCharacter)
+        FWalkFirstFloor(FAutomationTestBase& InTest, APlayerController* InPlayer, ACharacter* InCharacter,
+            TArray<FVector2D> InWaypoints, double InTimeLimit)
+            : Test(InTest), Player(InPlayer), Character(InCharacter), Waypoints(MoveTemp(InWaypoints)),
+              TimeLimit(InTimeLimit)
         {
             #if CSV_PROFILER
             FCsvProfiler::Get()->BeginCapture();
@@ -36,7 +38,7 @@ namespace
             {
                 return Finish(TEXT("The walking pawn changed during the route"));
             }
-            if (FPlatformTime::Seconds() - StartTime > 30.0)
+            if (FPlatformTime::Seconds() - StartTime > TimeLimit)
             {
                 return Finish(FString::Printf(TEXT("Timed out at %s on the way to point %d"), *Position.ToCompactString(), NextPoint + 1));
             }
@@ -84,16 +86,39 @@ namespace
         FAutomationTestBase& Test;
         TWeakObjectPtr<APlayerController> Player;
         TWeakObjectPtr<ACharacter> Character;
-        // Walk from the demo spawn, turn past the Zone 1200 sign, and enter the hallway.
-        const TArray<FVector2D> Waypoints = {
-            {10300, -6280}, {10300, -6400}, {10660, -6400}, {10660, -6640}, {11860, -6640}, {11860, -6520}
-        };
+        const TArray<FVector2D> Waypoints;
+        const double TimeLimit;
         double StartTime = FPlatformTime::Seconds();
         int32 NextPoint = 0;
         #if CSV_PROFILER
         TSharedFuture<FString> Capture;
         #endif
     };
+    const TArray<FVector2D> Zone1200Waypoints = {
+        {10300, -6280}, {10300, -6400}, {10660, -6400}, {10660, -6640}, {11860, -6640}, {11860, -6520}
+    };
+
+    bool StartWalk(FAutomationTestBase& Test, TArray<FVector2D> Waypoints, double TimeLimit)
+    {
+        UWorld* World = GEngine && GEngine->GameViewport ? GEngine->GameViewport->GetWorld() : nullptr;
+        FString ExpectedMap = TEXT("/Game/Level/PFTFirstFloorComplete");
+        FParse::Value(FCommandLine::Get(), TEXT("PFTWalkMap="), ExpectedMap);
+        if (!World || World->GetPackage()->GetName() != ExpectedMap)
+        {
+            Test.AddError(FString::Printf(TEXT("Start %s before running this route"), *ExpectedMap));
+            return false;
+        }
+        APlayerController* Player = World->GetFirstPlayerController();
+        ACharacter* Character = Player ? Player->GetCharacter() : nullptr;
+        if (!Test.TestNotNull(TEXT("First-floor walking pawn"), Character)) return false;
+        if (!Test.TestTrue(TEXT("The route starts at the C1003 spawn"),
+            FVector::Dist2D(Character->GetActorLocation(), FVector(9714, -6296, 101)) <= 50.0))
+        {
+            return false;
+        }
+        ADD_LATENT_AUTOMATION_COMMAND(FWalkFirstFloor(Test, Player, Character, MoveTemp(Waypoints), TimeLimit));
+        return true;
+    }
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPFTFirstFloorWalkTest, "PFTFirstFloor.WalkPastZone1200",
@@ -101,24 +126,17 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPFTFirstFloorWalkTest, "PFTFirstFloor.WalkPast
 
 bool FPFTFirstFloorWalkTest::RunTest(const FString& Parameters)
 {
-    UWorld* World = GEngine && GEngine->GameViewport ? GEngine->GameViewport->GetWorld() : nullptr;
-    FString ExpectedMap = TEXT("/Game/Level/PFTFirstFloorComplete");
-    FParse::Value(FCommandLine::Get(), TEXT("PFTWalkMap="), ExpectedMap);
-    if (!World || World->GetPackage()->GetName() != ExpectedMap)
-    {
-        AddError(FString::Printf(TEXT("Start %s before running this route"), *ExpectedMap));
-        return false;
-    }
-    APlayerController* Player = World->GetFirstPlayerController();
-    ACharacter* Character = Player ? Player->GetCharacter() : nullptr;
-    if (!TestNotNull(TEXT("First-floor walking pawn"), Character)) return false;
-    if (!TestTrue(TEXT("The route starts at the C1003 spawn"),
-        FVector::Dist2D(Character->GetActorLocation(), FVector(9714, -6296, 101)) <= 50.0))
-    {
-        return false;
-    }
-    ADD_LATENT_AUTOMATION_COMMAND(FWalkPastZone1200(*this, Player, Character));
-    return true;
+    return StartWalk(*this, Zone1200Waypoints, 30.0);
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPFTCommonsWalkTest, "PFTFirstFloor.WalkToCommons",
+    EAutomationTestFlags::ClientContext | EAutomationTestFlags::PerfFilter)
+
+bool FPFTCommonsWalkTest::RunTest(const FString& Parameters)
+{
+    TArray<FVector2D> Waypoints = Zone1200Waypoints;
+    Waypoints.Append({ {14020, -5720}, {14820, -5160}, {14900, -5160} });
+    return StartWalk(*this, MoveTemp(Waypoints), 45.0);
 }
 
 #endif

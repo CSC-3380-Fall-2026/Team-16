@@ -87,7 +87,7 @@ reports and step logs are under `Saved/FirstFloorBuilds/Level/PFTFirstFloorUpdat
 Pass `-EngineRoot` when Unreal is installed elsewhere.
 
 Add `-PackageDemo` to build the Windows demo after map verification. The command
-prints the launcher path after the Zone 1200 walkthrough and Navigator test
+prints the launcher path after the Commons walkthrough and Navigator test
 pass. A fresh map cooks its assets. On resume, packaging can reuse a matching cook.
 
 ```powershell
@@ -168,7 +168,7 @@ again or `-EngineRoot` if UE 5.8 is installed in a different directory. The scri
 copies the launcher into `Saved\FirstFloorWindows\Windows` after packaging succeeds.
 Keep the files under `Saved` local to the workspace.
 
-Pass `-Verify` to run the Zone 1200 walkthrough and the Navigator click test
+Pass `-Verify` to run the Commons walkthrough and the Navigator click test
 after packaging. The command exits with an error if either test fails.
 
 For C++ implementation edits, pass `-ReuseCook` to rebuild the executable and
@@ -221,13 +221,14 @@ Close the running demo. From the Windows package directory, run both checks:
 & '.\Play PFT Demo.cmd' verify
 ```
 
-The walkthrough starts at C1003 and drives the walking pawn past the Zone 1200
-sign into the hallway. It fails if the pawn falls through the floor or stalls.
+The walkthrough starts at C1003, turns past the Zone 1200 sign, and follows the
+hallway into the Commons. It fails if the pawn falls through the floor or stalls.
 The Navigator test skips the welcome screen, searches for a course, opens the
-room preview, and returns to the original player. Use `walkthrough` to run just
-the walking route. The game exits after each test.
+room preview, and returns to the original player. Use `walkthrough` to run the
+shorter Zone 1200 route on its own. The game exits after each test.
 
-Logs are in `PFTDigitalTwin\Saved\Logs`. The `FirstFloorWalk` and `Navigator`
+Logs are in `PFTDigitalTwin\Saved\Logs`. The `CommonsWalk` and `Navigator`
 folders under `PFTDigitalTwin\Saved\Automation` each contain an `index.json`
-with the test result. Use `FrameTime` in the new CSV under
-`PFTDigitalTwin\Saved\Profiling\CSV` to check frame pacing.
+with the test result. The shorter walkthrough writes to `FirstFloorWalk`.
+Use `FrameTime` in the new CSV under `PFTDigitalTwin\Saved\Profiling\CSV`
+to check frame pacing.
