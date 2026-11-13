@@ -131,26 +131,23 @@ its collision settings, and the standalone map's dependencies.
 
 ## Package the Windows demo
 
-Close Unreal Editor and run this from the project directory after the map
-verification succeeds:
+Close the project in Unreal Editor and run this from the project directory
+after the map verification succeeds:
 
 ```powershell
-& 'C:\Program Files\Epic Games\UE_5.8\Engine\Build\BatchFiles\RunUAT.bat' `
-  BuildCookRun "-project=$PWD\PFTDigitalTwin.uproject" -platform=Win64 `
-  -clientconfig=Development -build -cook -stage -pak -iostore -archive `
-  "-archivedirectory=$PWD\Saved\FirstFloorWindows" `
-  -map=/Game/Level/PFTFirstFloorComplete -unattended -nop4 -utf8output
+& .\Tools\package_first_floor_demo.ps1 -Project .\PFTDigitalTwin.uproject
 ```
 
-For another package from the same workspace, add
-`-AdditionalCookerOptions=-CookIncremental` to reuse unchanged cooked packages.
+The script reuses unchanged cooked packages. Pass `-FullCook` to cook everything
+again or `-EngineRoot` if UE 5.8 is installed in a different directory. The script
+copies the launcher into `Saved\FirstFloorWindows\Windows` after packaging succeeds.
 Keep the files under `Saved` local to the workspace.
 
-Open the archived `PFTDigitalTwin.exe`. From the C1003 spawn, check the floor in
+Open `Play PFT Demo.cmd` in the Windows package. From the C1003 spawn, check the floor in
 front of the glass entrance and walk past the Zone 1200 sign around the corner.
 Search for `CSC 1350`, select room 1200, and use **View selected room** to check
 the camera. Try room 1202 and the Commons to check the added destinations.
 
-On the GTX 1080 test machine, launching with `-d3d11` avoided the DirectX 12
-shader precache errors observed during startup. The package includes both
-DirectX renderers.
+The launcher opens the demo at 720p with DirectX 11 and a 30 FPS cap. The package
+includes both DirectX renderers. Opening `PFTDigitalTwin.exe` directly uses the
+project's default settings.
