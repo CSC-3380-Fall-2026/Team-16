@@ -49,9 +49,10 @@ function Get-CombinedHash($entries) {
     try { (Get-FileHash -InputStream $stream).Hash } finally { $stream.Dispose() }
 }
 
-function Get-CookInputHash {
+function Get-CookInputs {
     $recursive = [IO.SearchOption]::AllDirectories
-    $assetFolders = @("$projectRoot/Content", "$projectRoot/Config", "$projectRoot/Shaders")
+    $assetFolders = @("$projectRoot/Content")
+    $settingFolders = @("$projectRoot/Config", "$projectRoot/Shaders")
     $sourceFolders = @("$projectRoot/Source")
     $descriptors = @($projectFile, (Get-Item -LiteralPath $mapFile))
     $engineVersion = Join-Path $EngineRoot 'Engine\Build\Build.version'
@@ -62,28 +63,49 @@ function Get-CookInputHash {
     if ([IO.Directory]::Exists($plugins)) {
         foreach ($plugin in [IO.DirectoryInfo]::new($plugins).EnumerateFiles('*.uplugin', $recursive)) {
             $descriptors += $plugin
-            $assetFolders += @("$($plugin.DirectoryName)/Content", "$($plugin.DirectoryName)/Config", "$($plugin.DirectoryName)/Shaders")
+            $assetFolders += "$($plugin.DirectoryName)/Content"
+            $settingFolders += @("$($plugin.DirectoryName)/Config", "$($plugin.DirectoryName)/Shaders")
             $sourceFolders += "$($plugin.DirectoryName)/Source"
         }
     }
 
-    $entries = [Collections.Generic.List[string]]::new()
+    # Keep the asset scan inexpensive for large Content folders.
+    $assets = [Collections.Generic.List[string]]::new()
     foreach ($folder in $assetFolders | Where-Object { [IO.Directory]::Exists($_) }) {
         foreach ($file in [IO.DirectoryInfo]::new($folder).EnumerateFiles('*', $recursive)) {
-            $entries.Add("$($file.FullName)|$($file.Length)|$($file.LastWriteTimeUtc.Ticks)")
+            $assets.Add("$($file.FullName)|$($file.Length)|$($file.LastWriteTimeUtc.Ticks)")
         }
     }
+    $settings = [Collections.Generic.List[string]]::new()
+    foreach ($folder in $settingFolders | Where-Object { [IO.Directory]::Exists($_) }) {
+        foreach ($file in [IO.DirectoryInfo]::new($folder).EnumerateFiles('*', $recursive)) {
+            $settings.Add("$($file.FullName)|$((Get-FileHash -LiteralPath $file.FullName).Hash)")
+        }
+    }
+    $source = [Collections.Generic.List[string]]::new()
     foreach ($folder in $sourceFolders | Where-Object { [IO.Directory]::Exists($_) }) {
         foreach ($file in [IO.DirectoryInfo]::new($folder).EnumerateFiles('*', $recursive)) {
             if ($file.Extension -in '.h', '.hpp', '.inl', '.cs') {
-                $entries.Add("$($file.FullName)|$($file.Length)|$($file.LastWriteTimeUtc.Ticks)")
+                $source.Add("$($file.FullName)|$((Get-FileHash -LiteralPath $file.FullName).Hash)")
             }
         }
     }
+    $project = [Collections.Generic.List[string]]::new()
     foreach ($file in $descriptors) {
-        $entries.Add("$($file.FullName)|$((Get-FileHash -LiteralPath $file.FullName).Hash)")
+        $project.Add("$($file.FullName)|$((Get-FileHash -LiteralPath $file.FullName).Hash)")
     }
-    Get-CombinedHash $entries
+    @{
+        Assets = Get-CombinedHash $assets
+        Settings = Get-CombinedHash $settings
+        HeadersAndBuildRules = Get-CombinedHash $source
+        ProjectAndMap = Get-CombinedHash $project
+    }
+}
+
+function Get-ChangedCookInputs($savedInputs, $currentInputs) {
+    foreach ($name in ($currentInputs.Keys | Sort-Object)) {
+        if ($savedInputs.$name -ne $currentInputs[$name]) { $name }
+    }
 }
 
 function Get-CookStoreHash($directory) {
@@ -131,19 +153,29 @@ try {
     throw "Could not lock Windows packaging for $projectRoot. Check for another packaging command."
 }
 try {
-    $inputHash = Get-CookInputHash
+    $inputs = Get-CookInputs
     $saved = $null
     if ($ReuseCook -and (Test-Path -LiteralPath $receipt -PathType Leaf)) {
         try { $saved = Get-Content -LiteralPath $receipt -Raw | ConvertFrom-Json } catch { $saved = $null }
     }
-    $cookHash = if ($ReuseCook) { Get-CookStoreHash $cookDirectory }
-    $usingSavedCook = $saved -and $saved.Map -eq $map -and $saved.Inputs -eq $inputHash -and
-        $cookHash -and $saved.Store -eq $cookHash
+    $reuseIssue = $null
+    $cookHash = $null
+    if ($ReuseCook) {
+        if (!$saved -or $saved.Map -ne $map -or !$saved.CookInputs) {
+            $reuseIssue = 'No compatible cook receipt'
+        } else {
+            $changed = @(Get-ChangedCookInputs $saved.CookInputs $inputs)
+            $cookHash = Get-CookStoreHash $cookDirectory
+            if ($changed.Count) { $reuseIssue = "Cook inputs changed ($($changed -join ', '))" }
+            elseif (!$cookHash -or $saved.Store -ne $cookHash) { $reuseIssue = 'Cook metadata is missing or changed' }
+        }
+    }
+    $usingSavedCook = $ReuseCook -and !$reuseIssue
     if ($usingSavedCook) {
         Write-Host "Reusing the saved Windows cook for $map."
         $arguments += '-skipcook'
     } else {
-        if ($ReuseCook) { Write-Host "No matching saved Windows cook for $map. Cooking assets." }
+        if ($ReuseCook) { Write-Host "$reuseIssue for $map. Cooking assets." }
         if (Test-Path -LiteralPath $receipt -PathType Leaf) { [IO.File]::WriteAllText($receipt, '') }
         $arguments += '-cook'
         if (!$FullCook) { $arguments += '-AdditionalCookerOptions=-CookIncremental' }
@@ -156,13 +188,14 @@ try {
         throw 'Packaging finished without producing the Windows demo executable.'
     }
 
-    $finalInputHash = Get-CookInputHash
+    $finalInputs = Get-CookInputs
+    $changed = @(Get-ChangedCookInputs $inputs $finalInputs)
     $finalCookHash = Get-CookStoreHash $cookDirectory
-    if ($usingSavedCook -and ($finalInputHash -ne $inputHash -or $finalCookHash -ne $cookHash)) {
+    if ($usingSavedCook -and ($changed.Count -or $finalCookHash -ne $cookHash)) {
         throw 'The saved cook or its inputs changed during packaging. Run again with a fresh cook.'
     }
-    if ($finalInputHash -eq $inputHash -and $finalCookHash) {
-        @{Map = $map; Inputs = $inputHash; Store = $finalCookHash} | ConvertTo-Json | Set-Content -LiteralPath $receipt
+    if (!$changed.Count -and $finalCookHash) {
+        @{Map = $map; CookInputs = $finalInputs; Store = $finalCookHash} | ConvertTo-Json | Set-Content -LiteralPath $receipt
     }
 
     $reportTemplate = Join-Path $EngineRoot 'Engine\Content\Automation\Report-Template.html'
