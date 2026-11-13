@@ -175,7 +175,11 @@ The project settings on Perforce shelf `42426` use the Unreal 5.8 include order
 and keep local `UserEngine.ini` overrides out of the Windows package.
 
 Pass `-Verify` to run the Commons walkthrough and the Navigator click test
-after packaging. The command exits with an error if either test fails.
+before replacing the playable archive. If either test fails, the command exits
+with an error and leaves the new build and its logs in the printed `pending`
+folder. Successful builds move into the launcher location. The previous archive
+is kept in a `previous` folder beside it. Delete old `previous` and `pending`
+folders once you no longer need them.
 
 For C++ implementation edits, pass `-ReuseCook` to rebuild the executable and
 package the saved Windows cook. The script checks the selected map, project and
