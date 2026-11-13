@@ -62,8 +62,9 @@ The project-side welcome screen code is in Perforce shelf 41648. A host can
 defer the panel during its welcome screen by setting the `PFTOnboardingActive`
 tag on the local player controller and clearing it when the screen closes.
 Search by room number, course code/title, or department, then select a result to show its room
-info (name, type, floor, offices, and classes) and its marker. Rooms with no map
-location yet still show their info with "Map location not available yet."
+info (name, type, floor, offices, and classes) and its marker. Results marked
+**Preview** have a location on the current map. **Details only** results show
+their directory entry when selected.
 Press Enter in the search box when there is one result to open its preview.
 For a room without a map location, Enter shows its directory details.
 **View selected room** moves the exploration camera near that marker. Unbound
