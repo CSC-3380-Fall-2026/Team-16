@@ -86,6 +86,15 @@ prints the map and report paths after verification. Build and verification
 reports and step logs are under `Saved/FirstFloorBuilds/Level/PFTFirstFloorUpdated`.
 Pass `-EngineRoot` when Unreal is installed elsewhere.
 
+Add `-PackageDemo` to build the Windows demo after map verification. The command
+prints the launcher path after the Zone 1200 walkthrough and Navigator test
+pass. A fresh map cooks its assets. On resume, packaging can reuse a matching cook.
+
+```powershell
+& .\Tools\rebuild_first_floor.ps1 -Project .\PFTDigitalTwin.uproject `
+  -MapName PFTFirstFloorUpdated -PackageDemo
+```
+
 If a later step fails, use the same command with `-Resume` once the error is
 fixed. Resume uses the saved geometry and its build report. Open the new map
 in Unreal to review it before updating `EditorStartupMap`, `GameDefaultMap`,

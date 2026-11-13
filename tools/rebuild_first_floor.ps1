@@ -2,7 +2,8 @@ param(
     [Parameter(Mandatory)] [string]$Project,
     [Parameter(Mandatory)] [ValidatePattern('^[A-Za-z0-9_]+$')] [string]$MapName,
     [string]$EngineRoot = $env:UE_ROOT,
-    [switch]$Resume
+    [switch]$Resume,
+    [switch]$PackageDemo
 )
 
 $ErrorActionPreference = 'Stop'
@@ -80,6 +81,10 @@ try {
     }
     Write-Output $mapFile
     Write-Output $verificationReport
+    if ($PackageDemo) {
+        & (Join-Path $PSScriptRoot 'package_first_floor_demo.ps1') -Project $projectFile.FullName `
+            -EngineRoot $EngineRoot -MapName $MapName -ReuseCook -Verify
+    }
 } finally {
     $lock.Dispose()
 }
