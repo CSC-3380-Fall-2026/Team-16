@@ -10,7 +10,7 @@ set "DemoMap=/Game/Level/PFTFirstFloorComplete"
 set "DemoArgs=-d3d11 -windowed -ResX=1280 -ResY=720 -nosplash"
 set "DemoSettings=r.SetRes 1280x720w,r.VSync 0,sg.ShadowQuality 1,sg.GlobalIlluminationQuality 0,sg.ReflectionQuality 0,sg.PostProcessQuality 1,sg.EffectsQuality 1,r.ScreenPercentage 100,t.MaxFPS 30,r.LightMaxDrawDistanceScale 0.5"
 if /i "%~1"=="walkthrough" goto checks
-if /i "%~1"=="verify" goto checks
+if /i "%~1"=="verify" goto verify
 
 start "" "PFTDigitalTwin.exe" %DemoMap% %DemoArgs% -ExecCmds="%DemoSettings%"
 popd
@@ -18,8 +18,12 @@ exit /b
 
 :checks
 call :run_check FirstFloorWalk PFTFirstFloor.WalkPastZone1200 WalkPastZone1200
+goto checks_done
+
+:verify
+call :run_check CommonsWalk PFTFirstFloor.WalkToCommons WalkToCommons
 if errorlevel 1 goto checks_done
-if /i "%~1"=="verify" call :run_check Navigator PFTNavigator.Panel.AfterOnboarding AfterOnboarding -RenderOffscreen
+call :run_check Navigator PFTNavigator.Panel.AfterOnboarding AfterOnboarding -RenderOffscreen
 
 :checks_done
 set "Result=%errorlevel%"
