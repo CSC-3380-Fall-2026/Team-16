@@ -2,6 +2,7 @@ param(
     [Parameter(Mandatory)] [string]$Project,
     [string]$EngineRoot = $env:UE_ROOT,
     [switch]$FullCook,
+    [switch]$Verify,
     [string]$ArchiveDirectory,
     [ValidatePattern('^[A-Za-z0-9_]+$')] [string]$MapName = 'PFTFirstFloorComplete'
 )
@@ -62,6 +63,20 @@ if ($LASTEXITCODE -ne 0) { throw "Unreal packaging failed with exit code $LASTEX
 if (!(Test-Path -LiteralPath (Join-Path $package 'PFTDigitalTwin.exe') -PathType Leaf)) {
     throw 'Packaging finished without producing the Windows demo executable.'
 }
+
+$reportTemplate = Join-Path $EngineRoot 'Engine\Content\Automation\Report-Template.html'
+if (Test-Path -LiteralPath $reportTemplate -PathType Leaf) {
+    $reportFolder = Join-Path $package 'Engine\Content\Automation'
+    $null = New-Item -ItemType Directory -Path $reportFolder -Force
+    Copy-Item -LiteralPath $reportTemplate -Destination $reportFolder
+}
+
 $packageLauncher = Join-Path $package 'Play PFT Demo.cmd'
 [IO.File]::WriteAllText($packageLauncher, $launcherText.Replace($defaultMap, $map))
+if ($Verify) {
+    & $packageLauncher verify
+    if ($LASTEXITCODE -ne 0) {
+        throw "Windows demo verification failed. Read the logs under $package\PFTDigitalTwin\Saved\Logs."
+    }
+}
 Write-Output $packageLauncher
