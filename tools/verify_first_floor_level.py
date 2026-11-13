@@ -11,7 +11,8 @@ import unreal
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from create_first_floor_level import (
     C1003_TERRAIN, C1003_TERRAIN_LABEL, CAMPUS_ROAD_OVERLAY, DEMO_START_LOCATION, DEMO_START_YAW,
-    MAIN_HALLWAY_FLOOR, OUTPUT_MAP, baked_terrain_textures, fixture_draw_limit, local_lights,
+    LOCAL_LOCATION_TAG, MAIN_HALLWAY_FLOOR, OUTPUT_MAP, ROOM_NUMBER_TAG,
+    baked_terrain_textures, fixture_draw_limit, local_lights, location_number,
     map_report_path, missing_material_assets, read_map_build_report, valid_output_map, write_report,
 )
 from first_floor_destinations import check_room_markers
@@ -61,6 +62,19 @@ def check_room_ids(rooms, map_path):
         if room_ids and source_id != room_ids.get(actor.get_actor_label()):
             errors.append("Copied room IDs differ from the source twin")
             break
+    return errors
+
+
+def check_location_tags(world, rooms):
+    """Check the saved runtime number for each first-floor room and hallway."""
+    tags = {str(tag) for tag in world.get_world_settings().get_editor_property("tags")}
+    errors = [] if LOCAL_LOCATION_TAG in tags else ["Missing local first-floor location setting"]
+    for room in rooms:
+        label = room.get_actor_label()
+        number = location_number(label)
+        numbers = [str(tag) for tag in room.get_editor_property("tags") if str(tag).startswith(ROOM_NUMBER_TAG)]
+        if numbers != [ROOM_NUMBER_TAG + number]:
+            errors.append(f"Incorrect local location number for {label}")
     return errors
 
 
@@ -147,6 +161,7 @@ def verification_report(world, actors, visited, paths, map_path=MAP):
     errors.extend(check_entrance_terrain(actors, visited))
     errors.extend(check_room_markers(world, actors, markers))
     errors.extend(check_room_ids(rooms, map_path))
+    errors.extend(check_location_tags(world, rooms))
     return {
         "Name": "FirstFloorVerification",
         "Map": map_path,
