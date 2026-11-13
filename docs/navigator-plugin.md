@@ -65,6 +65,8 @@ Search by room number, course code/title, or department, then select a result to
 info (name, type, floor, offices, and classes) and its marker. Results marked
 **Preview** have a location on the current map. **Details only** results show
 their directory entry when selected.
+Turn on **Previewable rooms only** to limit the current search and floor to
+rooms with a preview on the open map.
 Use **Show more rooms** to load the next set of results in a broad search. The
 list starts over when you change the search or floor.
 Press Enter in the search box when there is one result to open its preview.

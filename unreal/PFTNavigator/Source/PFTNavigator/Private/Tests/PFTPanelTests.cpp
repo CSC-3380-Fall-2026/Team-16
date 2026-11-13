@@ -5,6 +5,7 @@
 #include "PFTExplorePawn.h"
 #include "PFTRoomMarker.h"
 #include "Components/Button.h"
+#include "Components/CheckBox.h"
 #include "Components/ComboBoxString.h"
 #include "Components/EditableTextBox.h"
 #include "Components/TextBlock.h"
@@ -287,6 +288,38 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
         {
             TestFalse(TEXT("The preview button is disabled for details-only rooms"), ViewButton->GetIsEnabled());
         }
+        auto* Filter = Cast<UCheckBox>(Panel->WidgetTree->FindWidget(TEXT("PreviewOnlyFilter")));
+        if (!TestNotNull(TEXT("The preview-only filter exists"), Filter)) return true;
+        TestTrue(TEXT("The preview-only filter is clickable"), ClickVisibleWidget(Filter));
+        TestTrue(TEXT("The filter is checked"), Filter->IsChecked());
+        TestEqual(TEXT("The details-only room is filtered out"), GetResults(Panel).Num(), 0);
+        SetSearch(Panel, TEXT("CSC 1350"));
+        const auto CourseRooms = GetResults(Panel);
+        if (TestEqual(TEXT("The mapped course remains available"), CourseRooms.Num(), 1))
+        {
+            TestEqual(TEXT("The mapped course still points to PFT 1200"), CourseRooms[0]->RoomId, FString(TEXT("PFT_1200")));
+        }
+        auto* FloorFilter = CastChecked<UComboBoxString>(Panel->WidgetTree->FindWidget(TEXT("FloorFilter")));
+        FloorFilter->SetSelectedOption(TEXT("3"));
+        TestEqual(TEXT("The preview filter respects the selected floor"), GetResults(Panel).Num(), 0);
+        FloorFilter->SetSelectedOption(TEXT("All floors"));
+        SetSearch(Panel, TEXT(""));
+        const auto PreviewRooms = GetResults(Panel);
+        TestTrue(TEXT("The map offers previews to browse"), !PreviewRooms.IsEmpty());
+        for (const auto* Room : PreviewRooms)
+        {
+            TestTrue(TEXT("Each filtered result has a preview"), Room->ResultText.EndsWith(TEXT(" | Preview")));
+        }
+        SetSearch(Panel, TEXT("3307"));
+        return true;
+    }));
+    ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
+    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World]()
+    {
+        auto* Panel = FindNavigator(World);
+        if (!Panel) return true;
+        TestTrue(TEXT("The filter can be cleared"), ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("PreviewOnlyFilter"))));
+        TestEqual(TEXT("Clearing the filter restores the details-only room"), GetResults(Panel).Num(), 1);
         return true;
     }));
     ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World, Player]()

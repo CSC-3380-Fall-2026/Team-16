@@ -9,6 +9,7 @@
 class UTextBlock;
 class UScrollBox;
 class UEditableTextBox;
+class UCheckBox;
 
 UCLASS()
 class UPFTSearchButton : public UButton
@@ -36,6 +37,7 @@ protected:
 private:
     UFUNCTION() void SearchChanged(const FText& Text);
     UFUNCTION() void FloorChanged(FString Floor, ESelectInfo::Type SelectionType);
+    UFUNCTION() void PreviewFilterChanged(bool bChecked);
     UFUNCTION() void ClearRoom();
     UFUNCTION() void ShowMoreRooms();
     void RefreshResults();
@@ -47,6 +49,7 @@ private:
     UPROPERTY() TObjectPtr<UTextBlock> Details;
     UPROPERTY() TObjectPtr<UEditableTextBox> Search;
     UPROPERTY() TObjectPtr<UComboBoxString> Floors;
+    UPROPERTY() TObjectPtr<UCheckBox> PreviewOnly;
     UPROPERTY() TObjectPtr<UButton> ViewButton;
     UPROPERTY() TObjectPtr<UButton> ClearButton;
     UPROPERTY() TObjectPtr<UTextBlock> CameraLabel;
