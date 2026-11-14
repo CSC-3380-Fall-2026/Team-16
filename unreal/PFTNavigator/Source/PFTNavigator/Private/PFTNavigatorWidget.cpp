@@ -171,7 +171,7 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     CameraHelp->Rename(TEXT("CameraHelp"));
 
     Settings = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("RouteSettings"));
-    Column->AddChild(Settings);
+    Browser->AddChild(Settings);
     Settings->SetVisibility(ESlateVisibility::Collapsed);
     auto AddSetting = [&](const FName Name, const TCHAR* Text)
     {
@@ -462,7 +462,7 @@ void UPFTNavigatorWidget::ToggleSettings()
 {
     const bool bWasVisible = Settings->GetVisibility() == ESlateVisibility::Visible;
     Settings->SetVisibility(bWasVisible ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
-    if (!bWasVisible) Browser->ScrollWidgetIntoView(Settings, false, EDescendantScrollDestination::BottomOrRight);
+    Browser->ScrollWidgetIntoView(bWasVisible ? nullptr : Settings.Get(), false, EDescendantScrollDestination::BottomOrRight);
 }
 
 void UPFTNavigatorWidget::MotionChanged(bool bChecked)
