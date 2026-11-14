@@ -4,7 +4,9 @@
 #include "PFTExploration.h"
 #include "PFTExplorePawn.h"
 #include "PFTPalette.h"
+#include "PFTRoutes.h"
 #include "Blueprint/WidgetTree.h"
+#include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Components/Border.h"
 #include "Components/CheckBox.h"
 #include "Components/EditableTextBox.h"
@@ -16,6 +18,8 @@
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
 #include "InputCoreTypes.h"
+#include "GameFramework/Character.h"
+#include "GameFramework/PlayerController.h"
 #include "Styling/CoreStyle.h"
 
 namespace
@@ -59,7 +63,7 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     auto* Title = AddText(TEXT("PFT Navigator"));
     Title->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), 20));
     Title->SetColorAndOpacity(FSlateColor(FLinearColor(PFTPalette::Purple)));
-    AddText(TEXT("Fall 2026 CSC classes in PFT"));
+    AddText(TEXT("Selected Fall 2026 CSC lectures"));
     Search = WidgetTree->ConstructWidget<UEditableTextBox>(UEditableTextBox::StaticClass(), TEXT("RoomSearch"));
     auto Style = Search->GetWidgetStyle();
     Style.TextStyle.SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Regular"), 16));
@@ -127,8 +131,16 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     CameraButton->Rename(TEXT("CameraModeButton"));
     CameraButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ToggleFreeCamera);
     CameraLabel = Label;
+    RouteButton = AddButton(ExploreActions, TEXT("Start walking route"), Label);
+    RouteButton->Rename(TEXT("RouteButton"));
+    RouteButton->SetVisibility(ESlateVisibility::Collapsed);
+    RouteButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ToggleRoute);
+    RouteLabel = Label;
     CameraHelp = AddText(TEXT("Free camera lets you fly around the building."));
     CameraHelp->Rename(TEXT("CameraHelp"));
+    RouteHint = AddText(FString());
+    RouteHint->Rename(TEXT("RouteHint"));
+    RouteHint->SetVisibility(ESlateVisibility::Collapsed);
     Details = AddText(TEXT("Select a room to see its details."));
     Details->Rename(TEXT("RoomDetails"));
     for (auto* Child : Column->GetAllChildren())
@@ -245,7 +257,10 @@ void UPFTNavigatorWidget::ChooseRoom(const FString& RoomId)
     ClearButton->SetIsEnabled(true);
     FString Message = TEXT("Room preview is unavailable on this map.");
     if (bHasLocation) Message = bSelected ? TEXT("Room selected.") : Destinations->Error;
+    if (bSelected && !GetWorld()->GetSubsystem<UPFTRoutes>()->HasDestination(RoomId))
+        Message = TEXT("Room selected. A walking route is unavailable.");
     Status->SetText(FText::FromString(Message));
+    UpdateRouteControls();
 }
 
 void UPFTNavigatorWidget::ClearRoom()
@@ -257,12 +272,14 @@ void UPFTNavigatorWidget::ClearRoom()
         if (Destinations->IsRoomPreviewActive()) return;
     }
     Destinations->ClearSelection();
+    GetWorld()->GetSubsystem<UPFTRoutes>()->Stop();
     SelectedRoomId.Empty();
     UpdateSelectedTags();
     Details->SetText(FText::FromString(TEXT("Select a room to see its details.")));
     ViewButton->SetIsEnabled(false);
     ClearButton->SetIsEnabled(false);
     Status->SetText(FText::FromString(TEXT("Room selection cleared.")));
+    UpdateRouteControls();
 }
 
 // Puts a gold "Selected" tag on every result that points at the selected room.
@@ -303,6 +320,50 @@ void UPFTNavigatorWidget::UpdateCameraControls(bool bFreeCamera, bool bCursorSho
         if (bRoomPreview) Help = TEXT("Room preview. Press Tab to fly from here.");
     }
     CameraHelp->SetText(FText::FromString(Help));
+}
+
+void UPFTNavigatorWidget::ToggleRoute()
+{
+    auto* Routes = GetWorld()->GetSubsystem<UPFTRoutes>();
+    if (Routes->IsGuiding())
+    {
+        Routes->Stop();
+        UpdateRouteControls();
+        return;
+    }
+
+    const auto* Room = GetGameInstance()->GetSubsystem<UPFTDirectory>()->FindRoom(SelectedRoomId);
+    if (!Room || !Routes->HasDestination(SelectedRoomId)) return;
+    auto* Exploration = GetWorld()->GetSubsystem<UPFTExploration>();
+    if (IsValid(Exploration->ExplorePawn) && !Exploration->EndExplore()) return;
+    auto* Player = GetOwningPlayer();
+    auto* Character = Player ? Player->GetCharacter() : nullptr;
+    if (!Character) return;
+
+    if (Routes->Start(*Character, SelectedRoomId, Room->DisplayName) && Routes->IsGuiding())
+    {
+        Character->EnableInput(Player);
+        FInputModeGameAndUI Mode;
+        Mode.SetHideCursorDuringCapture(false);
+        Player->bShowMouseCursor = true;
+        Player->SetInputMode(Mode);
+        UWidgetBlueprintLibrary::SetFocusToGameViewport();
+    }
+    UpdateRouteControls();
+}
+
+void UPFTNavigatorWidget::UpdateRouteControls()
+{
+    if (!RouteButton) return;
+    const auto* Routes = GetWorld()->GetSubsystem<UPFTRoutes>();
+    const bool bAvailable = Routes->HasDestination(SelectedRoomId);
+    RouteButton->SetVisibility(bAvailable ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    const FString Label = Routes->IsGuiding() ? TEXT("Stop route") : TEXT("Start walking route");
+    if (RouteLabel->GetText().ToString() != Label) RouteLabel->SetText(FText::FromString(Label));
+    const FText& Message = Routes->GetMessage();
+    RouteHint->SetVisibility(Message.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
+    CameraHelp->SetVisibility(Message.IsEmpty() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    if (!RouteHint->GetText().EqualTo(Message)) RouteHint->SetText(Message);
 }
 
 void UPFTNavigatorWidget::ViewRoom()

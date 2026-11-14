@@ -18,7 +18,12 @@ TStatId UPFTExploration::GetStatId() const
 
 void UPFTExploration::Tick(float DeltaTime)
 {
-    if (Widget || !GetWorld()->HasBegunPlay() || IsRunningDedicatedServer()) return;
+    if (Widget)
+    {
+        Widget->UpdateRouteControls();
+        return;
+    }
+    if (!GetWorld()->HasBegunPlay() || IsRunningDedicatedServer()) return;
     auto* Player = GetWorld()->GetFirstPlayerController();
     if (!Player || !Player->IsLocalPlayerController()) return;
     // The welcome screen owns the cursor until the twin removes this tag.

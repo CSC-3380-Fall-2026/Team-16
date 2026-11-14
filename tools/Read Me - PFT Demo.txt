@@ -3,6 +3,8 @@ PFT Digital Twin | Windows demo
 1. Extract the entire package to a local folder.
 2. Open Play PFT Demo.cmd.
 3. Choose Skip tour to open the Navigator and walk around.
+4. Search for Commons, click the result, then choose Start walking route.
+   Follow the gold trail using WASD. Hold the left mouse button in the scene to look around.
 
 If Windows reports a missing Visual C++ runtime, run this installer from the
 extracted package, then open the launcher again.

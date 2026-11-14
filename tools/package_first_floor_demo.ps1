@@ -318,7 +318,7 @@ try {
         if ($LASTEXITCODE -ne 0) {
             throw "Windows demo verification failed. Read the logs under $candidate\PFTDigitalTwin\Saved\Logs."
         }
-        $suites = @('CommonsWalk', 'Navigator')
+        $suites = @('CommonsWalk', 'Navigator', 'GuidedWalk')
         if ($VerifyExtended) { $suites += 'C1007Walk' }
         foreach ($suite in $suites) {
             $report = "PFTDigitalTwin/Saved/Automation/$suite/index.json"

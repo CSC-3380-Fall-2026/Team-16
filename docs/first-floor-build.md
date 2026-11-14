@@ -249,6 +249,17 @@ Navigator. From the C1003 spawn, check the floor in
 front of the glass entrance and walk past the Zone 1200 sign around the corner.
 Search for `CSC 1350`, select room 1200, and use **View selected room** to check
 the camera. Try room 1202 and the Commons to check the added destinations.
+For walking directions, click the Commons search result and choose
+**Start walking route**. Follow the gold trail with WASD until the arrival
+message appears.
+
+The first-floor routes use a walking graph baked from the demo map's pawn
+collision. Regenerate it after changes to the floor, collision, or room markers.
+Close the editor and run `tools/build_first_floor_routes.py` with Unreal's
+PythonScript commandlet. Copy the resulting
+`Plugins/PFTNavigator/Content/Data/first_floor_routes.json` back to the Navigator
+repository's `data` folder. The bake keeps destinations the player can reach
+from C1003.
 
 The launcher opens the demo at native 720p with DirectX 11 and a 30 FPS cap.
 Run `& '.\Play PFT Demo.cmd' smooth` to use a 45 FPS cap at the same resolution
@@ -256,7 +267,7 @@ and quality settings. The package includes both DirectX renderers.
 
 ## Verify a Windows package
 
-Close the running demo. From the Windows package directory, run both checks:
+Close the running demo. From the Windows package directory, run the checks:
 
 ```powershell
 & '.\Play PFT Demo.cmd' verify
@@ -266,13 +277,15 @@ The walkthrough clicks **Skip tour**, starts at C1003, and walks past the Zone
 1200 sign into the Commons. It fails if the welcome screen blocks the walk or if
 the pawn falls through the floor or stalls. The Navigator test checks that the
 welcome screen locks walking and looking until it closes. It then searches for
-a course, opens the room preview, and returns to the original player. The
+a course, opens the room preview, and returns to the original player. The guided
+walk checks selection, the route button, and arrival at the Commons by following
+the generated path with the first-person pawn. The
 welcome screen input change is on Perforce shelf `41648`. Use `walkthrough` to
 run the shorter Zone 1200 route on its own. The game exits after each test.
 Use `& '.\Play PFT Demo.cmd' crossbuilding` to continue beyond the Commons to
 hallway C1007. This extended walk checks floor collision, the destination HUD
 label on maps with local room data, and the runtime log for asset failures.
-Use `& '.\Play PFT Demo.cmd' verifyextended` to run all three checks on an
+Use `& '.\Play PFT Demo.cmd' verifyextended` to run all four checks on an
 existing package.
 
 Logs are in `PFTDigitalTwin\Saved\Logs`. The `CommonsWalk` and `Navigator`
