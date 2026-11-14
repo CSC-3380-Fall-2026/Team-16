@@ -440,7 +440,13 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
         TestEqual(TEXT("The combined filters can leave no results"), GetResults(Panel).Num(), 0);
         if (!TestTrue(TEXT("Reset is clickable with no results"), ClickVisibleWidget(Tree->FindWidget(TEXT("ResetClassSearchButton")))))
             return true;
-        TestEqual(TEXT("Reset shows both bundled meetings"), GetResults(Panel).Num(), 2);
+        // Count the meetings from the data so this doesn't break every time we add class times
+        int32 Meetings = 0;
+        for (const auto& Course : World->GetGameInstance()->GetSubsystem<UPFTDirectory>()->Courses)
+        {
+            if (!Course.StartTime.IsEmpty()) ++Meetings;
+        }
+        TestEqual(TEXT("Reset shows every bundled meeting"), GetResults(Panel).Num(), Meetings);
         TestEqual(TEXT("Reset restores all floors"), Floor->GetSelectedOption(), FString(TEXT("All floors")));
         TestFalse(TEXT("Reset clears preview-only browsing"), Preview->IsChecked());
         TestTrue(TEXT("Reset keeps class search active"), CastChecked<UCheckBox>(Tree->FindWidget(TEXT("ClassSearchFilter")))->IsChecked());

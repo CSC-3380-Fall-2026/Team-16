@@ -27,8 +27,12 @@ struct PFTNAVIGATOR_API FPFTCourse
     UPROPERTY(BlueprintReadOnly) FString Instructor;
     UPROPERTY(BlueprintReadOnly) FString MeetingDays;
     UPROPERTY(BlueprintReadOnly) FString StartTime;
+    // Optional, "HH:MM" like StartTime. Empty when we don't know when the class ends
+    UPROPERTY(BlueprintReadOnly) FString EndTime;
 
     FString GetStartTimeLabel() const;
+    // "10:30 AM - 11:20 AM", or just the start time when there's no end time
+    FString GetTimeRangeLabel() const;
     FString GetScheduleLabel() const;
 };
 
