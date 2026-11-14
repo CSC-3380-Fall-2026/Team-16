@@ -26,13 +26,16 @@ Use the same checkout to install or check the Navigator and run the package tool
 
 ```powershell
 $Project = 'C:\path\to\PFTDigitalTwin.uproject'
-python tools/install_navigator.py $Project --check
 & .\tools\package_first_floor_demo.ps1 -Project $Project -ReuseCook -Verify
 ```
 
-If the first command reports differences, run the installer with your pending
-changelist as described in the Navigator instructions before packaging. The
-packaging script uses the launcher and verification tools beside it in Git.
+Packaging from the Git checkout uses Python to check that the installed
+Navigator source and directory data match that checkout. If the check reports
+differences, run the installer with your pending changelist as described in
+the Navigator instructions. If it reports unexpected source or data files,
+review those files and move them out of the plugin if they are leftovers from
+another branch. The packaging script uses the launcher and verification tools
+beside it in Git.
 
 ## Map contents
 
@@ -104,13 +107,14 @@ prints the map and report paths after verification. Build and verification
 reports and step logs are under `Saved/FirstFloorBuilds/Level/PFTFirstFloorUpdated`.
 Pass `-EngineRoot` when Unreal is installed elsewhere.
 
-Add `-PackageDemo` to build the Windows demo after map verification. The command
-prints the launcher path after the Commons walkthrough and Navigator test
-pass. A fresh map cooks its assets. On resume, packaging can reuse a matching cook.
+To package a new map, first bake and install its graph using the walking-route
+steps below. Then resume from the Git checkout and pass the same graph file.
+Packaging prints the launcher path after the Commons and C1007 walks, Navigator
+controls, and guided walk all pass. It reuses a matching cook when available.
 
 ```powershell
-& .\Tools\rebuild_first_floor.ps1 -Project .\PFTDigitalTwin.uproject `
-  -MapName PFTFirstFloorUpdated -PackageDemo
+& ./tools/rebuild_first_floor.ps1 -Project $Project -MapName PFTFirstFloorUpdated `
+  -Resume -PackageDemo -WalkingGraph ./first_floor_routes.json
 ```
 
 If a later step fails, use the same command with `-Resume` once the error is
@@ -190,8 +194,9 @@ Keep the files under `Saved` local to the workspace.
 Each published package has a `PFTDemoBuild.json` file beside the launcher.
 It records the selected map and its SHA-256 hash, the Unreal version, the
 cook mode, and whether the packaged checks passed. Builds run from the Git
-checkout also record the packaging tools' commit and whether those files had
-local changes. The test report paths are relative to the package folder.
+checkout also record its commit and whether the packaging tools, Navigator
+source, or directory data had local changes. The test report paths are relative
+to the package folder.
 The archive includes Unreal's bundled Microsoft Visual C++ x64 installer and
 first-run instructions in `Read Me - PFT Demo.txt`. Extract the entire package
 before running the launcher.
@@ -203,6 +208,8 @@ before replacing the playable archive. Verification also checks both runtime
 logs for missing packages, missing imports, and default-material fallbacks.
 Use `-VerifyExtended` to also walk through the Commons to C1007 before
 publishing a review build. Its result is recorded in `PFTDemoBuild.json`.
+Before publishing, packaging confirms that each report names the expected test
+and records a completed success.
 If a check fails, the command exits
 with an error and leaves the new build and its logs in the printed `pending`
 folder. Successful builds move into the launcher location. The previous archive
@@ -247,8 +254,48 @@ startup map.
 Open `Play PFT Demo.cmd` in the Windows package. Choose **Skip tour** to open the
 Navigator. From the C1003 spawn, check the floor in
 front of the glass entrance and walk past the Zone 1200 sign around the corner.
-Search for `CSC 1350`, select room 1200, and use **View selected room** to check
+Search for `CSC 1350`, select room 1200, and use **Preview room** to check
 the camera. Try room 1202 and the Commons to check the added destinations.
+For walking directions, click the Commons search result and choose
+**Walk there**. The room browser collapses into a directions panel with the
+next turn and a **Stop route** button. Follow the gold arrows until the room
+name appears at the destination. Use **Find another room** to search again.
+If a route cannot be recalculated, return to a first-floor hallway and use
+**Retry route**. **Settings** offers stationary arrows, larger directions text,
+and a lower render resolution for slower machines.
+
+The first-floor routes use a walking graph baked from the demo map's pawn
+collision. Regenerate it after changes to the floor, collision, or room markers.
+Close the editor and run `tools/build_first_floor_routes.py` with Unreal's
+PythonScript commandlet. Copy the resulting
+`Plugins/PFTNavigator/Content/Data/first_floor_routes.json` back to the Navigator
+repository's `data` folder. The bake keeps destinations the player can reach
+from C1003.
+
+For a candidate map, pass both an output file and the map package to the
+Python commandlet. Write the graph outside the project first so the default
+graph is available until you choose which map to package.
+
+```powershell
+& "$EngineRoot/Engine/Binaries/Win64/UnrealEditor-Cmd.exe" $Project `
+  -run=PythonScript "-script=$PWD/tools/build_first_floor_routes.py $PWD/first_floor_routes.json --map /Game/Level/PFTFirstFloorUpdated" `
+  -unattended -nullrhi -nop4 -nosound
+```
+
+Use forward slashes in the script and output paths passed to the Python
+commandlet. Pass the reviewed graph to both the installer and packager. Use
+your pending changelist for the install in a Perforce workspace.
+
+```powershell
+python tools/install_navigator.py $Project --walking-graph ./first_floor_routes.json --changelist CHANGE_NUMBER
+& ./tools/package_first_floor_demo.ps1 -Project $Project -MapName PFTFirstFloorUpdated `
+  -WalkingGraph ./first_floor_routes.json -ReuseCook -VerifyExtended
+```
+
+Packaging checks that the installed graph matches the supplied file and the
+selected map before starting Unreal. The build record includes the installed
+graph's SHA-256 hash. To switch back to the default map, run the installer
+without `--walking-graph`.
 
 The launcher opens the demo at native 720p with DirectX 11 and a 30 FPS cap.
 Run `& '.\Play PFT Demo.cmd' smooth` to use a 45 FPS cap at the same resolution
@@ -256,7 +303,7 @@ and quality settings. The package includes both DirectX renderers.
 
 ## Verify a Windows package
 
-Close the running demo. From the Windows package directory, run both checks:
+Close the running demo. From the Windows package directory, run the checks:
 
 ```powershell
 & '.\Play PFT Demo.cmd' verify
@@ -266,13 +313,15 @@ The walkthrough clicks **Skip tour**, starts at C1003, and walks past the Zone
 1200 sign into the Commons. It fails if the welcome screen blocks the walk or if
 the pawn falls through the floor or stalls. The Navigator test checks that the
 welcome screen locks walking and looking until it closes. It then searches for
-a course, opens the room preview, and returns to the original player. The
+a course, opens the room preview, and returns to the original player. The guided
+walk checks selection, the route button, and arrival at the Commons by following
+the generated path with the first-person pawn. The
 welcome screen input change is on Perforce shelf `41648`. Use `walkthrough` to
 run the shorter Zone 1200 route on its own. The game exits after each test.
 Use `& '.\Play PFT Demo.cmd' crossbuilding` to continue beyond the Commons to
 hallway C1007. This extended walk checks floor collision, the destination HUD
 label on maps with local room data, and the runtime log for asset failures.
-Use `& '.\Play PFT Demo.cmd' verifyextended` to run all three checks on an
+Use `& '.\Play PFT Demo.cmd' verifyextended` to run all four checks on an
 existing package.
 
 Logs are in `PFTDigitalTwin\Saved\Logs`. The `CommonsWalk` and `Navigator`

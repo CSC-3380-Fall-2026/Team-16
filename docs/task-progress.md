@@ -68,3 +68,11 @@ confirmed that the room list and floor selector display. Unreal tests ran from
 the engine's Entry map; they do not verify building navigation. The integration
 remains in pending Perforce changelist 41648. Routing and first-person guidance
 remain unfinished.
+
+## First-floor guidance
+
+The Windows demo has first-person walking directions on the first-floor map.
+Select a reachable destination and choose **Start walking route** to see a gold
+trail, turn instructions, and arrival feedback. Rooms without a connected walk
+can still offer a preview. The course directory covers selected Fall 2026 CSC
+lectures. See [first-floor build and verification](first-floor-build.md).

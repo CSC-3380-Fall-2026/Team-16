@@ -27,7 +27,13 @@ by every professor in that department, each pointing at their own office.
 The plugin reads staged `Content/Data/rooms.json`, `courses.json`, `departments.json`, and `faculty.json`. The installer
 copies all four directory files after running the team's complete validator.
 Room, faculty, and department records include sourced directory entries; see
-[data sources](data-schema.md). Courses are real Fall 2026 CSC sections that meet in PFT.
+[data sources](data-schema.md). Course results show selected Fall 2026 CSC
+lectures in PFT. Students can confirm their own section in LSU Course Offerings.
+
+On the first-floor demo map, select a room with a walking route and choose
+**Walk there**. Follow the gold arrows with WASD. The Navigator shows
+which way to turn and confirms arrival. Choose **Stop route** or **Clear** to end
+guidance. Room previews and free camera are available from the same panel.
 No original twin source or building assets are included in the GitHub plugin.
 
 ## Task 5 destinations
@@ -70,6 +76,12 @@ info (name, type, floor, offices, and classes) and its marker. Results marked
 their directory entry when selected.
 Turn on **Previewable rooms only** to limit the current search and floor to
 rooms with a preview on the open map.
+Turn on **Find a class by instructor or time** to search the bundled Fall 2026
+meetings. Enter part of the instructor's name and optionally pick a meeting
+day and start time. For example, Duncan on Wednesday at 10:30 AM shows CSC 1350
+in PFT 1200. Select the match to preview the room or start a walking route.
+Use **Reset class search** to clear the course, instructor, day, time, floor,
+and preview filters and see all included meetings again.
 Use **Show more rooms** to load the next set of results in a broad search. The
 list starts over when you change the search or floor.
 Press Enter in the search box when there is one result to open its preview.

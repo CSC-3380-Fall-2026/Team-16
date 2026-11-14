@@ -1,10 +1,10 @@
 # PFT Navigator : Team 16
 # Members
-Project Manager: Jayden Hong ([jaydenhongfails])\
-Communications Lead: Josemaria Ramos ([jramo18])\
-Git Master: Malek Badawi ([malekbadawi21])\
-Design Lead: Claire Bonius ([claire-coded])\
-Quality Assurance Tester: Laila Holland ([lailaholland])
+Project Manager: Jayden Hong (jaydenhongfails)\
+Communications Lead: Josemaria Ramos (jramo18)\
+Git Master: Malek Badawi (malekbadawi21)\
+Design Lead: Claire Bonius (claire-coded)\
+Quality Assurance Tester: Laila Holland (lailaholland)
 
 # About Our Software
 

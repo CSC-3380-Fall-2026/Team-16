@@ -128,6 +128,20 @@ bool FPFTBrowseTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("Unknown floor is empty"), Directory->BrowseRooms(TEXT(""), 2).Num(), 0);
     TestEqual(TEXT("Negative floor is empty"), Directory->BrowseRooms(TEXT(""), -1).Num(), 0);
     TestEqual(TEXT("Original empty search behavior preserved"), Directory->Search(TEXT("")).Num(), 0);
+    Course.Instructor = TEXT("Test Professor");
+    Course.MeetingDays = TEXT("MWF");
+    Course.StartTime = TEXT("10:30");
+    Directory->Courses.Add(Course);
+    const auto ClassMatches = Directory->FindClasses(TEXT(""), TEXT(" professor "), TEXT('W'), TEXT("10:30"), 1);
+    TestEqual(TEXT("Instructor, day, time and floor combine"), ClassMatches.Num(), 1);
+    if (!ClassMatches.IsEmpty())
+    {
+        TestEqual(TEXT("A class result resolves to the classroom"), ClassMatches[0].RoomId, Downstairs.Name);
+        TestTrue(TEXT("The result shows the meeting details"), ClassMatches[0].Label.Contains(TEXT("Wed/Fri 10:30 AM")));
+    }
+    TestEqual(TEXT("Wrong day returns no class"), Directory->FindClasses(TEXT(""), TEXT("professor"), TEXT('T'), TEXT("10:30"), 1).Num(), 0);
+    TestEqual(TEXT("Wrong start time returns no class"), Directory->FindClasses(TEXT(""), TEXT("professor"), TEXT('W'), TEXT("09:30"), 1).Num(), 0);
+    TestEqual(TEXT("Wrong floor returns no class"), Directory->FindClasses(TEXT(""), TEXT("professor"), TEXT('W'), TEXT("10:30"), 3).Num(), 0);
     return true;
 }
 #endif

@@ -383,6 +383,69 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
         TestTrue(TEXT("Return is clickable after Tab"), ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("CameraModeButton"))));
         TestEqual(TEXT("Returning restores the walking pawn"), Player->GetPawn(), OriginalPawn);
         TestFalse(TEXT("Returning hides flight shortcuts"), GetCameraHelp(Panel).Contains(TEXT("Q down")));
+        SetSearch(Panel, TEXT(""));
+        return true;
+    }));
+    ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
+    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World]()
+    {
+        auto* Panel = FindNavigator(World);
+        if (!Panel) return true;
+        auto* Tree = Panel->WidgetTree.Get();
+        auto* Filter = CastChecked<UCheckBox>(Tree->FindWidget(TEXT("ClassSearchFilter")));
+        if (!TestTrue(TEXT("Class search can be opened"), ClickVisibleWidget(Filter))) return true;
+        TestTrue(TEXT("Class search is active"), Filter->IsChecked());
+        auto* Instructor = CastChecked<UEditableTextBox>(Tree->FindWidget(TEXT("InstructorSearch")));
+        Instructor->SetText(FText::FromString(TEXT("duncan")));
+        Instructor->OnTextChanged.Broadcast(Instructor->GetText());
+        TestEqual(TEXT("Instructor yields both bundled lectures"), GetResults(Panel).Num(), 2);
+        auto* Day = CastChecked<UComboBoxString>(Tree->FindWidget(TEXT("ClassDay")));
+        Day->SetSelectedOption(TEXT("Tuesday"));
+        TestEqual(TEXT("No Duncan lecture meets on Tuesday"), GetResults(Panel).Num(), 0);
+        Day->SetSelectedOption(TEXT("Wednesday"));
+        auto* Start = CastChecked<UComboBoxString>(Tree->FindWidget(TEXT("ClassStart")));
+        Start->SetSelectedOption(TEXT("9:30 AM"));
+        const auto EarlyResults = GetResults(Panel);
+        if (TestEqual(TEXT("9:30 AM identifies one class"), EarlyResults.Num(), 1))
+            TestEqual(TEXT("The early class points to PFT 1100"), EarlyResults[0]->RoomId, FString(TEXT("PFT_1100")));
+        Start->SetSelectedOption(TEXT("10:30 AM"));
+        return true;
+    }));
+    ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
+    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World]()
+    {
+        auto* Panel = FindNavigator(World);
+        if (!Panel) return true;
+        const auto Results = GetResults(Panel);
+        if (!TestEqual(TEXT("10:30 AM identifies one class"), Results.Num(), 1)) return true;
+        TestTrue(TEXT("The class result shows course, room and time"), Results[0]->ResultText.Contains(TEXT("CSC 1350 · PFT 1200"))
+            && Results[0]->ResultText.Contains(TEXT("10:30 AM")));
+        TestTrue(TEXT("The classroom result is clickable"), ClickVisibleWidget(Results[0]));
+        TestTrue(TEXT("The classroom is selected"), GetTaggedRooms(Panel).Contains(TEXT("PFT_1200")));
+        TestTrue(TEXT("The result can start a walk"), Panel->WidgetTree->FindWidget(TEXT("RouteButton"))->IsVisible());
+        return true;
+    }));
+    ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
+    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World]()
+    {
+        auto* Panel = FindNavigator(World);
+        if (!Panel) return true;
+        auto* Tree = Panel->WidgetTree.Get();
+        auto* Floor = CastChecked<UComboBoxString>(Tree->FindWidget(TEXT("FloorFilter")));
+        auto* Preview = CastChecked<UCheckBox>(Tree->FindWidget(TEXT("PreviewOnlyFilter")));
+        Floor->SetSelectedOption(TEXT("3"));
+        SetSearch(Panel, TEXT("CSC 1350"));
+        Preview->SetIsChecked(true);
+        Preview->OnCheckStateChanged.Broadcast(true);
+        TestEqual(TEXT("The combined filters can leave no results"), GetResults(Panel).Num(), 0);
+        if (!TestTrue(TEXT("Reset is clickable with no results"), ClickVisibleWidget(Tree->FindWidget(TEXT("ResetClassSearchButton")))))
+            return true;
+        TestEqual(TEXT("Reset shows both bundled meetings"), GetResults(Panel).Num(), 2);
+        TestEqual(TEXT("Reset restores all floors"), Floor->GetSelectedOption(), FString(TEXT("All floors")));
+        TestFalse(TEXT("Reset clears preview-only browsing"), Preview->IsChecked());
+        TestTrue(TEXT("Reset keeps class search active"), CastChecked<UCheckBox>(Tree->FindWidget(TEXT("ClassSearchFilter")))->IsChecked());
+        TestTrue(TEXT("Reset clears the instructor"), CastChecked<UEditableTextBox>(Tree->FindWidget(TEXT("InstructorSearch")))->GetText().IsEmpty());
+        TestFalse(TEXT("Reset deactivates walking to the previous result"), Tree->FindWidget(TEXT("RouteButton"))->IsVisible());
         return true;
     }));
     return true;

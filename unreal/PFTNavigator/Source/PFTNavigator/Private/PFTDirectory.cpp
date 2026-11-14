@@ -7,6 +7,54 @@
 
 namespace
 {
+    bool IsStartTimeValid(const FString& Time)
+    {
+        if (Time.Len() != 5 || Time[2] != TEXT(':')) return false;
+        for (int32 Index : {0, 1, 3, 4})
+        {
+            if (Time[Index] < TEXT('0') || Time[Index] > TEXT('9')) return false;
+        }
+        return FCString::Atoi(*Time) < 24 && FCString::Atoi(*Time.Mid(3)) < 60;
+    }
+
+    bool IsMeetingPatternValid(const FString& Pattern)
+    {
+        if (Pattern.IsEmpty()) return false;
+        int32 PreviousDay = INDEX_NONE;
+        const FString Week = TEXT("MTWRFSU");
+        for (TCHAR Day : Pattern)
+        {
+            int32 DayIndex;
+            if (!Week.FindChar(Day, DayIndex) || DayIndex <= PreviousDay) return false;
+            PreviousDay = DayIndex;
+        }
+        return true;
+    }
+
+    bool ReadCourseSchedule(const FJsonObject& Object, FPFTCourse& Course)
+    {
+        if (!Object.HasField(TEXT("Instructor")) && !Object.HasField(TEXT("MeetingDays")) && !Object.HasField(TEXT("StartTime"))) return true;
+        return Object.HasTypedField<EJson::String>(TEXT("Instructor"))
+            && Object.HasTypedField<EJson::String>(TEXT("MeetingDays"))
+            && Object.HasTypedField<EJson::String>(TEXT("StartTime"))
+            && Object.TryGetStringField(TEXT("Instructor"), Course.Instructor)
+            && Object.TryGetStringField(TEXT("MeetingDays"), Course.MeetingDays)
+            && Object.TryGetStringField(TEXT("StartTime"), Course.StartTime)
+            && !Course.Instructor.IsEmpty() && Course.Instructor == Course.Instructor.TrimStartAndEnd()
+            && IsMeetingPatternValid(Course.MeetingDays) && IsStartTimeValid(Course.StartTime);
+    }
+
+    bool MatchesCourse(const FPFTCourse& Course, const FString& Text)
+    {
+        return Text.IsEmpty() || Course.CourseCode.Contains(Text) || Course.CourseTitle.Contains(Text) || Course.Name.Contains(Text);
+    }
+
+    FString FormatTime(const FString& Time)
+    {
+        const int32 Hour = FCString::Atoi(*Time);
+        return FString::Printf(TEXT("%d:%s %s"), (Hour + 11) % 12 + 1, *Time.Mid(3), Hour < 12 ? TEXT("AM") : TEXT("PM"));
+    }
+
     template<typename Row>
     bool ReadRows(const FString& Path, const TArray<FString>& Fields, TArray<Row>& Rows, FString& Error)
     {
@@ -49,6 +97,14 @@ namespace
                 Error = TEXT("Invalid row in ") + Path;
                 return false;
             }
+            if constexpr (std::is_same_v<Row, FPFTCourse>)
+            {
+                if (!ReadCourseSchedule(*Object, Entry))
+                {
+                    Error = TEXT("Invalid instructor or meeting schedule in ") + Path;
+                    return false;
+                }
+            }
             Rows.Add(Entry);
         }
         return true;
@@ -63,6 +119,25 @@ namespace
         const FString Code = Department.Name.Replace(TEXT("DEPT_"), TEXT(""));
         return Department.DisplayName.Contains(Text) || Code.Equals(Text, ESearchCase::IgnoreCase);
     }
+}
+
+FString FPFTCourse::GetStartTimeLabel() const
+{
+    return StartTime.IsEmpty() ? FString() : FormatTime(StartTime);
+}
+
+FString FPFTCourse::GetScheduleLabel() const
+{
+    if (StartTime.IsEmpty()) return FString();
+    const FString Week = TEXT("MTWRFSU");
+    const TCHAR* DayNames[] = {TEXT("Mon"), TEXT("Tue"), TEXT("Wed"), TEXT("Thu"), TEXT("Fri"), TEXT("Sat"), TEXT("Sun")};
+    TArray<FString> Days;
+    for (TCHAR Day : MeetingDays)
+    {
+        int32 Index;
+        if (Week.FindChar(Day, Index)) Days.Add(DayNames[Index]);
+    }
+    return Instructor + TEXT(" · ") + FString::Join(Days, TEXT("/")) + TEXT(" ") + GetStartTimeLabel();
 }
 
 void UPFTDirectory::Initialize(FSubsystemCollectionBase& Collection)
@@ -157,7 +232,9 @@ FString UPFTDirectory::GetRoomDetails(const FString& RoomId) const
     }
     for (const auto& Course : Courses)
     {
-        if (Course.RoomId == RoomId) Details += TEXT("\nClass here: ") + Course.CourseCode + TEXT(" - ") + Course.CourseTitle;
+        if (Course.RoomId != RoomId) continue;
+        Details += TEXT("\nClass here: ") + Course.CourseCode + TEXT(" - ") + Course.CourseTitle;
+        if (!Course.StartTime.IsEmpty()) Details += TEXT("\n") + Course.GetScheduleLabel();
     }
     return Details;
 }
@@ -174,8 +251,10 @@ TArray<FPFTSearchResult> UPFTDirectory::Search(const FString& Query) const
     }
     for (const auto& Course : Courses)
     {
-        if (Course.CourseCode.Contains(Text) || Course.CourseTitle.Contains(Text) || Course.Name.Contains(Text))
+        if (MatchesCourse(Course, Text))
+        {
             Results.Add({ Course.RoomId, Course.CourseCode + TEXT(" - ") + Course.CourseTitle });
+        }
     }
     // Departments match on their full name or their short code. The first result is the department office,
     // then everyone in that department so you can find a professor without knowing their name
@@ -223,5 +302,24 @@ TArray<FPFTSearchResult> UPFTDirectory::BrowseRooms(const FString& Query, int32 
         if (First->Floor != Second->Floor) return First->Floor < Second->Floor;
         return First->RoomNumber < Second->RoomNumber;
     });
+    return Results;
+}
+
+TArray<FPFTSearchResult> UPFTDirectory::FindClasses(const FString& Query, const FString& Instructor, TCHAR Day, const FString& StartTime, int32 Floor) const
+{
+    TArray<FPFTSearchResult> Results;
+    const FString CourseQuery = Query.TrimStartAndEnd();
+    const FString InstructorQuery = Instructor.TrimStartAndEnd();
+    for (const auto& Course : Courses)
+    {
+        if (Course.StartTime.IsEmpty() || !MatchesCourse(Course, CourseQuery)) continue;
+        if (!InstructorQuery.IsEmpty() && !Course.Instructor.Contains(InstructorQuery)) continue;
+        if (Day != 0 && !Course.MeetingDays.Contains(FString::Chr(Day))) continue;
+        if (!StartTime.IsEmpty() && Course.StartTime != StartTime) continue;
+        const auto* Room = FindRoom(Course.RoomId);
+        if (!Room || (Floor > 0 && Room->Floor != Floor)) continue;
+        const FString Label = Course.CourseCode + TEXT(" · ") + Room->DisplayName + TEXT("\n") + Course.GetScheduleLabel();
+        Results.Add({ Course.RoomId, Label });
+    }
     return Results;
 }

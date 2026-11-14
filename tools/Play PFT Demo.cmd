@@ -17,6 +17,7 @@ if /i "%~1"=="walkthrough" goto checks
 if /i "%~1"=="verify" goto verify
 if /i "%~1"=="verifyextended" goto verify
 if /i "%~1"=="crossbuilding" goto crossbuilding
+if /i "%~1"=="guidedwalk" goto guidedwalk
 if /i "%~1"=="profile" goto profile
 
 start "" "PFTDigitalTwin.exe" %DemoMap% %DemoArgs% -ExecCmds="%DemoSettings%"
@@ -31,14 +32,24 @@ goto checks_done
 call :walk_to_c1007
 goto checks_done
 
+:guidedwalk
+call :walk_with_guidance
+goto checks_done
+
+:walk_with_guidance
+call :run_check GuidedWalk PFTFirstFloor.GuidedWalk GuidedWalk %~1
+if errorlevel 1 exit /b %errorlevel%
+call :check_assets
+exit /b %errorlevel%
+
 :walk_to_c1007
-call :run_check C1007Walk PFTFirstFloor.WalkToC1007 WalkToC1007
+call :run_check C1007Walk PFTFirstFloor.WalkToC1007 WalkToC1007 %~1
 if errorlevel 1 exit /b %errorlevel%
 call :check_assets
 exit /b %errorlevel%
 
 :verify
-call :run_check CommonsWalk PFTFirstFloor.WalkToCommons WalkToCommons
+call :run_check CommonsWalk PFTFirstFloor.WalkToCommons WalkToCommons -RenderOffscreen
 if errorlevel 1 goto checks_done
 call :check_assets
 if errorlevel 1 goto checks_done
@@ -46,7 +57,9 @@ call :run_check Navigator PFTNavigator.Panel.AfterOnboarding AfterOnboarding -Re
 if errorlevel 1 goto checks_done
 call :check_assets
 if errorlevel 1 goto checks_done
-if /i "%~1"=="verifyextended" call :walk_to_c1007
+call :walk_with_guidance -RenderOffscreen
+if errorlevel 1 goto checks_done
+if /i "%~1"=="verifyextended" call :walk_to_c1007 -RenderOffscreen
 goto checks_done
 
 :profile

@@ -57,6 +57,51 @@ class TestValidateData(unittest.TestCase):
         # The actual data we have in the repo should always pass
         self.assertEqual(validate_data.validate(validate_data.DATA_FOLDER), [])
 
+    def test_walking_graph_rejects_broken_routes(self):
+        self.data["rooms.json"].append(
+            {"Name": "PFT_COMMONS", "RoomNumber": "Commons", "DisplayName": "Commons", "Floor": 1, "RoomType": "Common Area"}
+        )
+        graph = {
+            "Map": "/Game/Level/PFTFirstFloorComplete",
+            "Step": 60,
+            "Destinations": {"PFT_COMMONS": [0, 0], "PFT_1200": [1, 0]},
+            "Nodes": [[0, 0, 0.0, 1], [1, 0, 0.0, 4]],
+        }
+        self.data["first_floor_routes.json"] = graph
+        self.write_files()
+        self.assertEqual(validate_data.validate(self.folder), [])
+        cases = [
+            ({"Nodes": [[0, 0, 0, 1], [1, 0, 0, 0]]}, "no return edge"),
+            ({"Nodes": [[0, 0, 0, 0], [1, 0, 0, 0]]}, "disconnected"),
+            ({"Nodes": graph["Nodes"] * 2}, "duplicate node"),
+            ({"Nodes": [[0, 0, float("inf"), 1]]}, "invalid floor height"),
+            ({"Destinations": {"PFT_COMMONS": [0, 0], "PFT_3325": [1, 0]}}, "not a first-floor"),
+            ({"Destinations": {"PFT_COMMONS": [0, 0], "PFT_1200": [2, 0]}}, "does not point"),
+            ({"Step": True}, "Step must be an integer"),
+        ]
+        for overrides, message in cases:
+            with self.subTest(message=message):
+                self.data["first_floor_routes.json"] = {**graph, **overrides}
+                self.write_files()
+                self.assertTrue(any(message in error for error in validate_data.validate(self.folder)))
+
+    def test_class_schedule_is_optional_but_must_be_complete(self):
+        course = self.data["courses.json"][0]
+        course.update(Instructor="Test Person", MeetingDays="MWF", StartTime="10:30")
+        self.write_files()
+        self.assertEqual(validate_data.validate(self.folder), [])
+        for field, value in [("Instructor", ""), ("MeetingDays", "WMM"), ("StartTime", "24:00"),
+                             ("StartTime", "10:60"), ("StartTime", 1030)]:
+            with self.subTest(field=field, value=value):
+                original = course[field]
+                course[field] = value
+                self.write_files()
+                self.assertTrue(any(f"invalid {field}" in error for error in validate_data.validate(self.folder)))
+                course[field] = original
+        del course["Instructor"]
+        self.write_files()
+        self.assertTrue(any("invalid Instructor" in error for error in validate_data.validate(self.folder)))
+
     def test_floor_limit_matches_unreal(self):
         self.data["rooms.json"][0]["Floor"] = 2147483647
         self.write_files()

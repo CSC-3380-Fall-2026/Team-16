@@ -11,6 +11,10 @@ The third floor offices, faculty, and departments are only in here so they're re
 
 Courses are Fall 2026 CSC lecture sections that meet in PFT, from LSU's [Course Offerings](https://courseofferings.lsu.edu/LSU) (checked November 2026). Titles are written the way that site lists them. This isn't every class in PFT yet, only the CSC sections we've checked so far, so more can be added the same way.
 
+The instructor, days, and start times for CSC 1350 and CSC 3102 come from
+[William Duncan's Fall 2026 schedule](https://www.csc.lsu.edu/~duncan/sched.htm).
+The other five course entries can still be found by course code or title.
+
 Each office's DisplayName has the professor's name or the department in it, like `PFT 3209B - James Ghawaly`. That way searching a name in the app already finds their office, even before faculty search is added. If someone changes offices, update both `faculty.json` and their room in `rooms.json`.
 
 The rooms from our [design scope](design.md) are in `rooms.json`. If a room has a name (like Panera), it goes in the DisplayName after the number so it shows up when someone searches for it. The Commons doesn't have a room number, so its RoomNumber is just `"Commons"`.
@@ -40,6 +44,9 @@ The rooms from our [design scope](design.md) are in `rooms.json`. If a room has 
 | CourseTitle | `"COMP SCI I-MJRS"` |
 | DepartmentId | `DEPT_CSE` (from departments.json) |
 | RoomId | `PFT_1200` (from rooms.json) |
+| Instructor | `"William Duncan"` (optional with both fields below) |
+| MeetingDays | `"MWF"` (use `MTWRFSU` in weekday order, with `R` for Thursday) |
+| StartTime | `"10:30"` (local 24-hour time, `HH:MM`) |
 
 ## departments.json
 | Field | Example |
@@ -58,7 +65,11 @@ must point to existing rows. Keep room numbers as strings to preserve formatting
 
 Task 3 reuses the team's existing schema and placeholder rows. The validator
 also rejects malformed JSON, wrong row/field types, blank strings, duplicate room
-numbers, and broken references. Course rows only say which room a class
-meets in, not its section or meeting times. Runtime loading and room bindings are separate tasks.
+numbers, and broken references. Each course row identifies one selected lecture
+location. Use LSU Course Offerings to check a specific section and its meeting times.
 
 Run `python tools/validate_data.py` after changing anything in here.
+
+If `first_floor_routes.json` is present, validation also checks its grid,
+two-way links, and connectivity from the Commons to every listed first-floor
+destination. Unreal's walkthrough tests check movement on the actual map.
