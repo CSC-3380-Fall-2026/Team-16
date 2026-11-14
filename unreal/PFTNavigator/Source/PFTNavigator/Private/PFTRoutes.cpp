@@ -11,6 +11,9 @@
 #include "Interfaces/IPluginManager.h"
 #include "Misc/FileHelper.h"
 #include "Serialization/JsonSerializer.h"
+#if WITH_DEV_AUTOMATION_TESTS
+#include "Misc/AutomationTest.h"
+#endif
 
 namespace
 {
@@ -22,6 +25,70 @@ namespace
     constexpr double ArrowSpacing = 125.0;
     constexpr double ArrowSpeed = 85.0;
     constexpr double TrailLength = 1600.0;
+    constexpr double SecondsPerQuarterTurn = 0.25;
+
+    struct FRouteVisit
+    {
+        double Seconds;
+        FIntVector Previous;
+    };
+
+    struct FRouteCandidate
+    {
+        FIntVector State;
+        double Seconds;
+        double Estimate;
+
+        bool operator<(const FRouteCandidate& Other) const
+        {
+            return Estimate < Other.Estimate;
+        }
+    };
+
+    // A cell reached from different headings can have a different cost for the next turn.
+    TArray<FIntPoint> FindFastestPath(const FIntPoint& Start, const FIntPoint& Target, double SecondsPerStep,
+        TFunctionRef<uint8(const FIntPoint&)> GetLinks)
+    {
+        const auto RemainingTime = [&](const FIntPoint& Cell)
+        {
+            return (FMath::Abs(Cell.X - Target.X) + FMath::Abs(Cell.Y - Target.Y)) * SecondsPerStep;
+        };
+        const FIntVector First(Start.X, Start.Y, INDEX_NONE);
+        TArray<FRouteCandidate> Open = {{First, 0.0, RemainingTime(Start)}};
+        TMap<FIntVector, FRouteVisit> Visits = {{First, {0.0, First}}};
+        while (!Open.IsEmpty())
+        {
+            FRouteCandidate Current;
+            Open.HeapPop(Current, EAllowShrinking::No);
+            if (Current.Seconds > Visits.FindChecked(Current.State).Seconds) continue;
+            const FIntPoint Cell(Current.State.X, Current.State.Y);
+            if (Cell == Target)
+            {
+                TArray<FIntPoint> Reversed = {Cell};
+                for (FIntVector State = Current.State; State != First;)
+                {
+                    State = Visits.FindChecked(State).Previous;
+                    Reversed.Emplace(State.X, State.Y);
+                }
+                return Reversed;
+            }
+            const uint8 Links = GetLinks(Cell);
+            for (int32 Direction = 0; Direction < UE_ARRAY_COUNT(Directions); ++Direction)
+            {
+                if (!(Links & (1 << Direction))) continue;
+                const FIntPoint Next = Cell + Directions[Direction];
+                const FIntVector State(Next.X, Next.Y, Direction);
+                const int32 Difference = FMath::Abs(Current.State.Z - Direction);
+                const int32 Turns = Current.State.Z == INDEX_NONE ? 0 : FMath::Min(Difference, 4 - Difference);
+                const double Seconds = Current.Seconds + SecondsPerStep + Turns * SecondsPerQuarterTurn;
+                const auto* Previous = Visits.Find(State);
+                if (Previous && Previous->Seconds <= Seconds) continue;
+                Visits.Add(State, {Seconds, Current.State});
+                Open.HeapPush({State, Seconds, Seconds + RemainingTime(Next)});
+            }
+        }
+        return {};
+    }
 
     void AddArrow(TArray<FBatchedLine>& Lines, const FVector& Center, const FVector& Forward, float Opacity)
     {
@@ -150,32 +217,21 @@ bool UPFTRoutes::Plan(ACharacter& Character, const FIntPoint& Target)
     }
     if (Best == TNumericLimits<double>::Max()) return false;
 
-    TArray<FIntPoint> Queue = {Start};
-    TMap<FIntPoint, FIntPoint> Parents = {{Start, Start}};
-    for (int32 Index = 0; Index < Queue.Num() && !Parents.Contains(Target); ++Index)
+    const double Speed = FMath::Max(1.0, static_cast<double>(Character.GetCharacterMovement()->MaxWalkSpeed));
+    const auto Reversed = FindFastestPath(Start, Target, Step / Speed, [this](const FIntPoint& Cell)
     {
-        const FIntPoint Cell = Queue[Index];
-        const FNode& Node = Nodes.FindChecked(Cell);
+        const auto* Node = Nodes.Find(Cell);
+        if (!Node) return uint8(0);
+        uint8 Links = Node->Links;
         for (int32 Direction = 0; Direction < UE_ARRAY_COUNT(Directions); ++Direction)
         {
-            const FIntPoint Neighbor = Cell + Directions[Direction];
-            if ((Node.Links & (1 << Direction)) && Nodes.Contains(Neighbor) && !Parents.Contains(Neighbor))
-            {
-                Parents.Add(Neighbor, Cell);
-                Queue.Add(Neighbor);
-            }
+            if (!Nodes.Contains(Cell + Directions[Direction])) Links &= ~(1 << Direction);
         }
-    }
-    if (!Parents.Contains(Target)) return false;
-
-    TArray<FVector> Reversed;
-    for (FIntPoint Cell = Target; Cell != Start; Cell = Parents.FindChecked(Cell))
-    {
-        Reversed.Add(Nodes.FindChecked(Cell).Floor);
-    }
-    Reversed.Add(Nodes.FindChecked(Start).Floor);
+        return Links;
+    });
+    if (Reversed.IsEmpty()) return false;
     Path.Reset(Reversed.Num());
-    for (int32 Index = Reversed.Num() - 1; Index >= 0; --Index) Path.Add(Reversed[Index]);
+    for (int32 Index = Reversed.Num() - 1; Index >= 0; --Index) Path.Add(Nodes.FindChecked(Reversed[Index]).Floor);
     NextIndex = 0;
     return true;
 }
@@ -380,3 +436,35 @@ void UPFTRoutes::Deinitialize()
     if (ArrivalLabel) ArrivalLabel->DestroyComponent();
     Super::Deinitialize();
 }
+
+#if WITH_DEV_AUTOMATION_TESTS
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPFTFastestPathTest, "PFTNavigator.Routes.FastestPath",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::EngineFilter)
+
+bool FPFTFastestPathTest::RunTest(const FString& Parameters)
+{
+    TMap<FIntPoint, uint8> Graph;
+    const auto LinkPath = [&](const TArray<FIntPoint>& Points)
+    {
+        for (int32 Index = 1; Index < Points.Num(); ++Index)
+        {
+            const FIntPoint Delta = Points[Index] - Points[Index - 1];
+            for (int32 Direction = 0; Direction < UE_ARRAY_COUNT(Directions); ++Direction)
+            {
+                if (Delta != Directions[Direction]) continue;
+                Graph.FindOrAdd(Points[Index - 1]) |= 1 << Direction;
+                Graph.FindOrAdd(Points[Index]) |= 1 << ((Direction + 2) % 4);
+                break;
+            }
+        }
+    };
+    LinkPath({{0, 0}, {1, 0}, {1, 1}, {2, 1}, {2, 2}, {3, 2}, {3, 3}, {4, 3}, {4, 4}});
+    LinkPath({{0, 0}, {-1, 0}, {-1, 1}, {-1, 2}, {-1, 3}, {-1, 4}, {0, 4}, {1, 4}, {2, 4}, {3, 4}, {4, 4}});
+    const auto Links = [&](const FIntPoint& Cell) { return Graph.FindRef(Cell); };
+    TestEqual(TEXT("Fast walking favors the longer route with fewer turns"), FindFastestPath({0, 0}, {4, 4}, 0.1, Links).Num(), 11);
+    TestEqual(TEXT("Slow walking favors the shorter route"), FindFastestPath({0, 0}, {4, 4}, 1.0, Links).Num(), 9);
+    TestEqual(TEXT("The current position can already be the destination"), FindFastestPath({4, 4}, {4, 4}, 0.1, Links).Num(), 1);
+    TestTrue(TEXT("Disconnected destinations return no route"), FindFastestPath({0, 0}, {9, 9}, 0.1, Links).IsEmpty());
+    return true;
+}
+#endif
