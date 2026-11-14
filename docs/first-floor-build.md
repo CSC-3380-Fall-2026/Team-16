@@ -177,9 +177,11 @@ after packaging. The command exits with an error if either test fails.
 
 For C++ implementation edits, pass `-ReuseCook` to rebuild the executable and
 package the saved Windows cook. The script checks the selected map, project and
-plugin files, headers, and cook metadata. A missing or stale cook falls back to
-incremental cooking. Use a regular cook after changing asset defaults or
-serialization in C++.
+plugin files, headers, and cook metadata. Rewriting an identical header or
+settings file keeps the cook reusable. If the script needs to cook, it reports
+which inputs changed or whether the cook receipt or metadata is missing. Older
+receipts are refreshed on the next cook. Use a regular cook after changing
+asset defaults or serialization in C++.
 
 ```powershell
 & .\Tools\package_first_floor_demo.ps1 -Project .\PFTDigitalTwin.uproject `
