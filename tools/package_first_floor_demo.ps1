@@ -207,6 +207,24 @@ function Write-BuildRecord($mapHash, $cookMode, $verification, $toolsRevision, $
     } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $candidate 'PFTDemoBuild.json') -Encoding UTF8
 }
 
+function Confirm-WalkthroughReport($path, $testPath) {
+    if (!(Test-Path -LiteralPath $path -PathType Leaf)) {
+        throw "Windows demo verification did not produce $path."
+    }
+    try {
+        $report = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+    } catch {
+        throw "Windows demo verification produced an unreadable report at $path."
+    }
+    $results = @($report.tests)
+    if ($results.Count -ne 1 -or $results[0].fullTestPath -cne $testPath -or
+        $results[0].state -cne 'Success' -or $report.failed -ne 0 -or
+        $report.notRun -ne 0 -or $report.inProcess -ne 0 -or
+        ($report.succeeded + $report.succeededWithWarnings) -ne 1) {
+        throw "Windows demo verification did not confirm a successful $testPath in $path."
+    }
+}
+
 $builds = Join-Path $projectRoot 'Saved\FirstFloorBuilds'
 $mapBuild = Join-Path $builds "Level\$MapName"
 $receipt = Join-Path $mapBuild 'WindowsCook.json'
@@ -318,13 +336,15 @@ try {
         if ($LASTEXITCODE -ne 0) {
             throw "Windows demo verification failed. Read the logs under $candidate\PFTDigitalTwin\Saved\Logs."
         }
-        $suites = @('CommonsWalk', 'Navigator', 'GuidedWalk')
-        if ($VerifyExtended) { $suites += 'C1007Walk' }
-        foreach ($suite in $suites) {
+        $suites = [ordered]@{
+            CommonsWalk = 'PFTFirstFloor.WalkToCommons'
+            Navigator = 'PFTNavigator.Panel.AfterOnboarding'
+            GuidedWalk = 'PFTFirstFloor.GuidedWalk'
+        }
+        if ($VerifyExtended) { $suites['C1007Walk'] = 'PFTFirstFloor.WalkToC1007' }
+        foreach ($suite in $suites.Keys) {
             $report = "PFTDigitalTwin/Saved/Automation/$suite/index.json"
-            if (!(Test-Path -LiteralPath (Join-Path $candidate $report) -PathType Leaf)) {
-                throw "Windows demo verification did not produce $report. Read the logs under $candidate\PFTDigitalTwin\Saved\Logs."
-            }
+            Confirm-WalkthroughReport (Join-Path $candidate $report) $suites[$suite]
             $tests[$suite] = $report
         }
         $verification = 'Passed'
