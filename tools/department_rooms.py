@@ -17,7 +17,7 @@ def get_department_room_ids(department_id: str, folder: str = DATA_FOLDER) -> li
     if courses is None:
         return []
 
-    room_ids = set()
+    room_ids: set[str] = set()
 
     for course in courses:
         if course.get("DepartmentId") == department_id:
