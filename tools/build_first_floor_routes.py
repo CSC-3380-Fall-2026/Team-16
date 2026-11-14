@@ -1,10 +1,10 @@
 """Bake the first-floor walking graph from the demo map's pawn collision."""
 
 from collections import deque
+import argparse
 import json
 import math
 from pathlib import Path
-import sys
 
 import unreal
 
@@ -17,10 +17,11 @@ EDGES = ((1, 0), (0, 1), (-1, 0), (0, -1))
 COMMONS = (14900, -5160)
 
 
-def bake():
-    world = unreal.EditorLoadingAndSavingUtils.load_map(MAP)
+def bake(map_path, output):
+    """Bake collision data for the selected map and write it to output."""
+    world = unreal.EditorLoadingAndSavingUtils.load_map(map_path)
     if world is None:
-        raise RuntimeError(f"Could not open {MAP}")
+        raise RuntimeError(f"Could not open {map_path}")
     unreal.SystemLibrary.execute_console_command(world, "Editor.AsyncStaticMeshCompilationFinishAll")
     actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem).get_all_level_actors()
     markers = [actor for actor in actors if isinstance(actor, unreal.PFTRoomMarker)]
@@ -113,13 +114,19 @@ def bake():
 
     if "PFT_COMMONS" not in destinations or len(destinations) < 2:
         raise RuntimeError(f"Too few rooms connect to the walking graph: {sorted(destinations)}")
-    path = (Path(sys.argv[1]) if len(sys.argv) > 1 else
-            Path(unreal.Paths.project_plugins_dir(), "PFTNavigator", "Content", "Data", "first_floor_routes.json"))
     nodes = (json.dumps([x, y, round(positions[x, y].z - HALF_HEIGHT - 4, 2), links[x, y]], separators=(",", ":"))
              for x, y in sorted(links))
-    text = json.dumps({"Map": MAP, "Step": STEP, "Destinations": destinations}, separators=(",", ":"))
-    path.write_text(text[:-1] + ',"Nodes":[\n' + ",\n".join(nodes) + "\n]}\n", encoding="utf-8")
+    text = json.dumps({"Map": map_path, "Step": STEP, "Destinations": destinations}, separators=(",", ":"))
+    output.write_text(text[:-1] + ',"Nodes":[\n' + ",\n".join(nodes) + "\n]}\n", encoding="utf-8")
     unreal.log(f"PFT routes: {len(links)} connected points, {len(destinations)} destinations: {', '.join(destinations)}")
 
 
-bake()
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("output", nargs="?", type=Path)
+    parser.add_argument("--map", default=MAP, help="First-floor Unreal map package")
+    args = parser.parse_args()
+    if args.map != MAP and args.output is None:
+        parser.error("An explicit output path is required when baking a candidate map.")
+    output = args.output or Path(unreal.Paths.project_plugins_dir(), "PFTNavigator", "Content", "Data", "first_floor_routes.json")
+    bake(args.map, output)

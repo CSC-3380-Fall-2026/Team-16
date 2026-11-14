@@ -204,6 +204,22 @@ function Confirm-NavigatorInstall {
     }
 }
 
+function Confirm-WalkingMap {
+    if (!$Verify -and !$VerifyExtended) { return }
+    $path = Join-Path $projectRoot 'Plugins/PFTNavigator/Content/Data/first_floor_routes.json'
+    if (!(Test-Path -LiteralPath $path -PathType Leaf)) {
+        throw "Verified packaging requires a walking graph for $map. Bake and install first_floor_routes.json before packaging."
+    }
+    try {
+        $graph = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+    } catch {
+        throw "Could not read the walking graph at $path."
+    }
+    if ($graph.Map -cne $map) {
+        throw "The walking graph is for '$($graph.Map)'. Bake and install the graph for $map before packaging."
+    }
+}
+
 function Write-BuildRecord($mapHash, $cookMode, $verification, $toolsRevision, $tests) {
     $enginePath = Join-Path $EngineRoot 'Engine\Build\Build.version'
     $engine = if (Test-Path -LiteralPath $enginePath -PathType Leaf) {
@@ -271,6 +287,7 @@ try {
 }
 try {
     Confirm-NavigatorInstall
+    Confirm-WalkingMap
     $null = New-Item -ItemType Directory -Path $packageParent -Force
     $archiveLock = [IO.File]::Open((Join-Path $packageParent "$packageName.package.lock"), 'OpenOrCreate', 'ReadWrite', 'None')
     Confirm-DemoArchive $package
@@ -367,6 +384,7 @@ try {
         $verification = 'Passed'
     }
     Confirm-NavigatorInstall
+    Confirm-WalkingMap
     Write-BuildRecord $mapHash $cookMode $verification $toolsRevision $tests
     Publish-DemoArchive
     Write-Output (Join-Path $package 'Play PFT Demo.cmd')

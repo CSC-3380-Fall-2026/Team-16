@@ -253,7 +253,7 @@ startup map.
 Open `Play PFT Demo.cmd` in the Windows package. Choose **Skip tour** to open the
 Navigator. From the C1003 spawn, check the floor in
 front of the glass entrance and walk past the Zone 1200 sign around the corner.
-Search for `CSC 1350`, select room 1200, and use **View selected room** to check
+Search for `CSC 1350`, select room 1200, and use **Preview room** to check
 the camera. Try room 1202 and the Commons to check the added destinations.
 For walking directions, click the Commons search result and choose
 **Walk there**. The room browser collapses into a directions panel with the
@@ -270,6 +270,21 @@ PythonScript commandlet. Copy the resulting
 `Plugins/PFTNavigator/Content/Data/first_floor_routes.json` back to the Navigator
 repository's `data` folder. The bake keeps destinations the player can reach
 from C1003.
+
+For a candidate map, pass both an output file and the map package to the
+Python commandlet. Write the graph outside the project first so the default
+graph is available until you choose which map to package.
+
+```powershell
+& "$EngineRoot/Engine/Binaries/Win64/UnrealEditor-Cmd.exe" $Project `
+  -run=PythonScript "-script=$PWD/tools/build_first_floor_routes.py $PWD/first_floor_routes.json --map /Game/Level/PFTFirstFloorUpdated" `
+  -unattended -nullrhi -nop4 -nosound
+```
+
+Use forward slashes in the script and output paths passed to the Python
+commandlet. Review the graph, then update the Git data and run the Navigator
+installer for the candidate. Verified packaging checks the installed graph's
+map before starting Unreal. The graph must match the selected `-MapName`.
 
 The launcher opens the demo at native 720p with DirectX 11 and a 30 FPS cap.
 Run `& '.\Play PFT Demo.cmd' smooth` to use a 45 FPS cap at the same resolution
