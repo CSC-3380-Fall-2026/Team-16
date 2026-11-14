@@ -134,6 +134,11 @@ FString FPFTCourse::GetStartTimeLabel() const
     return StartTime.IsEmpty() ? FString() : FormatTime(StartTime);
 }
 
+FString FPFTCourse::GetEndTimeLabel() const
+{
+    return EndTime.IsEmpty() ? FString() : FormatTime(EndTime);
+}
+
 FString FPFTCourse::GetTimeRangeLabel() const
 {
     if (StartTime.IsEmpty()) return FString();
@@ -333,7 +338,46 @@ TArray<FPFTSearchResult> UPFTDirectory::FindClasses(const FString& Query, const 
         const auto* Room = FindRoom(Course.RoomId);
         if (!Room || (Floor > 0 && Room->Floor != Floor)) continue;
         const FString Label = Course.CourseCode + TEXT(" · ") + Room->DisplayName + TEXT("\n") + Course.GetScheduleLabel();
-        Results.Add({ Course.RoomId, Label });
+        Results.Add({ Course.RoomId, Label, Course.Name });
     }
     return Results;
+}
+
+const FPFTCourse* UPFTDirectory::FindCourse(const FString& CourseId) const
+{
+    return Courses.FindByPredicate([&](const FPFTCourse& Course) { return Course.Name == CourseId; });
+}
+
+TArray<const FPFTCourse*> UPFTDirectory::GetClassesForDay(const TArray<FString>& CourseIds, TCHAR Day) const
+{
+    TArray<const FPFTCourse*> DayClasses;
+    for (const FString& CourseId : CourseIds)
+    {
+        // A saved ID can point at a course we took out of the data later, so those just get skipped.
+        // Classes with no time can't be put in order, so they're skipped too
+        const auto* Course = FindCourse(CourseId);
+        if (!Course || Course->StartTime.IsEmpty() || !Course->MeetingDays.Contains(FString::Chr(Day), ESearchCase::CaseSensitive)) continue;
+        DayClasses.AddUnique(Course);
+    }
+    // "HH:MM" strings sort the same way the times do
+    DayClasses.StableSort([](const FPFTCourse& A, const FPFTCourse& B) { return A.StartTime < B.StartTime; });
+    return DayClasses;
+}
+
+int32 UPFTDirectory::FindCurrentOrNextClass(const TArray<const FPFTCourse*>& DayClasses, const FString& Now)
+{
+    for (int32 Index = 0; Index < DayClasses.Num(); ++Index)
+    {
+        const auto* Course = DayClasses[Index];
+        // Without an end time we can only say a class is coming up, not that it's still going
+        const bool bStillGoing = !Course->EndTime.IsEmpty() && Now < Course->EndTime;
+        if (Now <= Course->StartTime || bStillGoing) return Index;
+    }
+    return INDEX_NONE;
+}
+
+TCHAR UPFTDirectory::GetDayCode(const FDateTime& Time)
+{
+    // EDayOfWeek goes Monday to Sunday, which is the same order as MTWRFSU
+    return TEXT("MTWRFSU")[static_cast<int32>(Time.GetDayOfWeek())];
 }

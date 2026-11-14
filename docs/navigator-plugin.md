@@ -82,6 +82,13 @@ day and start time. For example, Duncan on Wednesday at 10:30 AM shows CSC 1350
 in PFT 1200. Select the match to preview the room or start a walking route.
 Use **Reset class search** to clear the course, instructor, day, time, floor,
 and preview filters and see all included meetings again.
+After you pick a class result, **Add to my classes** saves it. Turn on **My classes**
+at the bottom of the panel to see the classes you saved that meet today, earliest
+first. The one going on now (or coming up next) is gold and tagged **Now** or **Next**,
+and the ones that are over say **Done**. Click one to preview the room or walk there,
+or pick it and choose **Remove from my classes**. The list is saved with the other
+panel settings, so it's still there next time. Classes without a time in
+`courses.json` can't be added since there's no way to put them in order.
 Use **Show more rooms** to load the next set of results in a broad search. The
 list starts over when you change the search or floor.
 Press Enter in the search box when there is one result to open its preview.

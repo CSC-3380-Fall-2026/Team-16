@@ -48,7 +48,7 @@ namespace
 
 void UPFTSearchButton::SelectRoom()
 {
-    if (Panel) Panel->ChooseRoom(RoomId);
+    if (Panel) Panel->ChooseRoom(RoomId, CourseId);
 }
 
 TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
@@ -202,6 +202,14 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     RouteUnavailable->Rename(TEXT("RouteUnavailable"));
     RouteUnavailable->SetVisibility(ESlateVisibility::Collapsed);
     RoomCard->AddChild(RouteUnavailable);
+    // Only shows up when the pick came from a class result, since that's the only time we know the course
+    auto* SaveClassRow = WidgetTree->ConstructWidget<UHorizontalBox>();
+    RoomCard->AddChild(SaveClassRow);
+    SaveClassButton = AddButton(SaveClassRow, TEXT("Add to my classes"), Label);
+    SaveClassButton->Rename(TEXT("SaveClassButton"));
+    SaveClassButton->SetVisibility(ESlateVisibility::Collapsed);
+    SaveClassButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ToggleSavedClass);
+    SaveClassLabel = Label;
     auto* ExploreActions = WidgetTree->ConstructWidget<UHorizontalBox>();
     Column->AddChild(ExploreActions);
     auto* CameraButton = AddButton(ExploreActions, TEXT("Free camera"), Label);
@@ -213,6 +221,25 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     SettingsButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ToggleSettings);
     CameraHelp = AddText(TEXT("Free camera lets you fly around the building."));
     CameraHelp->Rename(TEXT("CameraHelp"));
+
+    // My classes goes at the bottom so opening it doesn't push the search controls around
+    MyClassesToggle = WidgetTree->ConstructWidget<UCheckBox>(UCheckBox::StaticClass(), TEXT("MyClassesToggle"));
+    MyClassesToggle->SetContent(MakeText(TEXT("My classes")));
+    MyClassesToggle->OnCheckStateChanged.AddDynamic(this, &UPFTNavigatorWidget::MyClassesChanged);
+    Column->AddChild(MyClassesToggle);
+    MyClassesBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("MyClasses"));
+    MyClassesBox->SetVisibility(ESlateVisibility::Collapsed);
+    Column->AddChild(MyClassesBox);
+    MyClassesStatus = MakeText(FString());
+    MyClassesStatus->Rename(TEXT("MyClassesStatus"));
+    MyClassesBox->AddChild(MyClassesStatus);
+    MyClassesList = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("MyClassesList"));
+    MyClassesBox->AddChild(MyClassesList);
+    // Saved as course Names in the same settings file as the route options, so the list is still there after a restart
+    FString SavedClasses;
+    GConfig->GetString(SettingsSection, TEXT("MyClasses"), SavedClasses, GGameUserSettingsIni);
+    SavedClasses.ParseIntoArray(MyClasses, TEXT(","));
+    RefreshMyClasses();
 
     Settings = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("RouteSettings"));
     Browser->AddChild(Settings);
@@ -365,6 +392,7 @@ void UPFTNavigatorWidget::AddResultPage()
     {
         auto* Button = WidgetTree->ConstructWidget<UPFTSearchButton>();
         Button->RoomId = Entries[Index].RoomId;
+        Button->CourseId = Entries[Index].CourseId;
         Button->Panel = this;
         auto* Label = WidgetTree->ConstructWidget<UTextBlock>();
         const auto* Room = Directory->FindRoom(Entries[Index].RoomId);
@@ -391,7 +419,7 @@ void UPFTNavigatorWidget::AddResultPage()
     MoreRoomsButton->GetParent()->SetVisibility(VisibleCount < Entries.Num() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 }
 
-void UPFTNavigatorWidget::ChooseRoom(const FString& RoomId)
+void UPFTNavigatorWidget::ChooseRoom(const FString& RoomId, const FString& CourseId)
 {
     const auto* Directory = GetGameInstance()->GetSubsystem<UPFTDirectory>();
     const auto* Room = Directory->FindRoom(RoomId);
@@ -409,7 +437,9 @@ void UPFTNavigatorWidget::ChooseRoom(const FString& RoomId)
         return;
     }
     SelectedRoomId = RoomId;
+    SelectedCourseId = CourseId;
     UpdateSelectedTags();
+    UpdateSaveClassButton();
     const bool bSelected = bHasLocation && Destinations->SelectRoom(RoomId);
     if (bSwitchPreview && !bSelected) ToggleFreeCamera();
     Details->SetText(FText::FromString(Directory->GetRoomDetails(RoomId)));
@@ -433,7 +463,9 @@ void UPFTNavigatorWidget::ClearRoom()
     Destinations->ClearSelection();
     GetWorld()->GetSubsystem<UPFTRoutes>()->Stop();
     SelectedRoomId.Empty();
+    SelectedCourseId.Empty();
     UpdateSelectedTags();
+    UpdateSaveClassButton();
     Details->SetText(FText::FromString(TEXT("Select a room to see its details.")));
     ViewButton->SetIsEnabled(false);
     ClearButton->SetIsEnabled(false);
@@ -567,6 +599,104 @@ void UPFTNavigatorWidget::PerformanceChanged(bool bChecked)
     SavePreference(TEXT("PerformanceMode"), bChecked);
 }
 
+void UPFTNavigatorWidget::MyClassesChanged(bool bChecked)
+{
+    MyClassesBox->SetVisibility(bChecked ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    RefreshMyClasses();
+    if (bChecked) Browser->ScrollWidgetIntoView(MyClassesBox.Get(), false, EDescendantScrollDestination::BottomOrRight);
+}
+
+// Adds the picked class to My classes, or takes it off if it's already there, and saves the list right away
+void UPFTNavigatorWidget::ToggleSavedClass()
+{
+    if (SelectedCourseId.IsEmpty()) return;
+    if (MyClasses.Contains(SelectedCourseId)) MyClasses.Remove(SelectedCourseId);
+    else MyClasses.Add(SelectedCourseId);
+    GConfig->SetString(SettingsSection, TEXT("MyClasses"), *FString::Join(MyClasses, TEXT(",")), GGameUserSettingsIni);
+    GConfig->Flush(false, GGameUserSettingsIni);
+    UpdateSaveClassButton();
+    RefreshMyClasses();
+}
+
+void UPFTNavigatorWidget::UpdateSaveClassButton()
+{
+    if (!SaveClassButton) return;
+    SaveClassButton->SetVisibility(SelectedCourseId.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
+    const bool bSaved = MyClasses.Contains(SelectedCourseId);
+    SaveClassLabel->SetText(FText::FromString(bSaved ? TEXT("Remove from my classes") : TEXT("Add to my classes")));
+}
+
+FDateTime UPFTNavigatorWidget::GetNow() const
+{
+    return TestClock.GetTicks() > 0 ? TestClock : FDateTime::Now();
+}
+
+void UPFTNavigatorWidget::SetClockForTests(const FDateTime& Time)
+{
+    TestClock = Time;
+    RefreshMyClasses();
+}
+
+void UPFTNavigatorWidget::UpdateMyClassesClock()
+{
+    const FDateTime Now = GetNow();
+    if (Now.GetHour() * 60 + Now.GetMinute() != LastClockMinute) RefreshMyClasses();
+}
+
+// Rebuilds the My classes list for today. The class going on now (or coming up next) gets a tag in front,
+// and the ones that are already over say Done, so you can tell where you are in the day at a glance
+void UPFTNavigatorWidget::RefreshMyClasses()
+{
+    if (!MyClassesList) return;
+    const FDateTime Now = GetNow();
+    LastClockMinute = Now.GetHour() * 60 + Now.GetMinute();
+    const FString Time = Now.ToString(TEXT("%H:%M"));
+    const auto* Directory = GetGameInstance()->GetSubsystem<UPFTDirectory>();
+    const auto Today = Directory->GetClassesForDay(MyClasses, UPFTDirectory::GetDayCode(Now));
+    const int32 Next = UPFTDirectory::FindCurrentOrNextClass(Today, Time);
+
+    FString Message = TEXT("No more classes today.");
+    if (MyClasses.IsEmpty()) Message = TEXT("No saved classes yet. Find a class by instructor or time, pick it, then choose Add to my classes.");
+    else if (Today.IsEmpty()) Message = TEXT("None of your classes meet today.");
+    else if (Next != INDEX_NONE)
+    {
+        const auto* Course = Today[Next];
+        const auto* Room = Directory->FindRoom(Course->RoomId);
+        const FString Where = Room ? Room->DisplayName : Course->RoomId;
+        if (Course->StartTime <= Time && !Course->EndTime.IsEmpty())
+            Message = FString::Printf(TEXT("In class now: %s in %s until %s"), *Course->CourseCode, *Where, *Course->GetEndTimeLabel());
+        else Message = FString::Printf(TEXT("Next class: %s at %s in %s"), *Course->CourseCode, *Course->GetStartTimeLabel(), *Where);
+    }
+    MyClassesStatus->SetText(FText::FromString(Message));
+
+    MyClassesList->ClearChildren();
+    for (int32 Index = 0; Index < Today.Num(); ++Index)
+    {
+        const auto* Course = Today[Index];
+        const auto* Room = Directory->FindRoom(Course->RoomId);
+        const TCHAR* Tag = TEXT("");
+        if (Index == Next) Tag = Course->StartTime <= Time ? TEXT("Now | ") : TEXT("Next | ");
+        else if (Next == INDEX_NONE || Index < Next) Tag = TEXT("Done | ");
+        auto* Button = WidgetTree->ConstructWidget<UPFTSearchButton>();
+        Button->RoomId = Course->RoomId;
+        Button->CourseId = Course->Name;
+        Button->Panel = this;
+        Button->ResultText = FString::Printf(TEXT("%s%s · %s\n%s"), Tag, *Course->CourseCode,
+            Room ? *Room->DisplayName : *Course->RoomId, *Course->GetTimeRangeLabel());
+        auto* Label = WidgetTree->ConstructWidget<UTextBlock>();
+        Label->SetText(FText::FromString(Button->ResultText));
+        Label->SetAutoWrapText(true);
+        Label->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Regular"), 14));
+        Label->SetColorAndOpacity(FSlateColor(FLinearColor(PFTPalette::Ink)));
+        Button->Label = Label;
+        Button->SetContent(Label);
+        // The next class is gold like a selected result so it stands out from the rest of the day
+        Button->SetBackgroundColor(Index == Next ? FLinearColor(PFTPalette::Gold) : FLinearColor::White);
+        Button->OnClicked.AddDynamic(Button, &UPFTSearchButton::SelectRoom);
+        MyClassesList->AddChild(Button);
+    }
+}
+
 void UPFTNavigatorWidget::ViewRoom()
 {
     auto* Exploration = GetWorld()->GetSubsystem<UPFTExploration>();
@@ -578,8 +708,9 @@ FReply UPFTNavigatorWidget::NativeOnPreviewKeyDown(const FGeometry& Geometry, co
     if (Event.GetKey() == EKeys::Enter && (Search->HasKeyboardFocus() || Search->HasFocusedDescendants()))
     {
         if (Event.IsRepeat() || Results->GetChildrenCount() != 1) return FReply::Handled();
-        const FString RoomId = CastChecked<UPFTSearchButton>(Results->GetChildAt(0))->RoomId;
-        ChooseRoom(RoomId);
+        const auto* Only = CastChecked<UPFTSearchButton>(Results->GetChildAt(0));
+        const FString RoomId = Only->RoomId;
+        ChooseRoom(RoomId, Only->CourseId);
         const auto* Destinations = GetWorld()->GetSubsystem<UPFTDestinations>();
         if (SelectedRoomId == RoomId && ViewButton->GetIsEnabled() && !Destinations->IsRoomPreviewActive()) ViewRoom();
         return FReply::Handled();
