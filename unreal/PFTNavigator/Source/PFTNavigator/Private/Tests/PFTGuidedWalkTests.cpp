@@ -226,4 +226,66 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
     return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPFTWalkToRoom1218Test, "PFTFirstFloor.WalkToRoom1218",
+    EAutomationTestFlags::ClientContext | EAutomationTestFlags::EngineFilter)
+
+bool FPFTWalkToRoom1218Test::RunTest(const FString& Parameters)
+{
+    UWorld* World = GEngine && GEngine->GameViewport ? GEngine->GameViewport->GetWorld() : nullptr;
+    if (!TestNotNull(TEXT("First-floor demo world"), World)) return false;
+    auto* Player = World->GetFirstPlayerController();
+    auto* Character = Player ? Player->GetCharacter() : nullptr;
+    if (!TestNotNull(TEXT("First-person walking pawn"), Character)) return false;
+    auto* Routes = World->GetSubsystem<UPFTRoutes>();
+    if (!TestTrue(TEXT("Skip tour is clickable"), PFTViewportTest::SkipWelcome(World))) return false;
+
+    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World, Character, Routes,
+        ReadyBy = FPlatformTime::Seconds() + 10.0]()
+    {
+        TArray<UUserWidget*> Widgets;
+        UWidgetBlueprintLibrary::GetAllWidgetsOfClass(World, Widgets, UPFTNavigatorWidget::StaticClass(), true);
+        if (Widgets.IsEmpty() && FPlatformTime::Seconds() < ReadyBy) return false;
+        if (!TestEqual(TEXT("Navigator is visible"), Widgets.Num(), 1)) return true;
+        auto* Navigator = CastChecked<UPFTNavigatorWidget>(Widgets[0]);
+        Navigator->ChooseRoom(TEXT("PFT_1218"));
+        auto* Tree = Navigator->WidgetTree.Get();
+        ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
+        ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Tree, Character, Routes]()
+        {
+            if (!TestTrue(TEXT("Walk there starts directions to 1218"),
+                PFTViewportTest::ClickVisibleWidget(Tree->FindWidget(TEXT("RouteButton"))) && Routes->IsGuiding())) return true;
+            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Tree, Character, Routes,
+                Deadline = FPlatformTime::Seconds() + 40.0]()
+            {
+                const FVector Position = Character->GetActorLocation();
+                if (Routes->HasArrived())
+                {
+                    const FVector HallwayStop(10440, -5700, 0);
+                    TestTrue(TEXT("The player stops in the hallway by the signed door"),
+                        FVector::Dist2D(Position, HallwayStop) <= 65.0 && Position.X < 10500
+                        && Character->GetCharacterMovement()->IsMovingOnGround());
+                    const auto* Hint = CastChecked<UTextBlock>(Tree->FindWidget(TEXT("RouteHint")));
+                    TestTrue(TEXT("The arrival message names PFT 1218"), Hint->GetText().ToString().Contains(TEXT("Arrived at PFT 1218")));
+                    AddInfo(FString::Printf(TEXT("Reached the Room 1218 hallway stop at %s"), *Position.ToCompactString()));
+                    return true;
+                }
+                if (!Routes->IsGuiding() || Position.Z < 65 || FPlatformTime::Seconds() > Deadline)
+                {
+                    AddError(FString::Printf(TEXT("Room 1218 route stopped at %s. %s"),
+                        *Position.ToCompactString(), *Routes->GetMessage().ToString()));
+                    return true;
+                }
+                const FVector Delta = Routes->NextPoint() - Position;
+                const FVector Direction = Delta.GetSafeNormal2D();
+                Character->GetController()->SetControlRotation(Direction.Rotation());
+                Character->AddMovementInput(Direction, FMath::Clamp(Delta.Size2D() / 95.0, 0.16, 0.8));
+                return false;
+            }));
+            return true;
+        }));
+        return true;
+    }));
+    return true;
+}
+
 #endif
