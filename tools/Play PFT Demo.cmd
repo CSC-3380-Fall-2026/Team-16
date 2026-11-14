@@ -8,7 +8,11 @@ if not exist "%~dp0PFTDigitalTwin.exe" (
 pushd "%~dp0" || exit /b 1
 set "DemoMap=/Game/Level/PFTFirstFloorComplete"
 set "DemoArgs=-d3d11 -windowed -ResX=1280 -ResY=720 -nosplash"
-set "DemoSettings=r.SetRes 1280x720w,r.VSync 0,sg.ShadowQuality 1,sg.GlobalIlluminationQuality 0,sg.ReflectionQuality 0,sg.PostProcessQuality 1,sg.EffectsQuality 1,r.ScreenPercentage 100,t.MaxFPS 30,r.LightMaxDrawDistanceScale 0.5"
+set "DemoSettings=r.SetRes 1280x720w,r.VSync 0,sg.ShadowQuality 1,sg.GlobalIlluminationQuality 0,sg.ReflectionQuality 0,sg.PostProcessQuality 1,sg.EffectsQuality 1,r.ScreenPercentage 100,r.LightMaxDrawDistanceScale 0.5"
+set "DemoFPS=30"
+if /i "%~1"=="smooth" set "DemoFPS=45"
+if /i "%~1"=="profile" if /i "%~2"=="smooth" set "DemoFPS=45"
+set "DemoSettings=%DemoSettings%,t.MaxFPS %DemoFPS%"
 if /i "%~1"=="walkthrough" goto checks
 if /i "%~1"=="verify" goto verify
 if /i "%~1"=="profile" goto profile
@@ -28,7 +32,7 @@ call :run_check Navigator PFTNavigator.Panel.AfterOnboarding AfterOnboarding -Re
 goto checks_done
 
 :profile
-call :run_check CommonsProfile PFTFirstFloor.WalkToCommons WalkToCommons
+call :run_check CommonsProfile-%DemoFPS%FPS PFTFirstFloor.WalkToCommons WalkToCommons
 if errorlevel 1 goto checks_done
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0measure_demo_frames.ps1" -Log "%TestLog%"
 

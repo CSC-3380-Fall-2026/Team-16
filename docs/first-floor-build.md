@@ -223,7 +223,8 @@ Search for `CSC 1350`, select room 1200, and use **View selected room** to check
 the camera. Try room 1202 and the Commons to check the added destinations.
 
 The launcher opens the demo at native 720p with DirectX 11 and a 30 FPS cap.
-The package includes both DirectX renderers.
+Run `& '.\Play PFT Demo.cmd' smooth` to use a 45 FPS cap at the same resolution
+and quality settings. The package includes both DirectX renderers.
 
 ## Verify a Windows package
 
@@ -245,7 +246,8 @@ Logs are in `PFTDigitalTwin\Saved\Logs`. The `CommonsWalk` and `Navigator`
 folders under `PFTDigitalTwin\Saved\Automation` each contain an `index.json`
 with the test result. The shorter walkthrough writes to `FirstFloorWalk`.
 Run `& '.\Play PFT Demo.cmd' profile` from the Windows package to measure frame
-pacing on the Commons route. It prints frame-time percentiles, the slowest frame,
+pacing on the Commons route at 30 FPS, or `& '.\Play PFT Demo.cmd' profile smooth`
+to measure the 45 FPS preset. It prints frame-time percentiles, the slowest frame,
 and counts above 50 ms and 100 ms. The text report sits beside the test log and
 links to the exact CSV under `PFTDigitalTwin\Saved\Profiling\CSV`. Close other
 copies of the demo when comparing runs. The report measures the walk after
