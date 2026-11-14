@@ -76,6 +76,10 @@ info (name, type, floor, offices, and classes) and its marker. Results marked
 their directory entry when selected.
 Turn on **Previewable rooms only** to limit the current search and floor to
 rooms with a preview on the open map.
+Turn on **Find a class by instructor or time** to search the bundled Fall 2026
+meetings. Enter part of the instructor's name and optionally pick a meeting
+day and start time. For example, Duncan on Wednesday at 10:30 AM shows CSC 1350
+in PFT 1200. Select the match to preview the room or start a walking route.
 Use **Show more rooms** to load the next set of results in a broad search. The
 list starts over when you change the search or floor.
 Press Enter in the search box when there is one result to open its preview.
