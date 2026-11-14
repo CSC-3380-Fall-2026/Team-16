@@ -2,6 +2,7 @@
 #include "PFTPalette.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/LineBatchComponent.h"
+#include "Components/TextRenderComponent.h"
 #include "Dom/JsonObject.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
@@ -186,7 +187,8 @@ bool UPFTRoutes::Start(ACharacter& Character, const FString& RoomId, const FStri
     if (!Target) return false;
     if (!Character.GetCharacterMovement()->IsMovingOnGround() || !Plan(Character, *Target))
     {
-        Message = FText::FromString(TEXT("Walk onto a connected first-floor hallway and try again."));
+        bCanRetry = true;
+        Message = FText::FromString(TEXT("Walk to a first-floor hallway, then choose Retry route."));
         return false;
     }
 
@@ -200,20 +202,37 @@ bool UPFTRoutes::Start(ACharacter& Character, const FString& RoomId, const FStri
 void UPFTRoutes::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
+    const auto* Player = GetWorld()->GetFirstPlayerController();
+    if (bArrived && ArrivalLabel && Player)
+    {
+        FVector ViewLocation;
+        FRotator ViewRotation;
+        Player->GetPlayerViewPoint(ViewLocation, ViewRotation);
+        ArrivalLabel->SetWorldRotation((ViewLocation - ArrivalLabel->GetComponentLocation()).Rotation());
+    }
     if (Path.IsEmpty()) return;
     auto* Character = Walker.Get();
-    const auto* Player = GetWorld()->GetFirstPlayerController();
     if (!Character || !Player || Player->GetPawn() != Character)
     {
         Stop();
         return;
     }
-    DrawPath();
+    if (!bReplanning) DrawPath();
     UpdateTime -= DeltaTime;
     if (UpdateTime > 0) return;
     UpdateTime = 0.15f;
 
     const FVector Position = Character->GetActorLocation();
+    if (bReplanning)
+    {
+        bReplanning = false;
+        if (!Character->GetCharacterMovement()->IsMovingOnGround() || !Plan(*Character, Goal))
+        {
+            bCanRetry = true;
+            EndGuidance(FText::FromString(TEXT("Route lost. Walk to a first-floor hallway, then choose Retry route.")));
+            return;
+        }
+    }
     const FVector End = Path.Last();
     if (Character->GetCharacterMovement()->IsMovingOnGround()
         && FVector::Dist2D(Position, End) <= ArrivalRadius
@@ -221,6 +240,7 @@ void UPFTRoutes::Tick(float DeltaTime)
     {
         bArrived = true;
         EndGuidance(FText::FromString(FString::Printf(TEXT("Arrived at %s."), *Destination)));
+        ShowArrival(End);
         return;
     }
 
@@ -232,25 +252,51 @@ void UPFTRoutes::Tick(float DeltaTime)
         ++NextIndex;
     }
 
-    if (FVector::Dist2D(Position, NextPoint()) > Step * 3.0)
+    if (FVector::Dist2D(Position, NextPoint()) > Step * 3.0
+        || FMath::Abs(Position.Z - CapsuleCenter(*Character, NextPoint()).Z) > FloorTolerance)
     {
-        if (!Plan(*Character, Goal))
-        {
-            EndGuidance(FText::FromString(TEXT("Route lost. Return to a first-floor hallway and try again.")));
-            return;
-        }
+        bReplanning = true;
+        UpdateTime = 0.45f;
+        if (Trail) Trail->Flush();
+        Message = FText::FromString(FString::Printf(TEXT("%s\nUpdating route…"), *Destination));
+        return;
     }
+    UpdateDirections(Position, Player->GetControlRotation());
+}
 
-    const double Distance = FVector::Dist2D(Position, NextPoint());
+void UPFTRoutes::UpdateDirections(const FVector& Position, const FRotator& View)
+{
     const FVector Toward = (NextPoint() - Position).GetSafeNormal2D();
-    const FVector Right = FRotationMatrix(FRotator(0, Player->GetControlRotation().Yaw, 0)).GetUnitAxis(EAxis::Y);
+    const FVector Right = FRotationMatrix(FRotator(0, View.Yaw, 0)).GetUnitAxis(EAxis::Y);
     const double Side = FVector::DotProduct(Right, Toward);
     const double Forward = FVector::CrossProduct(Toward, Right).Z;
-    const TCHAR* Hint = TEXT("Walk ahead");
-    if (Forward < -0.35) Hint = TEXT("Turn around");
-    else if (Side > 0.55) Hint = TEXT("Turn right");
-    else if (Side < -0.55) Hint = TEXT("Turn left");
-    Message = FText::FromString(FString::Printf(TEXT("%s\n%s · %.1f m to next marker"), *Destination, Hint, Distance / 100.0));
+    FString Instruction;
+    if (Forward < -0.35) Instruction = TEXT("Turn around to follow the arrows");
+    else if (Side > 0.55) Instruction = TEXT("Follow the arrows to your right");
+    else if (Side < -0.55) Instruction = TEXT("Follow the arrows to your left");
+    if (Instruction.IsEmpty())
+    {
+        const int32 LookAhead = FMath::Max(2, FMath::CeilToInt(180.0 / Step));
+        const double DistanceToPath = FVector::Dist2D(Position, NextPoint());
+        for (int32 Index = NextIndex + LookAhead; Index + LookAhead < Path.Num(); ++Index)
+        {
+            const FVector Incoming = (Path[Index] - Path[Index - LookAhead]).GetSafeNormal2D();
+            const FVector Outgoing = (Path[Index + LookAhead] - Path[Index]).GetSafeNormal2D();
+            const double Turn = FVector::CrossProduct(Incoming, Outgoing).Z;
+            if (FMath::Abs(Turn) < 0.85) continue;
+            const int32 Metres = FMath::RoundToInt((DistanceToPath + (Index - NextIndex) * Step) / 100.0);
+            const TCHAR* SideName = Turn > 0 ? TEXT("right") : TEXT("left");
+            Instruction = Metres <= 1 ? FString::Printf(TEXT("Turn %s ahead"), SideName)
+                : FString::Printf(TEXT("Turn %s in %d m"), SideName, Metres);
+            break;
+        }
+        if (Instruction.IsEmpty())
+        {
+            const int32 Metres = FMath::RoundToInt((DistanceToPath + (Path.Num() - 1 - NextIndex) * Step) / 100.0);
+            Instruction = FString::Printf(TEXT("Continue to the destination · %d m"), Metres);
+        }
+    }
+    Message = FText::FromString(Destination + TEXT("\n") + Instruction);
 }
 
 void UPFTRoutes::DrawPath()
@@ -264,7 +310,8 @@ void UPFTRoutes::DrawPath()
     Trail->Flush();
 
     // Grid edges are one Step long in XY. Keep the animation phase when the first edge is skipped.
-    const double Phase = GetWorld()->GetTimeSeconds() * ArrowSpeed - NextIndex * Step;
+    const double AnimationDistance = bReducedMotion ? ArrowSpacing * 0.5 : GetWorld()->GetTimeSeconds() * ArrowSpeed;
+    const double Phase = AnimationDistance - NextIndex * Step;
     double ArrowDistance = FMath::Fmod(FMath::Fmod(Phase, ArrowSpacing) + ArrowSpacing, ArrowSpacing);
     TArray<FBatchedLine> Lines;
     Lines.Reserve(56);
@@ -293,18 +340,36 @@ void UPFTRoutes::DrawPath()
     Trail->DrawLines(Lines);
 }
 
+void UPFTRoutes::ShowArrival(const FVector& Position)
+{
+    if (!ArrivalLabel)
+    {
+        ArrivalLabel = NewObject<UTextRenderComponent>(this, TEXT("PFTArrivalLabel"));
+        ArrivalLabel->SetHorizontalAlignment(EHTA_Center);
+        ArrivalLabel->SetTextRenderColor(PFTPalette::Gold);
+        ArrivalLabel->SetWorldSize(24);
+        ArrivalLabel->RegisterComponentWithWorld(GetWorld());
+    }
+    ArrivalLabel->SetWorldLocation(Position + FVector(0, 0, 165));
+    ArrivalLabel->SetText(FText::FromString(Destination));
+    ArrivalLabel->SetVisibility(true);
+}
+
 void UPFTRoutes::EndGuidance(const FText& NewMessage)
 {
     if (Trail) Trail->Flush();
     Walker.Reset();
     Path.Reset();
     UpdateTime = 0;
+    bReplanning = false;
     Message = NewMessage;
 }
 
 void UPFTRoutes::Stop()
 {
     bArrived = false;
+    bCanRetry = false;
+    if (ArrivalLabel) ArrivalLabel->SetVisibility(false);
     EndGuidance(FText::GetEmpty());
 }
 
@@ -312,5 +377,6 @@ void UPFTRoutes::Deinitialize()
 {
     Stop();
     if (Trail) Trail->DestroyComponent();
+    if (ArrivalLabel) ArrivalLabel->DestroyComponent();
     Super::Deinitialize();
 }

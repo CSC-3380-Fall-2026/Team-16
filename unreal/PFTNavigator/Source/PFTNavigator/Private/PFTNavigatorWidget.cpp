@@ -20,11 +20,29 @@
 #include "InputCoreTypes.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
+#include "HAL/IConsoleManager.h"
+#include "Misc/ConfigCacheIni.h"
 #include "Styling/CoreStyle.h"
 
 namespace
 {
     constexpr int32 RoomsPerPage = 50;
+    const TCHAR* SettingsSection = TEXT("PFTNavigator");
+
+    void SavePreference(const TCHAR* Name, bool bEnabled)
+    {
+        GConfig->SetBool(SettingsSection, Name, bEnabled, GGameUserSettingsIni);
+        GConfig->Flush(false, GGameUserSettingsIni);
+    }
+
+    void ApplyPerformancePreset(bool bEnabled, float StandardRenderScale)
+    {
+        if (auto* ScreenPercentage = IConsoleManager::Get().FindConsoleVariable(TEXT("r.ScreenPercentage")))
+        {
+            // The Windows launcher sets this at console priority.
+            ScreenPercentage->Set(bEnabled ? FMath::Min(75.0f, StandardRenderScale) : StandardRenderScale, ECVF_SetByConsole);
+        }
+    }
 }
 
 void UPFTSearchButton::SelectRoom()
@@ -40,10 +58,12 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     // Light background so the ink text and purple buttons from the LSU palette are easy to read
     Border->SetBrushColor(FLinearColor(FColor(255, 255, 255, 245)));
     WidgetTree->RootWidget = Border;
-    auto* PanelScroll = WidgetTree->ConstructWidget<UScrollBox>();
-    Border->SetContent(PanelScroll);
+    auto* Content = WidgetTree->ConstructWidget<UVerticalBox>();
+    Border->SetContent(Content);
+    Browser = WidgetTree->ConstructWidget<UScrollBox>(UScrollBox::StaticClass(), TEXT("RoomBrowser"));
+    Content->AddChildToVerticalBox(Browser)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
     auto* Column = WidgetTree->ConstructWidget<UVerticalBox>();
-    PanelScroll->AddChild(Column);
+    Browser->AddChild(Column);
     auto MakeText = [&](const FString& Text)
     {
         auto* Label = WidgetTree->ConstructWidget<UTextBlock>();
@@ -115,34 +135,85 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     MoreRoomsButton = AddButton(MoreRoomsRow, TEXT("Show more rooms"), Label);
     MoreRoomsButton->Rename(TEXT("MoreRoomsButton"));
     MoreRoomsButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ShowMoreRooms);
+    auto* RoomCard = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("SelectedRoomCard"));
+    Column->AddChild(RoomCard);
+    Details = MakeText(TEXT("Select a room to see its details."));
+    Details->Rename(TEXT("RoomDetails"));
+    RoomCard->AddChild(Details);
     auto* RoomActions = WidgetTree->ConstructWidget<UHorizontalBox>();
-    Column->AddChild(RoomActions);
-    ViewButton = AddButton(RoomActions, TEXT("View selected room"), Label);
+    RoomCard->AddChild(RoomActions);
+    ViewButton = AddButton(RoomActions, TEXT("Preview room"), Label);
     ViewButton->Rename(TEXT("ViewRoomButton"));
     ViewButton->SetIsEnabled(false);
     ViewButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ViewRoom);
+    RouteButton = AddButton(RoomActions, TEXT("Walk there"), Label);
+    RouteButton->Rename(TEXT("RouteButton"));
+    RouteButton->SetVisibility(ESlateVisibility::Collapsed);
+    RouteButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::StartRoute);
     ClearButton = AddButton(RoomActions, TEXT("Clear"), Label);
     ClearButton->Rename(TEXT("ClearRoomButton"));
     ClearButton->SetIsEnabled(false);
     ClearButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ClearRoom);
+    RouteUnavailable = MakeText(TEXT("Walking directions unavailable"));
+    RouteUnavailable->Rename(TEXT("RouteUnavailable"));
+    RouteUnavailable->SetVisibility(ESlateVisibility::Collapsed);
+    RoomCard->AddChild(RouteUnavailable);
     auto* ExploreActions = WidgetTree->ConstructWidget<UHorizontalBox>();
     Column->AddChild(ExploreActions);
     auto* CameraButton = AddButton(ExploreActions, TEXT("Free camera"), Label);
     CameraButton->Rename(TEXT("CameraModeButton"));
     CameraButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ToggleFreeCamera);
     CameraLabel = Label;
-    RouteButton = AddButton(ExploreActions, TEXT("Start walking route"), Label);
-    RouteButton->Rename(TEXT("RouteButton"));
-    RouteButton->SetVisibility(ESlateVisibility::Collapsed);
-    RouteButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ToggleRoute);
-    RouteLabel = Label;
+    auto* SettingsButton = AddButton(ExploreActions, TEXT("Settings"), Label);
+    SettingsButton->Rename(TEXT("RouteSettingsButton"));
+    SettingsButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ToggleSettings);
     CameraHelp = AddText(TEXT("Free camera lets you fly around the building."));
     CameraHelp->Rename(TEXT("CameraHelp"));
-    RouteHint = AddText(FString());
+
+    Settings = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("RouteSettings"));
+    Column->AddChild(Settings);
+    Settings->SetVisibility(ESlateVisibility::Collapsed);
+    auto AddSetting = [&](const FName Name, const TCHAR* Text)
+    {
+        auto* Check = WidgetTree->ConstructWidget<UCheckBox>(UCheckBox::StaticClass(), Name);
+        bool bEnabled = false;
+        GConfig->GetBool(SettingsSection, *Name.ToString(), bEnabled, GGameUserSettingsIni);
+        Check->SetIsChecked(bEnabled);
+        Check->SetContent(MakeText(Text));
+        Settings->AddChild(Check);
+        return Check;
+    };
+    auto* Motion = AddSetting(TEXT("StationaryArrows"), TEXT("Stationary route arrows"));
+    auto* LargerText = AddSetting(TEXT("LargerDirections"), TEXT("Larger directions text"));
+    auto* Performance = AddSetting(TEXT("PerformanceMode"), TEXT("Performance mode"));
+    Motion->OnCheckStateChanged.AddDynamic(this, &UPFTNavigatorWidget::MotionChanged);
+    LargerText->OnCheckStateChanged.AddDynamic(this, &UPFTNavigatorWidget::DirectionsSizeChanged);
+    Performance->OnCheckStateChanged.AddDynamic(this, &UPFTNavigatorWidget::PerformanceChanged);
+
+    Directions = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("DirectionsHud"));
+    Content->AddChild(Directions);
+    Directions->SetVisibility(ESlateVisibility::Collapsed);
+    RouteHint = MakeText(FString());
     RouteHint->Rename(TEXT("RouteHint"));
-    RouteHint->SetVisibility(ESlateVisibility::Collapsed);
-    Details = AddText(TEXT("Select a room to see its details."));
-    Details->Rename(TEXT("RoomDetails"));
+    Directions->AddChildToVerticalBox(RouteHint)->SetPadding(FMargin(0, 0, 0, 8));
+    auto* GuidanceActions = WidgetTree->ConstructWidget<UHorizontalBox>();
+    Directions->AddChild(GuidanceActions);
+    StopRouteButton = AddButton(GuidanceActions, TEXT("Stop route"), Label);
+    StopRouteButton->Rename(TEXT("StopRouteButton"));
+    StopRouteButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::StopRoute);
+    RetryRouteButton = AddButton(GuidanceActions, TEXT("Retry route"), Label);
+    RetryRouteButton->Rename(TEXT("RetryRouteButton"));
+    RetryRouteButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::StartRoute);
+    FindAnotherRoomButton = AddButton(GuidanceActions, TEXT("Find another room"), Label);
+    FindAnotherRoomButton->Rename(TEXT("FindAnotherRoomButton"));
+    FindAnotherRoomButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::FindAnotherRoom);
+    GetWorld()->GetSubsystem<UPFTRoutes>()->SetReducedMotion(Motion->IsChecked());
+    RouteHint->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), LargerText->IsChecked() ? 24 : 18));
+    if (const auto* ScreenPercentage = IConsoleManager::Get().FindConsoleVariable(TEXT("r.ScreenPercentage")))
+    {
+        StandardRenderScale = ScreenPercentage->GetFloat();
+    }
+    if (Performance->IsChecked()) ApplyPerformancePreset(true, StandardRenderScale);
     for (auto* Child : Column->GetAllChildren())
         Cast<UVerticalBoxSlot>(Child->Slot)->SetPadding(FMargin(0, 0, 0, 6));
     RefreshResults();
@@ -241,8 +312,13 @@ void UPFTNavigatorWidget::ChooseRoom(const FString& RoomId)
     const auto* Directory = GetGameInstance()->GetSubsystem<UPFTDirectory>();
     const auto* Room = Directory->FindRoom(RoomId);
     auto* Destinations = GetWorld()->GetSubsystem<UPFTDestinations>();
-    ClearRoom();
-    if (Destinations->IsRoomPreviewActive()) return;
+    const bool bHasLocation = Room && Destinations->HasLocation(RoomId);
+    const bool bSwitchPreview = bHasLocation && Destinations->IsRoomPreviewActive();
+    if (!bSwitchPreview)
+    {
+        ClearRoom();
+        if (Destinations->IsRoomPreviewActive()) return;
+    }
     if (!Room)
     {
         Status->SetText(FText::FromString(TEXT("This room is no longer in the directory.")));
@@ -250,17 +326,16 @@ void UPFTNavigatorWidget::ChooseRoom(const FString& RoomId)
     }
     SelectedRoomId = RoomId;
     UpdateSelectedTags();
-    const bool bHasLocation = Destinations->HasLocation(RoomId);
     const bool bSelected = bHasLocation && Destinations->SelectRoom(RoomId);
+    if (bSwitchPreview && !bSelected) ToggleFreeCamera();
     Details->SetText(FText::FromString(Directory->GetRoomDetails(RoomId)));
     ViewButton->SetIsEnabled(bSelected);
     ClearButton->SetIsEnabled(true);
     FString Message = TEXT("Room preview is unavailable on this map.");
     if (bHasLocation) Message = bSelected ? TEXT("Room selected.") : Destinations->Error;
-    if (bSelected && !GetWorld()->GetSubsystem<UPFTRoutes>()->HasDestination(RoomId))
-        Message = TEXT("Room selected. A walking route is unavailable.");
     Status->SetText(FText::FromString(Message));
     UpdateRouteControls();
+    if (bSwitchPreview && bSelected) ViewRoom();
 }
 
 void UPFTNavigatorWidget::ClearRoom()
@@ -322,15 +397,9 @@ void UPFTNavigatorWidget::UpdateCameraControls(bool bFreeCamera, bool bCursorSho
     CameraHelp->SetText(FText::FromString(Help));
 }
 
-void UPFTNavigatorWidget::ToggleRoute()
+void UPFTNavigatorWidget::StartRoute()
 {
     auto* Routes = GetWorld()->GetSubsystem<UPFTRoutes>();
-    if (Routes->IsGuiding())
-    {
-        Routes->Stop();
-        UpdateRouteControls();
-        return;
-    }
 
     const auto* Room = GetGameInstance()->GetSubsystem<UPFTDirectory>()->FindRoom(SelectedRoomId);
     if (!Room || !Routes->HasDestination(SelectedRoomId)) return;
@@ -352,18 +421,66 @@ void UPFTNavigatorWidget::ToggleRoute()
     UpdateRouteControls();
 }
 
+void UPFTNavigatorWidget::StopRoute()
+{
+    GetWorld()->GetSubsystem<UPFTRoutes>()->Stop();
+    UpdateRouteControls();
+}
+
+void UPFTNavigatorWidget::FindAnotherRoom()
+{
+    ClearRoom();
+    Search->SetText(FText::GetEmpty());
+    Search->SetKeyboardFocus();
+}
+
+void UPFTNavigatorWidget::SetCompactDirections(bool bCompact)
+{
+    if (bCompactDirections == bCompact) return;
+    bCompactDirections = bCompact;
+    Browser->SetVisibility(bCompact ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
+    Directions->SetVisibility(bCompact ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    SetDesiredSizeInViewport(FVector2D(400, bCompact ? 160 : 575));
+}
+
 void UPFTNavigatorWidget::UpdateRouteControls()
 {
     if (!RouteButton) return;
     const auto* Routes = GetWorld()->GetSubsystem<UPFTRoutes>();
     const bool bAvailable = Routes->HasDestination(SelectedRoomId);
     RouteButton->SetVisibility(bAvailable ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-    const FString Label = Routes->IsGuiding() ? TEXT("Stop route") : TEXT("Start walking route");
-    if (RouteLabel->GetText().ToString() != Label) RouteLabel->SetText(FText::FromString(Label));
+    RouteUnavailable->SetVisibility(!bAvailable && !SelectedRoomId.IsEmpty() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    SetCompactDirections(Routes->IsGuiding() || Routes->CanRetry() || Routes->HasArrived());
+    StopRouteButton->SetVisibility(Routes->IsGuiding() || Routes->CanRetry() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    RetryRouteButton->SetVisibility(Routes->CanRetry() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    FindAnotherRoomButton->SetVisibility(Routes->HasArrived() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
     const FText& Message = Routes->GetMessage();
-    RouteHint->SetVisibility(Message.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
-    CameraHelp->SetVisibility(Message.IsEmpty() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
     if (!RouteHint->GetText().EqualTo(Message)) RouteHint->SetText(Message);
+}
+
+void UPFTNavigatorWidget::ToggleSettings()
+{
+    const bool bWasVisible = Settings->GetVisibility() == ESlateVisibility::Visible;
+    Settings->SetVisibility(bWasVisible ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
+    if (!bWasVisible) Browser->ScrollWidgetIntoView(Settings, false, EDescendantScrollDestination::BottomOrRight);
+}
+
+void UPFTNavigatorWidget::MotionChanged(bool bChecked)
+{
+    GetWorld()->GetSubsystem<UPFTRoutes>()->SetReducedMotion(bChecked);
+    SavePreference(TEXT("StationaryArrows"), bChecked);
+}
+
+void UPFTNavigatorWidget::DirectionsSizeChanged(bool bChecked)
+{
+    RouteHint->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), bChecked ? 24 : 18));
+    SavePreference(TEXT("LargerDirections"), bChecked);
+}
+
+void UPFTNavigatorWidget::PerformanceChanged(bool bChecked)
+{
+    ApplyPerformancePreset(bChecked, StandardRenderScale);
+    SavePreference(TEXT("PerformanceMode"), bChecked);
 }
 
 void UPFTNavigatorWidget::ViewRoom()
@@ -379,7 +496,8 @@ FReply UPFTNavigatorWidget::NativeOnPreviewKeyDown(const FGeometry& Geometry, co
         if (Event.IsRepeat() || Results->GetChildrenCount() != 1) return FReply::Handled();
         const FString RoomId = CastChecked<UPFTSearchButton>(Results->GetChildAt(0))->RoomId;
         ChooseRoom(RoomId);
-        if (SelectedRoomId == RoomId && ViewButton->GetIsEnabled()) ViewRoom();
+        const auto* Destinations = GetWorld()->GetSubsystem<UPFTDestinations>();
+        if (SelectedRoomId == RoomId && ViewButton->GetIsEnabled() && !Destinations->IsRoomPreviewActive()) ViewRoom();
         return FReply::Handled();
     }
     auto* Exploration = GetWorld()->GetSubsystem<UPFTExploration>();

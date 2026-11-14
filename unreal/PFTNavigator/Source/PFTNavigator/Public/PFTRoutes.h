@@ -6,6 +6,7 @@
 
 class ACharacter;
 class ULineBatchComponent;
+class UTextRenderComponent;
 
 UCLASS()
 class PFTNAVIGATOR_API UPFTRoutes : public UTickableWorldSubsystem
@@ -25,6 +26,9 @@ public:
 
     bool IsGuiding() const { return Walker.IsValid(); }
     bool HasArrived() const { return bArrived; }
+    bool CanRetry() const { return bCanRetry; }
+    bool IsReplanning() const { return bReplanning; }
+    void SetReducedMotion(bool bEnabled) { bReducedMotion = bEnabled; }
     FVector NextPoint() const { return Path.IsValidIndex(NextIndex) ? Path[NextIndex] : FVector::ZeroVector; }
     const FText& GetMessage() const { return Message; }
 
@@ -39,12 +43,15 @@ private:
     bool Plan(ACharacter& Character, const FIntPoint& Goal);
     bool CanCross(ACharacter& Character, const FVector& Start, const FVector& End) const;
     void DrawPath();
+    void ShowArrival(const FVector& Position);
+    void UpdateDirections(const FVector& Position, const FRotator& View);
     void EndGuidance(const FText& NewMessage);
 
     TMap<FIntPoint, FNode> Nodes;
     TMap<FString, FIntPoint> Destinations;
     TArray<FVector> Path;
     UPROPERTY() TObjectPtr<ULineBatchComponent> Trail;
+    UPROPERTY() TObjectPtr<UTextRenderComponent> ArrivalLabel;
     TWeakObjectPtr<ACharacter> Walker;
     FString Destination;
     FIntPoint Goal;
@@ -53,4 +60,7 @@ private:
     int32 NextIndex = 0;
     float UpdateTime = 0;
     bool bArrived = false;
+    bool bCanRetry = false;
+    bool bReplanning = false;
+    bool bReducedMotion = false;
 };

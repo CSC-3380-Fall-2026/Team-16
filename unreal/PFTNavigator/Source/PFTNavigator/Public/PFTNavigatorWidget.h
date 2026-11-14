@@ -10,6 +10,7 @@ class UTextBlock;
 class UScrollBox;
 class UEditableTextBox;
 class UCheckBox;
+class UVerticalBox;
 
 UCLASS()
 class UPFTSearchButton : public UButton
@@ -46,7 +47,14 @@ private:
     void UpdateSelectedTags();
     UFUNCTION() void ToggleFreeCamera();
     UFUNCTION() void ViewRoom();
-    UFUNCTION() void ToggleRoute();
+    UFUNCTION() void StartRoute();
+    UFUNCTION() void StopRoute();
+    UFUNCTION() void FindAnotherRoom();
+    UFUNCTION() void ToggleSettings();
+    UFUNCTION() void MotionChanged(bool bChecked);
+    UFUNCTION() void DirectionsSizeChanged(bool bChecked);
+    UFUNCTION() void PerformanceChanged(bool bChecked);
+    void SetCompactDirections(bool bCompact);
     UPROPERTY() TObjectPtr<UTextBlock> Status;
     UPROPERTY() TObjectPtr<UTextBlock> Details;
     UPROPERTY() TObjectPtr<UEditableTextBox> Search;
@@ -55,12 +63,20 @@ private:
     UPROPERTY() TObjectPtr<UButton> ViewButton;
     UPROPERTY() TObjectPtr<UButton> ClearButton;
     UPROPERTY() TObjectPtr<UButton> RouteButton;
-    UPROPERTY() TObjectPtr<UTextBlock> RouteLabel;
+    UPROPERTY() TObjectPtr<UTextBlock> RouteUnavailable;
     UPROPERTY() TObjectPtr<UTextBlock> RouteHint;
+    UPROPERTY() TObjectPtr<UScrollBox> Browser;
+    UPROPERTY() TObjectPtr<UVerticalBox> Directions;
+    UPROPERTY() TObjectPtr<UVerticalBox> Settings;
+    UPROPERTY() TObjectPtr<UButton> StopRouteButton;
+    UPROPERTY() TObjectPtr<UButton> RetryRouteButton;
+    UPROPERTY() TObjectPtr<UButton> FindAnotherRoomButton;
     UPROPERTY() TObjectPtr<UTextBlock> CameraLabel;
     UPROPERTY() TObjectPtr<UTextBlock> CameraHelp;
     UPROPERTY() TObjectPtr<UScrollBox> Results;
     UPROPERTY() TObjectPtr<UButton> MoreRoomsButton;
     // Room that's currently picked, empty when nothing is selected
     FString SelectedRoomId;
+    bool bCompactDirections = false;
+    float StandardRenderScale = 100.0f;
 };
