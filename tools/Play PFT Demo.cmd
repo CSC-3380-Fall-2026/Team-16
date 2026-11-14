@@ -37,19 +37,19 @@ call :walk_with_guidance
 goto checks_done
 
 :walk_with_guidance
-call :run_check GuidedWalk PFTFirstFloor.GuidedWalk GuidedWalk
+call :run_check GuidedWalk PFTFirstFloor.GuidedWalk GuidedWalk %~1
 if errorlevel 1 exit /b %errorlevel%
 call :check_assets
 exit /b %errorlevel%
 
 :walk_to_c1007
-call :run_check C1007Walk PFTFirstFloor.WalkToC1007 WalkToC1007
+call :run_check C1007Walk PFTFirstFloor.WalkToC1007 WalkToC1007 %~1
 if errorlevel 1 exit /b %errorlevel%
 call :check_assets
 exit /b %errorlevel%
 
 :verify
-call :run_check CommonsWalk PFTFirstFloor.WalkToCommons WalkToCommons
+call :run_check CommonsWalk PFTFirstFloor.WalkToCommons WalkToCommons -RenderOffscreen
 if errorlevel 1 goto checks_done
 call :check_assets
 if errorlevel 1 goto checks_done
@@ -57,9 +57,9 @@ call :run_check Navigator PFTNavigator.Panel.AfterOnboarding AfterOnboarding -Re
 if errorlevel 1 goto checks_done
 call :check_assets
 if errorlevel 1 goto checks_done
-call :walk_with_guidance
+call :walk_with_guidance -RenderOffscreen
 if errorlevel 1 goto checks_done
-if /i "%~1"=="verifyextended" call :walk_to_c1007
+if /i "%~1"=="verifyextended" call :walk_to_c1007 -RenderOffscreen
 goto checks_done
 
 :profile

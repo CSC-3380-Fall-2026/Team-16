@@ -250,8 +250,8 @@ front of the glass entrance and walk past the Zone 1200 sign around the corner.
 Search for `CSC 1350`, select room 1200, and use **View selected room** to check
 the camera. Try room 1202 and the Commons to check the added destinations.
 For walking directions, click the Commons search result and choose
-**Start walking route**. Follow the gold trail with WASD until the arrival
-message appears.
+**Start walking route**. Follow the moving gold arrows with WASD until the
+arrival message appears.
 
 The first-floor routes use a walking graph baked from the demo map's pawn
 collision. Regenerate it after changes to the floor, collision, or room markers.
