@@ -15,6 +15,9 @@ RADIUS = 42
 HALF_HEIGHT = 92
 EDGES = ((1, 0), (0, 1), (-1, 0), (0, -1))
 COMMONS = (14900, -5160)
+HALLWAY_DOORS = {
+    "PFT_1218": ("HallwayC1003", "SM_LongWindowDoor_2"),
+}
 
 
 def bake(map_path, output):
@@ -26,6 +29,7 @@ def bake(map_path, output):
     actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem).get_all_level_actors()
     markers = [actor for actor in actors if isinstance(actor, unreal.PFTRoomMarker)]
     rooms = {actor.get_actor_label(): actor for actor in actors if isinstance(actor, unreal.PFTAreaTriggers)}
+    actors_by_label = {actor.get_actor_label(): actor for actor in actors}
     spawn = next(actor.get_actor_location() for actor in actors if isinstance(actor, unreal.PlayerStart))
     up = unreal.Vector(0, 0, 1)
 
@@ -83,6 +87,28 @@ def bake(map_path, output):
     destinations = {}
     for marker in sorted(markers, key=lambda actor: actor.get_editor_property("room_id")):
         room_id = marker.get_editor_property("room_id")
+        if room_id in HALLWAY_DOORS:
+            hallway, door_label = HALLWAY_DOORS[room_id]
+            door = actors_by_label[door_label]
+            brush = rooms[hallway].get_component_by_class(unreal.BrushComponent)
+            target, _ = door.get_actor_bounds(False)
+            nearby = sorted(links, key=lambda node: math.dist(positions[node].to_tuple(), target.to_tuple()))
+            for node in nearby:
+                point = positions[node]
+                if math.dist(point.to_tuple(), target.to_tuple()) > 180:
+                    break
+                distance, _ = brush.get_closest_point_on_collision(point)
+                if not 0 <= distance < 0.1:
+                    continue
+                hit = unreal.SystemLibrary.line_trace_single_by_profile(
+                    world, point, target, "Pawn", False, [door], unreal.DrawDebugTrace.NONE, False,
+                )
+                if hit is None:
+                    destinations[room_id] = node
+                    break
+            if room_id not in destinations:
+                raise RuntimeError(f"No walkable hallway point faces the door to {room_id}")
+            continue
         room_label = {"PFT_COMMONS": "HallwayC1008", "PFT_1140": "HallwayC1001"}.get(
             room_id, f"Room{room_id.removeprefix('PFT_')}")
         room = rooms[room_label]

@@ -446,6 +446,8 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
         TestTrue(TEXT("Reset keeps class search active"), CastChecked<UCheckBox>(Tree->FindWidget(TEXT("ClassSearchFilter")))->IsChecked());
         TestTrue(TEXT("Reset clears the instructor"), CastChecked<UEditableTextBox>(Tree->FindWidget(TEXT("InstructorSearch")))->GetText().IsEmpty());
         TestFalse(TEXT("Reset deactivates walking to the previous result"), Tree->FindWidget(TEXT("RouteButton"))->IsVisible());
+        Panel->ChooseRoom(TEXT("PFT_1218"));
+        TestTrue(TEXT("Room 1218 offers directions to its door"), Tree->FindWidget(TEXT("RouteButton"))->IsVisible());
         return true;
     }));
     return true;
