@@ -3,11 +3,13 @@ param(
     [Parameter(Mandatory)] [ValidatePattern('^[A-Za-z0-9_]+$')] [string]$MapName,
     [string]$EngineRoot = $env:UE_ROOT,
     [switch]$Resume,
-    [switch]$PackageDemo
+    [switch]$PackageDemo,
+    [string]$WalkingGraph
 )
 
 $ErrorActionPreference = 'Stop'
 if (!$EngineRoot) { $EngineRoot = 'C:\Program Files\Epic Games\UE_5.8' }
+if ($WalkingGraph -and !$PackageDemo) { throw '-WalkingGraph requires -PackageDemo.' }
 
 $projectFile = Get-Item -LiteralPath $Project
 if ($projectFile.PSIsContainer -or $projectFile.Extension -ne '.uproject') {
@@ -82,8 +84,15 @@ try {
     Write-Output $mapFile
     Write-Output $verificationReport
     if ($PackageDemo) {
-        & (Join-Path $PSScriptRoot 'package_first_floor_demo.ps1') -Project $projectFile.FullName `
-            -EngineRoot $EngineRoot -MapName $MapName -ReuseCook -Verify
+        $packageOptions = @{
+            Project = $projectFile.FullName
+            EngineRoot = $EngineRoot
+            MapName = $MapName
+            ReuseCook = $true
+            VerifyExtended = $true
+        }
+        if ($WalkingGraph) { $packageOptions.WalkingGraph = $WalkingGraph }
+        & (Join-Path $PSScriptRoot 'package_first_floor_demo.ps1') @packageOptions
     }
 } finally {
     $lock.Dispose()
