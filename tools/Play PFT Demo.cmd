@@ -10,16 +10,19 @@ set "DemoMap=/Game/Level/PFTFirstFloorComplete"
 set "DemoArgs=-d3d11 -windowed -ResX=1280 -ResY=720 -nosplash"
 set "DemoSettings=r.SetRes 1280x720w,r.VSync 0,sg.ShadowQuality 1,sg.GlobalIlluminationQuality 0,sg.ReflectionQuality 0,sg.PostProcessQuality 1,sg.EffectsQuality 1,r.ScreenPercentage 100,r.LightMaxDrawDistanceScale 0.5"
 set "DemoFPS=30"
+set "DemoHttp=-ini:Engine:[HTTP]:bEnableHttp=False"
 if /i "%~1"=="smooth" set "DemoFPS=45"
 if /i "%~1"=="profile" if /i "%~2"=="smooth" set "DemoFPS=45"
 set "DemoSettings=%DemoSettings%,t.MaxFPS %DemoFPS%"
 if /i "%~1"=="walkthrough" goto checks
 if /i "%~1"=="verify" goto verify
 if /i "%~1"=="verifyextended" goto verify
+if /i "%~1"=="verifyoffline" goto verify
 if /i "%~1"=="crossbuilding" goto crossbuilding
 if /i "%~1"=="guidedwalk" goto guidedwalk
 if /i "%~1"=="profile" goto profile
 
+if /i "%~1"=="offline" set "DemoArgs=%DemoArgs% %DemoHttp%"
 start "" "PFTDigitalTwin.exe" %DemoMap% %DemoArgs% -ExecCmds="%DemoSettings%"
 popd
 exit /b
@@ -49,6 +52,7 @@ call :check_assets
 exit /b %errorlevel%
 
 :verify
+if /i "%~1"=="verifyoffline" set "DemoArgs=%DemoArgs% %DemoHttp% -LogCmds="LogHttp Verbose""
 call :run_check CommonsWalk PFTFirstFloor.WalkToCommons WalkToCommons -RenderOffscreen
 if errorlevel 1 goto checks_done
 call :check_assets
@@ -59,7 +63,7 @@ call :check_assets
 if errorlevel 1 goto checks_done
 call :walk_with_guidance -RenderOffscreen
 if errorlevel 1 goto checks_done
-if /i "%~1"=="verifyextended" call :walk_to_c1007 -RenderOffscreen
+if /i not "%~1"=="verify" call :walk_to_c1007 -RenderOffscreen
 goto checks_done
 
 :profile

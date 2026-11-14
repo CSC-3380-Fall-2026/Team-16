@@ -19,4 +19,12 @@ run the following command to try the 45 FPS preset.
 
 & '.\Play PFT Demo.cmd' smooth
 
+For a presentation without internet access, use the offline preset.
+
+& '.\Play PFT Demo.cmd' offline
+
+The local Navigator supports room and class search and first-floor walking
+directions. Live weather and the legacy server-backed Search are unavailable
+in offline mode.
+
 PFTDemoBuild.json identifies the map and tools used to build this package.
