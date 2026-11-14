@@ -45,17 +45,29 @@ namespace
         }
     };
 
+    struct FRouteEntry
+    {
+        FIntPoint Cell;
+        double Seconds;
+        int32 Heading = INDEX_NONE;
+    };
+
     // A cell reached from different headings can have a different cost for the next turn.
-    TArray<FIntPoint> FindFastestPath(const FIntPoint& Start, const FIntPoint& Target, double SecondsPerStep,
+    TArray<FIntPoint> FindFastestPath(const TArray<FRouteEntry>& Entries, const FIntPoint& Target, double SecondsPerStep,
         TFunctionRef<uint8(const FIntPoint&)> GetLinks)
     {
         const auto RemainingTime = [&](const FIntPoint& Cell)
         {
             return (FMath::Abs(Cell.X - Target.X) + FMath::Abs(Cell.Y - Target.Y)) * SecondsPerStep;
         };
-        const FIntVector First(Start.X, Start.Y, INDEX_NONE);
-        TArray<FRouteCandidate> Open = {{First, 0.0, RemainingTime(Start)}};
-        TMap<FIntVector, FRouteVisit> Visits = {{First, {0.0, First}}};
+        TArray<FRouteCandidate> Open;
+        TMap<FIntVector, FRouteVisit> Visits;
+        for (const FRouteEntry& Entry : Entries)
+        {
+            const FIntVector State(Entry.Cell.X, Entry.Cell.Y, Entry.Heading);
+            Visits.Add(State, {Entry.Seconds, State});
+            Open.HeapPush({State, Entry.Seconds, Entry.Seconds + RemainingTime(Entry.Cell)});
+        }
         while (!Open.IsEmpty())
         {
             FRouteCandidate Current;
@@ -65,7 +77,8 @@ namespace
             if (Cell == Target)
             {
                 TArray<FIntPoint> Reversed = {Cell};
-                for (FIntVector State = Current.State; State != First;)
+                FIntVector State = Current.State;
+                while (Visits.FindChecked(State).Previous != State)
                 {
                     State = Visits.FindChecked(State).Previous;
                     Reversed.Emplace(State.X, State.Y);
@@ -196,8 +209,11 @@ bool UPFTRoutes::Plan(ACharacter& Character, const FIntPoint& Target)
     const FVector Position = Character.GetActorLocation();
     const FVector RaisedPosition = Position + FVector(0, 0, 4);
     const FIntPoint Near(FMath::RoundToInt(Position.X / Step), FMath::RoundToInt(Position.Y / Step));
-    FIntPoint Start = Near;
-    double Best = TNumericLimits<double>::Max();
+    const double Speed = FMath::Max(1.0, static_cast<double>(Character.GetCharacterMovement()->MaxWalkSpeed));
+    const double EntryRange = Step * StartSearchCells;
+    TArray<FRouteEntry> Entries;
+    FCollisionQueryParams FloorQuery(SCENE_QUERY_STAT(PFTWalkingEntry), false, &Character);
+    const FName Profile = Character.GetCapsuleComponent()->GetCollisionProfileName();
     for (int32 X = -StartSearchCells; X <= StartSearchCells; ++X)
     {
         for (int32 Y = -StartSearchCells; Y <= StartSearchCells; ++Y)
@@ -206,19 +222,36 @@ bool UPFTRoutes::Plan(ACharacter& Character, const FIntPoint& Target)
             const FNode* Node = Nodes.Find(Cell);
             if (!Node) continue;
             const FVector Center = CapsuleCenter(Character, Node->Floor);
-            const double Distance = FVector::DistSquared(RaisedPosition, Center);
-            if (FMath::Abs(Center.Z - RaisedPosition.Z) <= FloorTolerance && Distance < Best
-                && CanCross(Character, RaisedPosition, Center))
+            const double Distance = FVector::Dist2D(Position, Center);
+            if (Distance > EntryRange || FMath::Abs(Center.Z - RaisedPosition.Z) > FloorTolerance
+                || !CanCross(Character, RaisedPosition, Center)) continue;
+
+            // A clear capsule sweep can cross empty space, so also check floor support along the approach.
+            bool bSupported = true;
+            const int32 Samples = FMath::CeilToInt(Distance / (Step * 0.5));
+            for (int32 Sample = 1; Sample < Samples; ++Sample)
             {
-                Start = Cell;
-                Best = Distance;
+                const FVector Point = FMath::Lerp(RaisedPosition, Center, static_cast<double>(Sample) / Samples);
+                const FVector Feet = Point - FVector(0, 0, Character.GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+                FHitResult FloorHit;
+                if (!GetWorld()->LineTraceSingleByProfile(FloorHit, Feet + FVector(0, 0, FloorTolerance),
+                    Feet - FVector(0, 0, FloorTolerance), Profile, FloorQuery)
+                    || FloorHit.ImpactNormal.Z < Character.GetCharacterMovement()->GetWalkableFloorZ())
+                {
+                    bSupported = false;
+                    break;
+                }
             }
+            if (!bSupported) continue;
+            const FVector Approach = Center - Position;
+            const int32 Heading = Distance < 1.0 ? INDEX_NONE
+                : (FMath::RoundToInt(Approach.Rotation().Yaw / 90.0) + 4) % 4;
+            Entries.Add({Cell, Distance / Speed, Heading});
         }
     }
-    if (Best == TNumericLimits<double>::Max()) return false;
+    if (Entries.IsEmpty()) return false;
 
-    const double Speed = FMath::Max(1.0, static_cast<double>(Character.GetCharacterMovement()->MaxWalkSpeed));
-    const auto Reversed = FindFastestPath(Start, Target, Step / Speed, [this](const FIntPoint& Cell)
+    const auto Reversed = FindFastestPath(Entries, Target, Step / Speed, [this](const FIntPoint& Cell)
     {
         const auto* Node = Nodes.Find(Cell);
         if (!Node) return uint8(0);
@@ -461,10 +494,15 @@ bool FPFTFastestPathTest::RunTest(const FString& Parameters)
     LinkPath({{0, 0}, {1, 0}, {1, 1}, {2, 1}, {2, 2}, {3, 2}, {3, 3}, {4, 3}, {4, 4}});
     LinkPath({{0, 0}, {-1, 0}, {-1, 1}, {-1, 2}, {-1, 3}, {-1, 4}, {0, 4}, {1, 4}, {2, 4}, {3, 4}, {4, 4}});
     const auto Links = [&](const FIntPoint& Cell) { return Graph.FindRef(Cell); };
-    TestEqual(TEXT("Fast walking favors the longer route with fewer turns"), FindFastestPath({0, 0}, {4, 4}, 0.1, Links).Num(), 11);
-    TestEqual(TEXT("Slow walking favors the shorter route"), FindFastestPath({0, 0}, {4, 4}, 1.0, Links).Num(), 9);
-    TestEqual(TEXT("The current position can already be the destination"), FindFastestPath({4, 4}, {4, 4}, 0.1, Links).Num(), 1);
-    TestTrue(TEXT("Disconnected destinations return no route"), FindFastestPath({0, 0}, {9, 9}, 0.1, Links).IsEmpty());
+    const TArray<FRouteEntry> Start = {{{0, 0}, 0.0}};
+    TestEqual(TEXT("Fast walking favors the longer route with fewer turns"), FindFastestPath(Start, {4, 4}, 0.1, Links).Num(), 11);
+    TestEqual(TEXT("Slow walking favors the shorter route"), FindFastestPath(Start, {4, 4}, 1.0, Links).Num(), 9);
+    TestEqual(TEXT("The current position can already be the destination"), FindFastestPath({{{4, 4}, 0.0}}, {4, 4}, 0.1, Links).Num(), 1);
+    TestTrue(TEXT("Disconnected destinations return no route"), FindFastestPath(Start, {9, 9}, 0.1, Links).IsEmpty());
+    const auto FartherEntry = FindFastestPath({{{0, 0}, 0.02}, {{2, 4}, 0.2, 0}}, {4, 4}, 0.1, Links);
+    TestTrue(TEXT("A farther entry can reduce total travel time"), !FartherEntry.IsEmpty() && FartherEntry.Last() == FIntPoint(2, 4));
+    const auto CostlyEntry = FindFastestPath({{{0, 0}, 0.02}, {{2, 4}, 4.0, 0}}, {4, 4}, 0.1, Links);
+    TestTrue(TEXT("An expensive approach does not win"), !CostlyEntry.IsEmpty() && CostlyEntry.Last() == FIntPoint(0, 0));
     return true;
 }
 #endif
