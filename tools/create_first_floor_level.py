@@ -12,6 +12,8 @@ import unreal
 
 SOURCE_MAP = "/Game/Level/PatrickFTaylorHall"
 OUTPUT_MAP = "/Game/Level/PFTFirstFloorComplete"
+LOCAL_LOCATION_TAG = "PFTLocalLocation"
+ROOM_NUMBER_TAG = "PFTRoomNumber:"
 FLOOR_LAYER = "/Game/DataLayers/Floor1.Floor1"
 ROOF_LAYER = "/Game/DataLayers/Roof.Roof"
 UNFILED_LAYER = "/Game/DataLayers/ToBeFiled.ToBeFiled"
@@ -181,6 +183,26 @@ def restore_room_ids(actors, room_ids):
         actor.set_editor_property("source_room_id", room_id)
 
 
+def location_number(label):
+    """Read the room or hallway number from its source actor label."""
+    match = re.fullmatch(r"(?:Room|Hallway)([A-Z]*1\d{3}[A-Z0-9]*)", label)
+    if not match:
+        raise RuntimeError(f"Invalid first-floor room label: {label}")
+    return match[1]
+
+
+def set_location_tags(world, rooms):
+    """Store the first-floor room numbers in tags that are available in Windows builds."""
+    settings = world.get_world_settings()
+    tags = list(settings.get_editor_property("tags"))
+    if LOCAL_LOCATION_TAG not in [str(tag) for tag in tags]:
+        settings.set_editor_property("tags", tags + [LOCAL_LOCATION_TAG])
+    for room in rooms:
+        number = location_number(room.get_actor_label())
+        tags = [tag for tag in room.get_editor_property("tags") if not str(tag).startswith(ROOM_NUMBER_TAG)]
+        room.set_editor_property("tags", tags + [ROOM_NUMBER_TAG + number])
+
+
 def copy_metadata(component, user_data):
     """Return metadata-only Datasmith data for a component, retaining other user data."""
     if not isinstance(user_data, unreal.DatasmithUserData):
@@ -278,18 +300,21 @@ def baked_terrain_textures(material):
     return textures
 
 
-def finish_map(room_ids):
+def finish_map(world, room_ids):
     """Finish the map and return counts for the build report."""
     from first_floor_materials import restore_surface_materials
 
     subsystem = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
     actors = subsystem.get_all_level_actors()
+    rooms = [actor for actor in actors if isinstance(actor, unreal.PFTAreaTriggers)]
     restore_room_ids(actors, room_ids)
+    set_location_tags(world, rooms)
     cleared = sum(clear_import_templates(actor) for actor in actors)
     move_player_start(actors)
     add_entrance_terrain(subsystem, actors)
     return {
         "ClearedImportTemplates": cleared,
+        "LocalLocationVolumes": len(rooms),
         "FixtureShadowsDisabled": disable_fixture_shadows(actors),
         "FixtureDrawLimitsApplied": limit_fixture_draw_distance(actors),
         "SurfaceMaterialsRepaired": restore_surface_materials(actors),
@@ -412,7 +437,7 @@ def finish_saved_map(output, report_path):
         raise RuntimeError("Generate the first-floor geometry before running --finish")
     unreal.SystemLibrary.execute_console_command(world, "Editor.AsyncStaticMeshCompilationFinishAll")
     report["RoomMarkers"] = add_room_markers(world)
-    report.update(finish_map(report["SourceRoomIds"]))
+    report.update(finish_map(world, report["SourceRoomIds"]))
     if not unreal.EditorLoadingAndSavingUtils.save_map(world, output):
         raise RuntimeError("Could not save room markers; use p4 edit if the map is versioned")
     report.update({"Complete": True, "DryRun": False})

@@ -66,6 +66,8 @@ its hallway because the storage room is too narrow. The Commons uses the C1008
 atrium volume. [LSU's first-floor plan](https://www.lsu.edu/eng/images/pft_floorplan_guide2_webupdated2021.pdf)
 Pixel Streaming reloads the active map when the last viewer leaves.
 Copied room volumes keep their source room IDs for the existing room-data service.
+The first-floor HUD reads room and hallway numbers directly from the saved map.
+Its player controller integration is on Perforce shelf 42426.
 Datasmith metadata is retained, while reimport templates that reference the full
 twin are removed from the lightweight copy.
 
