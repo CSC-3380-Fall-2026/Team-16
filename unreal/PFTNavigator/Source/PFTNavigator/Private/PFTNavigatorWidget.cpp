@@ -6,6 +6,7 @@
 #include "PFTPalette.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
+#include "Components/CheckBox.h"
 #include "Components/EditableTextBox.h"
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
@@ -39,13 +40,18 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     Border->SetContent(PanelScroll);
     auto* Column = WidgetTree->ConstructWidget<UVerticalBox>();
     PanelScroll->AddChild(Column);
-    auto AddText = [&](const FString& Text)
+    auto MakeText = [&](const FString& Text)
     {
         auto* Label = WidgetTree->ConstructWidget<UTextBlock>();
         Label->SetText(FText::FromString(Text));
         Label->SetAutoWrapText(true);
         Label->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Regular"), 14));
         Label->SetColorAndOpacity(FSlateColor(FLinearColor(PFTPalette::Ink)));
+        return Label;
+    };
+    auto AddText = [&](const FString& Text)
+    {
+        auto* Label = MakeText(Text);
         Column->AddChild(Label);
         return Label;
     };
@@ -74,6 +80,10 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     Floors->SetSelectedOption(TEXT("All floors"));
     Floors->OnSelectionChanged.AddDynamic(this, &UPFTNavigatorWidget::FloorChanged);
     Column->AddChild(Floors);
+    PreviewOnly = WidgetTree->ConstructWidget<UCheckBox>(UCheckBox::StaticClass(), TEXT("PreviewOnlyFilter"));
+    PreviewOnly->SetContent(MakeText(TEXT("Previewable rooms only")));
+    PreviewOnly->OnCheckStateChanged.AddDynamic(this, &UPFTNavigatorWidget::PreviewFilterChanged);
+    Column->AddChild(PreviewOnly);
     auto* ListSize = WidgetTree->ConstructWidget<USizeBox>();
     ListSize->SetMaxDesiredHeight(180);
     Results = WidgetTree->ConstructWidget<UScrollBox>();
@@ -137,6 +147,11 @@ void UPFTNavigatorWidget::FloorChanged(FString Floor, ESelectInfo::Type Selectio
     RefreshResults();
 }
 
+void UPFTNavigatorWidget::PreviewFilterChanged(bool bChecked)
+{
+    RefreshResults();
+}
+
 void UPFTNavigatorWidget::RefreshResults()
 {
     Results->ClearChildren();
@@ -158,7 +173,15 @@ void UPFTNavigatorWidget::AddResultPage()
 {
     const auto* Directory = GetGameInstance()->GetSubsystem<UPFTDirectory>();
     const auto* Destinations = GetWorld()->GetSubsystem<UPFTDestinations>();
-    const auto Entries = Directory->BrowseRooms(Search->GetText().ToString(), FCString::Atoi(*Floors->GetSelectedOption()));
+    auto Entries = Directory->BrowseRooms(Search->GetText().ToString(), FCString::Atoi(*Floors->GetSelectedOption()));
+    const bool bPreviewOnly = PreviewOnly->IsChecked();
+    if (bPreviewOnly)
+    {
+        Entries.RemoveAll([Destinations](const FPFTSearchResult& Entry)
+        {
+            return !Destinations->HasLocation(Entry.RoomId);
+        });
+    }
     const int32 FirstResult = Results->GetChildrenCount();
     const int32 VisibleCount = FMath::Min(FirstResult + RoomsPerPage, Entries.Num());
     FString Message = FString::Printf(TEXT("%d results."), Entries.Num());
@@ -166,7 +189,11 @@ void UPFTNavigatorWidget::AddResultPage()
     {
         Message = FString::Printf(TEXT("Showing %d of %d results."), VisibleCount, Entries.Num());
     }
-    if (Entries.IsEmpty()) Message = TEXT("No matches. Try another floor or search.");
+    if (Entries.IsEmpty())
+    {
+        Message = bPreviewOnly ? TEXT("No previews match. Uncheck the filter to see room details.")
+            : TEXT("No matches. Try another floor or search.");
+    }
     for (int32 Index = FirstResult; Index < VisibleCount; ++Index)
     {
         auto* Button = WidgetTree->ConstructWidget<UPFTSearchButton>();
@@ -174,7 +201,7 @@ void UPFTNavigatorWidget::AddResultPage()
         Button->Panel = this;
         auto* Label = WidgetTree->ConstructWidget<UTextBlock>();
         const auto* Room = Directory->FindRoom(Entries[Index].RoomId);
-        const bool bHasPreview = Destinations->HasLocation(Button->RoomId);
+        const bool bHasPreview = bPreviewOnly || Destinations->HasLocation(Button->RoomId);
         const TCHAR* Availability = bHasPreview ? TEXT("Preview") : TEXT("Details only");
         Button->ResultText = FString::Printf(TEXT("%s | Floor %d | %s"), *Entries[Index].Label, Room->Floor, Availability);
         if (Entries.Num() == 1)
