@@ -43,6 +43,7 @@ $candidate = Join-Path $packageParent "$packageName.pending-$buildId"
 $previous = Join-Path $packageParent "$packageName.previous-$buildId"
 $automationTool = Join-Path $EngineRoot 'Engine\Build\BatchFiles\RunUAT.bat'
 $launcher = Join-Path $PSScriptRoot 'Play PFT Demo.cmd'
+$frameReport = Join-Path $PSScriptRoot 'measure_demo_frames.ps1'
 if (!(Test-Path -LiteralPath $mapFile -PathType Leaf)) {
     throw "Could not find $mapFile. Apply or generate the first-floor map before packaging."
 }
@@ -50,6 +51,7 @@ if (!(Test-Path -LiteralPath $automationTool -PathType Leaf)) {
     throw 'Unreal Automation Tool is missing. Set UE_ROOT or pass -EngineRoot.'
 }
 if (!(Test-Path -LiteralPath $launcher -PathType Leaf)) { throw 'Play PFT Demo.cmd must be beside this script.' }
+if (!(Test-Path -LiteralPath $frameReport -PathType Leaf)) { throw 'measure_demo_frames.ps1 must be beside this script.' }
 $launcherText = Get-Content -LiteralPath $launcher -Raw
 if (!$launcherText.Contains($defaultMap)) { throw 'The launcher is missing its first-floor map setting.' }
 
@@ -253,6 +255,7 @@ try {
 
     $packageLauncher = Join-Path $candidate 'Play PFT Demo.cmd'
     [IO.File]::WriteAllText($packageLauncher, $launcherText.Replace($defaultMap, $map))
+    Copy-Item -LiteralPath $frameReport -Destination $candidate
     if ($Verify) {
         & $packageLauncher verify
         if ($LASTEXITCODE -ne 0) {

@@ -11,6 +11,7 @@ set "DemoArgs=-d3d11 -windowed -ResX=1280 -ResY=720 -nosplash"
 set "DemoSettings=r.SetRes 1280x720w,r.VSync 0,sg.ShadowQuality 1,sg.GlobalIlluminationQuality 0,sg.ReflectionQuality 0,sg.PostProcessQuality 1,sg.EffectsQuality 1,r.ScreenPercentage 100,t.MaxFPS 30,r.LightMaxDrawDistanceScale 0.5"
 if /i "%~1"=="walkthrough" goto checks
 if /i "%~1"=="verify" goto verify
+if /i "%~1"=="profile" goto profile
 
 start "" "PFTDigitalTwin.exe" %DemoMap% %DemoArgs% -ExecCmds="%DemoSettings%"
 popd
@@ -24,6 +25,12 @@ goto checks_done
 call :run_check CommonsWalk PFTFirstFloor.WalkToCommons WalkToCommons
 if errorlevel 1 goto checks_done
 call :run_check Navigator PFTNavigator.Panel.AfterOnboarding AfterOnboarding -RenderOffscreen
+goto checks_done
+
+:profile
+call :run_check CommonsProfile PFTFirstFloor.WalkToCommons WalkToCommons
+if errorlevel 1 goto checks_done
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0measure_demo_frames.ps1" -Log "%TestLog%"
 
 :checks_done
 set "Result=%errorlevel%"
