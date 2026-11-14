@@ -20,14 +20,20 @@ def navigator_files(root, project):
 
 
 def check_install(project, settings, files):
-    """Return the files that differ from Git and any plugin enablement error."""
+    """Return missing, changed, or extra build inputs and any enablement error."""
     problems = []
+    expected = {destination for _, destination in files}
     for source, destination in files:
         relative = destination.relative_to(project.parent)
         if not destination.is_file():
             problems.append(f"Missing {relative}")
         elif destination.read_bytes() != source.read_bytes():
             problems.append(f"Changed {relative}")
+    plugin = project.parent / "Plugins" / "PFTNavigator"
+    for folder in (plugin / "Source", plugin / "Content" / "Data"):
+        for path in sorted(folder.rglob("*")):
+            if path.is_file() and path not in expected:
+                problems.append(f"Unexpected {path.relative_to(project.parent)}")
     if not any(plugin.get("Name") == "PFTNavigator" and plugin.get("Enabled") is True
                for plugin in settings.get("Plugins", [])):
         problems.append("PFTNavigator is not enabled in the project file")
