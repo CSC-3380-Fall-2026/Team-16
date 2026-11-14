@@ -237,6 +237,41 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
         {
             TestTrue(TEXT("The preview keeps the room marker out of view"), Marker->IsHidden());
         }
+        SetSearch(Panel, TEXT("Commons"));
+        return true;
+    }));
+    ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
+    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World, Player]()
+    {
+        auto* Panel = FindNavigator(World);
+        if (!Panel) return true;
+        const auto Results = GetResults(Panel);
+        if (!TestEqual(TEXT("Commons returns one result"), Results.Num(), 1)) return true;
+        APawn* PreviewPawn = Player->GetPawn();
+        if (!TestNotNull(TEXT("A preview pawn is available before switching rooms"), PreviewPawn)) return true;
+        const FVector PreviousView = PreviewPawn->GetActorLocation();
+        TestTrue(TEXT("Commons is clickable during the room preview"), ClickVisibleWidget(Results[0]));
+        if (!TestTrue(TEXT("Switching previews keeps the same exploration pawn"), Player->GetPawn() == PreviewPawn)) return true;
+        auto* Destinations = World->GetSubsystem<UPFTDestinations>();
+        TestTrue(TEXT("The camera stays in room preview mode"), Destinations->IsRoomPreviewActive());
+        TestTrue(TEXT("Switching previews keeps the cursor available"), Player->bShowMouseCursor);
+        const auto* Marker = Destinations->ActiveMarker.Get();
+        if (TestNotNull(TEXT("Commons has a preview marker"), Marker))
+        {
+            TestEqual(TEXT("Commons is the active destination"), Marker->RoomId, FString(TEXT("PFT_COMMONS")));
+            const FVector CommonsView = PreviewPawn->GetActorLocation();
+            TestTrue(TEXT("The camera moved to the Commons preview"), CommonsView.Equals(Marker->GetActorLocation() + Marker->ViewOffset, 1.0));
+            TestFalse(TEXT("The Commons view matches the previous room"), CommonsView.Equals(PreviousView, 1.0));
+            TestTrue(TEXT("The Commons marker stays hidden"), Marker->IsHidden());
+        }
+        TestTrue(TEXT("The Commons result has the selected tag"), GetTaggedRooms(Panel).Contains(TEXT("PFT_COMMONS")));
+        TestTrue(TEXT("The search box can be focused during a preview"), ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("RoomSearch"))));
+        SetSearch(Panel, TEXT("CSC 1350"));
+        TestTrue(TEXT("Enter switches back to the course room preview"), PressKey(EKeys::Enter));
+        if (TestTrue(TEXT("The keyboard switch keeps the same exploration pawn"), Player->GetPawn() == PreviewPawn))
+        {
+            TestTrue(TEXT("The camera returns to the course room preview point"), PreviewPawn->GetActorLocation().Equals(PreviousView, 1.0));
+        }
         return true;
     }));
     ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
