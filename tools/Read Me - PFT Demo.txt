@@ -1,0 +1,17 @@
+PFT Digital Twin | Windows demo
+
+1. Extract the entire package to a local folder.
+2. Open Play PFT Demo.cmd.
+3. Choose Skip tour to open the Navigator and walk around.
+
+If Windows reports a missing Visual C++ runtime, run this installer from the
+extracted package, then open the launcher again.
+
+Engine\Extras\Redist\en-us\vc_redist.x64.exe
+
+The launcher uses native 720p and a 30 FPS cap. From PowerShell in this folder,
+run the following command to try the 45 FPS preset.
+
+& '.\Play PFT Demo.cmd' smooth
+
+PFTDemoBuild.json identifies the map and tools used to build this package.

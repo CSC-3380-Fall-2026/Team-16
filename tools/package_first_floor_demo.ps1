@@ -45,6 +45,8 @@ $automationTool = Join-Path $EngineRoot 'Engine\Build\BatchFiles\RunUAT.bat'
 $launcher = Join-Path $PSScriptRoot 'Play PFT Demo.cmd'
 $frameReport = Join-Path $PSScriptRoot 'measure_demo_frames.ps1'
 $assetCheck = Join-Path $PSScriptRoot 'check_demo_assets.ps1'
+$demoGuide = Join-Path $PSScriptRoot 'Read Me - PFT Demo.txt'
+$prerequisite = 'Engine\Extras\Redist\en-us\vc_redist.x64.exe'
 if (!(Test-Path -LiteralPath $mapFile -PathType Leaf)) {
     throw "Could not find $mapFile. Apply or generate the first-floor map before packaging."
 }
@@ -54,6 +56,7 @@ if (!(Test-Path -LiteralPath $automationTool -PathType Leaf)) {
 if (!(Test-Path -LiteralPath $launcher -PathType Leaf)) { throw 'Play PFT Demo.cmd must be beside this script.' }
 if (!(Test-Path -LiteralPath $frameReport -PathType Leaf)) { throw 'measure_demo_frames.ps1 must be beside this script.' }
 if (!(Test-Path -LiteralPath $assetCheck -PathType Leaf)) { throw 'check_demo_assets.ps1 must be beside this script.' }
+if (!(Test-Path -LiteralPath $demoGuide -PathType Leaf)) { throw 'Read Me - PFT Demo.txt must be beside this script.' }
 $launcherText = Get-Content -LiteralPath $launcher -Raw
 if (!$launcherText.Contains($defaultMap)) { throw 'The launcher is missing its first-floor map setting.' }
 
@@ -171,7 +174,10 @@ function Publish-DemoArchive {
 function Get-ToolsRevision {
     $git = Get-Command git -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if (!$git) { return $null }
-    $files = @('package_first_floor_demo.ps1', 'Play PFT Demo.cmd', 'measure_demo_frames.ps1', 'check_demo_assets.ps1')
+    $files = @(
+        'package_first_floor_demo.ps1', 'Play PFT Demo.cmd', 'measure_demo_frames.ps1',
+        'check_demo_assets.ps1', 'Read Me - PFT Demo.txt'
+    )
     $tracked = & $git.Source -C $PSScriptRoot ls-files -- @files 2>$null
     if ($LASTEXITCODE -ne 0 -or @($tracked).Count -ne $files.Count) { return $null }
     $commit = & $git.Source -C $PSScriptRoot rev-parse HEAD 2>$null
@@ -199,6 +205,7 @@ function Write-BuildRecord($mapHash, $cookMode, $verification, $toolsRevision) {
         Engine = $engine
         Tools = $toolsRevision
         CookMode = $cookMode
+        VisualCppInstaller = $prerequisite.Replace('\', '/')
         Verification = $verification
         TestReports = $tests
     } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $candidate 'PFTDemoBuild.json') -Encoding UTF8
@@ -210,7 +217,7 @@ $receipt = Join-Path $mapBuild 'WindowsCook.json'
 $cookDirectory = Join-Path $projectRoot 'Saved\Cooked\Windows'
 $arguments = @(
     'BuildCookRun', "-project=$($projectFile.FullName)", '-platform=Win64', '-clientconfig=Development',
-    '-build', '-stage', '-pak', '-iostore', '-archive', "-archivedirectory=$candidate",
+    '-build', '-stage', '-pak', '-iostore', '-archive', '-prereqs', "-archivedirectory=$candidate",
     "-map=$map", '-unattended', '-nop4', '-utf8output', '-ubtargs=-NoHotReloadFromIDE'
 )
 if ($map -ne $defaultMap) {
@@ -278,6 +285,9 @@ try {
         throw 'Packaging finished without producing the Windows demo executable.'
     }
     Confirm-DemoArchive $candidate
+    if (!(Test-Path -LiteralPath (Join-Path $candidate $prerequisite) -PathType Leaf)) {
+        throw 'Packaging finished without the Windows Visual C++ runtime installer.'
+    }
 
     $finalInputs = Get-CookInputs
     $changed = @(Get-ChangedCookInputs $inputs $finalInputs)
@@ -303,6 +313,7 @@ try {
     [IO.File]::WriteAllText($packageLauncher, $launcherText.Replace($defaultMap, $map))
     Copy-Item -LiteralPath $frameReport -Destination $candidate
     Copy-Item -LiteralPath $assetCheck -Destination $candidate
+    Copy-Item -LiteralPath $demoGuide -Destination $candidate
     $verification = 'Not requested'
     if ($Verify) {
         & $packageLauncher verify
