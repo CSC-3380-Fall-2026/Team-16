@@ -21,3 +21,12 @@ jobs:
         run: python -m unittest discover -s tools
       - name: Check data files
         run: python tools/validate_data.py
+  windows-package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check Windows demo publication
+        run: python -m unittest discover -s tools -p test_windows_demo_package.py
