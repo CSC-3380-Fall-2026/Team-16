@@ -33,7 +33,14 @@ namespace
 
     bool ReadCourseSchedule(const FJsonObject& Object, FPFTCourse& Course)
     {
-        if (!Object.HasField(TEXT("Instructor")) && !Object.HasField(TEXT("MeetingDays")) && !Object.HasField(TEXT("StartTime"))) return true;
+        if (!Object.HasField(TEXT("Instructor")) && !Object.HasField(TEXT("MeetingDays")) && !Object.HasField(TEXT("StartTime"))
+            && !Object.HasField(TEXT("EndTime"))) return true;
+        // EndTime is optional, but if it's there it has to be a real time after the class starts
+        if (Object.HasField(TEXT("EndTime")))
+        {
+            if (!Object.HasTypedField<EJson::String>(TEXT("EndTime")) || !Object.TryGetStringField(TEXT("EndTime"), Course.EndTime)
+                || !IsStartTimeValid(Course.EndTime)) return false;
+        }
         return Object.HasTypedField<EJson::String>(TEXT("Instructor"))
             && Object.HasTypedField<EJson::String>(TEXT("MeetingDays"))
             && Object.HasTypedField<EJson::String>(TEXT("StartTime"))
@@ -41,7 +48,8 @@ namespace
             && Object.TryGetStringField(TEXT("MeetingDays"), Course.MeetingDays)
             && Object.TryGetStringField(TEXT("StartTime"), Course.StartTime)
             && !Course.Instructor.IsEmpty() && Course.Instructor == Course.Instructor.TrimStartAndEnd()
-            && IsMeetingPatternValid(Course.MeetingDays) && IsStartTimeValid(Course.StartTime);
+            && IsMeetingPatternValid(Course.MeetingDays) && IsStartTimeValid(Course.StartTime)
+            && (Course.EndTime.IsEmpty() || Course.EndTime > Course.StartTime);
     }
 
     bool MatchesCourse(const FPFTCourse& Course, const FString& Text)
@@ -126,6 +134,12 @@ FString FPFTCourse::GetStartTimeLabel() const
     return StartTime.IsEmpty() ? FString() : FormatTime(StartTime);
 }
 
+FString FPFTCourse::GetTimeRangeLabel() const
+{
+    if (StartTime.IsEmpty()) return FString();
+    return EndTime.IsEmpty() ? GetStartTimeLabel() : GetStartTimeLabel() + TEXT(" - ") + FormatTime(EndTime);
+}
+
 FString FPFTCourse::GetScheduleLabel() const
 {
     if (StartTime.IsEmpty()) return FString();
@@ -137,7 +151,7 @@ FString FPFTCourse::GetScheduleLabel() const
         int32 Index;
         if (Week.FindChar(Day, Index)) Days.Add(DayNames[Index]);
     }
-    return Instructor + TEXT(" · ") + FString::Join(Days, TEXT("/")) + TEXT(" ") + GetStartTimeLabel();
+    return Instructor + TEXT(" · ") + FString::Join(Days, TEXT("/")) + TEXT(" ") + GetTimeRangeLabel();
 }
 
 void UPFTDirectory::Initialize(FSubsystemCollectionBase& Collection)

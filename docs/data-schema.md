@@ -13,7 +13,10 @@ Courses are Fall 2026 CSC lecture sections that meet in PFT, from LSU's [Course 
 
 The instructor, days, and start times for CSC 1350 and CSC 3102 come from
 [William Duncan's Fall 2026 schedule](https://www.csc.lsu.edu/~duncan/sched.htm).
-The other five course entries can still be found by course code or title.
+The other lectures with times (and their end times) come straight from Course Offerings.
+We only add the lecture section, not recitations, and a cross-listed section like CSC 4402G
+is left out since it's the same class in the same room. Courses without a time yet
+(CSC 1253, 2259, 2262, 2362, 3200) can still be found by course code or title.
 
 Each office's DisplayName has the professor's name or the department in it, like `PFT 3209B - James Ghawaly`. That way searching a name in the app already finds their office, even before faculty search is added. If someone changes offices, update both `faculty.json` and their room in `rooms.json`.
 
@@ -47,6 +50,7 @@ The rooms from our [design scope](design.md) are in `rooms.json`. If a room has 
 | Instructor | `"William Duncan"` (optional with both fields below) |
 | MeetingDays | `"MWF"` (use `MTWRFSU` in weekday order, with `R` for Thursday) |
 | StartTime | `"10:30"` (local 24-hour time, `HH:MM`) |
+| EndTime | `"11:20"` (optional, same format, has to be after StartTime) |
 
 ## departments.json
 | Field | Example |

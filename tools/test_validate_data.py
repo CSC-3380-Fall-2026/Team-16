@@ -102,6 +102,23 @@ class TestValidateData(unittest.TestCase):
         self.write_files()
         self.assertTrue(any("invalid Instructor" in error for error in validate_data.validate(self.folder)))
 
+    def test_end_time_is_optional_but_must_be_after_start(self):
+        course = self.data["courses.json"][0]
+        course.update(Instructor="Test Person", MeetingDays="MWF", StartTime="10:30", EndTime="11:20")
+        self.write_files()
+        self.assertEqual(validate_data.validate(self.folder), [])
+        for value in ["10:30", "09:00", "25:00", "1120", 1120]:
+            with self.subTest(value=value):
+                course["EndTime"] = value
+                self.write_files()
+                self.assertTrue(any("invalid EndTime" in error for error in validate_data.validate(self.folder)))
+        # An end time on its own isn't enough, the rest of the schedule has to be there too
+        for field in ("Instructor", "MeetingDays", "StartTime"):
+            del course[field]
+        course["EndTime"] = "11:20"
+        self.write_files()
+        self.assertTrue(any("invalid StartTime" in error for error in validate_data.validate(self.folder)))
+
     def test_floor_limit_matches_unreal(self):
         self.data["rooms.json"][0]["Floor"] = 2147483647
         self.write_files()
