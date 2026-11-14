@@ -2,11 +2,8 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-#include "Blueprint/WidgetBlueprintLibrary.h"
-#include "Blueprint/WidgetTree.h"
+#include "PFTViewportTest.h"
 #include "Components/TextBlock.h"
-#include "Engine/Engine.h"
-#include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -88,7 +85,7 @@ namespace
             const FVector Direction(Delta.X, Delta.Y, 0);
             Player->SetControlRotation(FMath::RInterpTo(Player->GetControlRotation(), Direction.Rotation(),
                 Character->GetWorld()->GetDeltaSeconds(), 7.0));
-            Character->AddMovementInput(Direction.GetSafeNormal2D(), FMath::Clamp(Delta.Size() / 120.0, 0.25, 1.0), true);
+            Character->AddMovementInput(Direction.GetSafeNormal2D(), FMath::Clamp(Delta.Size() / 120.0, 0.25, 1.0));
             return false;
         }
 
@@ -134,6 +131,9 @@ namespace
         APlayerController* Player = World->GetFirstPlayerController();
         ACharacter* Character = Player ? Player->GetCharacter() : nullptr;
         if (!Test.TestNotNull(TEXT("First-floor walking pawn"), Character)) return false;
+        if (!Test.TestTrue(TEXT("Skip tour is clickable before walking"), PFTViewportTest::SkipWelcome(World))) return false;
+        if (!Test.TestFalse(TEXT("Walking is unlocked after Skip tour"), Player->IsMoveInputIgnored())) return false;
+        if (!Test.TestFalse(TEXT("Looking is unlocked after Skip tour"), Player->IsLookInputIgnored())) return false;
         if (!Test.TestTrue(TEXT("The route starts at the C1003 spawn"),
             FVector::Dist2D(Character->GetActorLocation(), FVector(9714, -6296, 101)) <= 50.0))
         {

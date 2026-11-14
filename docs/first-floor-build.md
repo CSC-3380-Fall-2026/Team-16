@@ -223,11 +223,13 @@ Close the running demo. From the Windows package directory, run both checks:
 & '.\Play PFT Demo.cmd' verify
 ```
 
-The walkthrough starts at C1003, turns past the Zone 1200 sign, and follows the
-hallway into the Commons. It fails if the pawn falls through the floor or stalls.
-The Navigator test skips the welcome screen, searches for a course, opens the
-room preview, and returns to the original player. Use `walkthrough` to run the
-shorter Zone 1200 route on its own. The game exits after each test.
+The walkthrough clicks **Skip tour**, starts at C1003, and walks past the Zone
+1200 sign into the Commons. It fails if the welcome screen blocks the walk or if
+the pawn falls through the floor or stalls. The Navigator test checks that the
+welcome screen locks walking and looking until it closes. It then searches for
+a course, opens the room preview, and returns to the original player. The
+welcome screen input change is on Perforce shelf `41648`. Use `walkthrough` to
+run the shorter Zone 1200 route on its own. The game exits after each test.
 
 Logs are in `PFTDigitalTwin\Saved\Logs`. The `CommonsWalk` and `Navigator`
 folders under `PFTDigitalTwin\Saved\Automation` each contain an `index.json`
