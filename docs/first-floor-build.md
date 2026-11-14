@@ -203,6 +203,8 @@ before replacing the playable archive. Verification also checks both runtime
 logs for missing packages, missing imports, and default-material fallbacks.
 Use `-VerifyExtended` to also walk through the Commons to C1007 before
 publishing a review build. Its result is recorded in `PFTDemoBuild.json`.
+Before publishing, packaging confirms that each report names the expected test
+and records a completed success.
 If a check fails, the command exits
 with an error and leaves the new build and its logs in the printed `pending`
 folder. Successful builds move into the launcher location. The previous archive
