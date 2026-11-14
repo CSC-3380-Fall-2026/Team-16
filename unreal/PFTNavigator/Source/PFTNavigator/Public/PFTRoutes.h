@@ -44,12 +44,13 @@ private:
     bool CanCross(ACharacter& Character, const FVector& Start, const FVector& End) const;
     void DrawPath();
     void ShowArrival(const FVector& Position);
-    void UpdateDirections(const FVector& Position, const FRotator& View);
+    void UpdateDirections(const FVector& Position, const FRotator& View, double WalkSpeed);
     void EndGuidance(const FText& NewMessage);
 
     TMap<FIntPoint, FNode> Nodes;
     TMap<FString, FIntPoint> Destinations;
     TArray<FVector> Path;
+    TArray<double> TurnSeconds;
     UPROPERTY() TObjectPtr<ULineBatchComponent> Trail;
     UPROPERTY() TObjectPtr<UTextRenderComponent> ArrivalLabel;
     TWeakObjectPtr<ACharacter> Walker;

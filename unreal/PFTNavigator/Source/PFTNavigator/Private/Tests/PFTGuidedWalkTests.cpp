@@ -118,6 +118,13 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
                 Routes->SetReducedMotion(true);
                 return true;
             }));
+            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Tree]()
+            {
+                const auto* Hint = CastChecked<UTextBlock>(Tree->FindWidget(TEXT("RouteHint")));
+                TestTrue(TEXT("The walking panel shows estimated time left"), Hint->GetText().ToString().Contains(TEXT(" sec left"))
+                    || Hint->GetText().ToString().Contains(TEXT(" min left")));
+                return true;
+            }));
             ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.2f));
             ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Trail, StationaryTip]()
             {
@@ -145,7 +152,7 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
                     TestTrue(TEXT("Arrival marks the destination in the building"), ArrivalLabel && ArrivalLabel->IsVisible());
                     auto* Hint = Cast<UTextBlock>(Tree->FindWidget(TEXT("RouteHint")));
                     if (TestNotNull(TEXT("Walking instructions"), Hint))
-                        TestTrue(TEXT("The arrival message names the Commons"), Hint->GetText().ToString().Contains(TEXT("Arrived at PFT Commons")));
+                        TestEqual(TEXT("Arrival replaces the walking estimate"), Hint->GetText().ToString(), FString(TEXT("Arrived at PFT Commons.")));
                     AddInfo(FString::Printf(TEXT("Reached the Commons with route guidance at %s"), *Position.ToCompactString()));
                     ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
                     ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Navigator, Tree, Character, Routes, ArrivalLabel]()
