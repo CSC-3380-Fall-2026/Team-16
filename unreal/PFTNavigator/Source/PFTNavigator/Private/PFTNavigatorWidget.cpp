@@ -84,7 +84,6 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     auto* Title = AddText(TEXT("PFT Navigator"));
     Title->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), 20));
     Title->SetColorAndOpacity(FSlateColor(FLinearColor(PFTPalette::Purple)));
-    AddText(TEXT("Selected Fall 2026 CSC lectures"));
     Search = WidgetTree->ConstructWidget<UEditableTextBox>(UEditableTextBox::StaticClass(), TEXT("RoomSearch"));
     auto Style = Search->GetWidgetStyle();
     Style.TextStyle.SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Regular"), 16));
@@ -112,6 +111,7 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     ClassFilters = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("ClassFilters"));
     Column->AddChild(ClassFilters);
     ClassFilters->SetVisibility(ESlateVisibility::Collapsed);
+    ClassFilters->AddChild(MakeText(TEXT("Selected Fall 2026 CSC lecture meetings")));
     InstructorSearch = WidgetTree->ConstructWidget<UEditableTextBox>(UEditableTextBox::StaticClass(), TEXT("InstructorSearch"));
     InstructorSearch->SetWidgetStyle(Style);
     InstructorSearch->SetForegroundColor(FLinearColor(PFTPalette::Ink));
@@ -169,6 +169,11 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
         return Button;
     };
     UTextBlock* Label;
+    auto* ResetFiltersRow = WidgetTree->ConstructWidget<UHorizontalBox>();
+    ClassFilters->AddChild(ResetFiltersRow);
+    auto* ResetFilters = AddButton(ResetFiltersRow, TEXT("Reset class search"), Label);
+    ResetFilters->Rename(TEXT("ResetClassSearchButton"));
+    ResetFilters->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ResetClassSearch);
     auto* MoreRoomsRow = WidgetTree->ConstructWidget<UHorizontalBox>();
     Column->AddChild(MoreRoomsRow);
     MoreRoomsButton = AddButton(MoreRoomsRow, TEXT("Show more rooms"), Label);
@@ -281,8 +286,27 @@ void UPFTNavigatorWidget::ClassFilterChanged(bool bChecked)
     RefreshResults();
 }
 
+void UPFTNavigatorWidget::ResetClassSearch()
+{
+    if (!ClassesOnly->IsChecked()) return;
+    ClearRoom();
+    {
+        // Rebuild the results once after all controls have been reset.
+        TGuardValue<bool> ResetInProgress(bResettingClassSearch, true);
+        Search->SetText(FText::GetEmpty());
+        InstructorSearch->SetText(FText::GetEmpty());
+        ClassDay->SetSelectedIndex(0);
+        ClassStart->SetSelectedIndex(0);
+        Floors->SetSelectedIndex(0);
+        PreviewOnly->SetIsChecked(false);
+    }
+    RefreshResults();
+    InstructorSearch->SetKeyboardFocus();
+}
+
 void UPFTNavigatorWidget::RefreshResults()
 {
+    if (bResettingClassSearch) return;
     Results->ClearChildren();
     Results->ScrollToStart();
     AddResultPage();
@@ -334,7 +358,8 @@ void UPFTNavigatorWidget::AddResultPage()
     {
         Message = bPreviewOnly ? TEXT("No previews match. Uncheck the filter to see room details.")
             : TEXT("No matches. Try another floor or search.");
-        if (bClassSearch && !bPreviewOnly) Message = TEXT("No listed classes match. Try clearing a filter.");
+        if (bClassSearch && !bPreviewOnly)
+            Message = TEXT("No listed meetings match. Reset class search to see all included meetings.");
     }
     for (int32 Index = FirstResult; Index < VisibleCount; ++Index)
     {
