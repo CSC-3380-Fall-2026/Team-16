@@ -125,8 +125,8 @@ directory.
 ```
 
 Results are written to `Saved/FirstFloorVerification.json`. This checks loading,
-room preview coverage, camera clearance and sightlines, references, fixture
-shadows and draw limits, checkerboard and unassigned static-mesh slots, and
+room ID uniqueness, room preview coverage, camera clearance and sightlines,
+references, fixture shadows and draw limits, checkerboard and unassigned static-mesh slots, and
 material dependencies. Its `FallbackMaterialSlots` field identifies the actor,
 component, mesh, and slot for each missing surface.
 Rendered gameplay and packaging need separate checks.
@@ -169,6 +169,8 @@ The script reuses unchanged cooked packages. Pass `-FullCook` to cook everything
 again or `-EngineRoot` if UE 5.8 is installed in a different directory. The script
 copies the launcher into `Saved\FirstFloorWindows\Windows` after packaging succeeds.
 Keep the files under `Saved` local to the workspace.
+The project settings on Perforce shelf `42426` use the Unreal 5.8 include order
+and keep local `UserEngine.ini` overrides out of the Windows package.
 
 Pass `-Verify` to run the Commons walkthrough and the Navigator click test
 after packaging. The command exits with an error if either test fails.

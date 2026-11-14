@@ -54,13 +54,16 @@ def find_dependencies(registry, map_path=MAP):
 def check_room_ids(rooms, room_ids):
     """Return room-ID errors, comparing source IDs when a saved build report is available."""
     errors = []
-    if any(not actor.get_editor_property("source_room_id") for actor in rooms):
+    saved_ids = [actor.get_editor_property("source_room_id") for actor in rooms]
+    present_ids = [source_id for source_id in saved_ids if source_id]
+    if not rooms or len(present_ids) != len(rooms):
         errors.append("Copied room volumes are missing source IDs")
-    for actor in rooms:
-        source_id = actor.get_editor_property("source_room_id")
-        if room_ids and source_id != room_ids.get(actor.get_actor_label()):
+    if len(set(present_ids)) != len(present_ids):
+        errors.append("Copied room volumes have duplicate source IDs")
+    if room_ids:
+        saved_rooms = {actor.get_actor_label(): source_id for actor, source_id in zip(rooms, saved_ids)}
+        if saved_rooms != room_ids:
             errors.append("Copied room IDs differ from the source twin")
-            break
     return errors
 
 
