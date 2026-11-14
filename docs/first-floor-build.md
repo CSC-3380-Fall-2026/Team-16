@@ -107,13 +107,14 @@ prints the map and report paths after verification. Build and verification
 reports and step logs are under `Saved/FirstFloorBuilds/Level/PFTFirstFloorUpdated`.
 Pass `-EngineRoot` when Unreal is installed elsewhere.
 
-Add `-PackageDemo` to build the Windows demo after map verification. The command
-prints the launcher path after the Commons walkthrough and Navigator test
-pass. A fresh map cooks its assets. On resume, packaging can reuse a matching cook.
+To package a new map, first bake and install its graph using the walking-route
+steps below. Then resume from the Git checkout and pass the same graph file.
+Packaging prints the launcher path after the Commons and C1007 walks, Navigator
+controls, and guided walk all pass. It reuses a matching cook when available.
 
 ```powershell
-& .\Tools\rebuild_first_floor.ps1 -Project .\PFTDigitalTwin.uproject `
-  -MapName PFTFirstFloorUpdated -PackageDemo
+& ./tools/rebuild_first_floor.ps1 -Project $Project -MapName PFTFirstFloorUpdated `
+  -Resume -PackageDemo -WalkingGraph ./first_floor_routes.json
 ```
 
 If a later step fails, use the same command with `-Resume` once the error is
