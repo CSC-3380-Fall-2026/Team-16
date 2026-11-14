@@ -77,6 +77,7 @@ bool UPFTExploration::EndExplore()
     ExplorePawn->Destroy();
     ExplorePawn = nullptr;
     PreviousPawn = nullptr;
+    UpdateCameraControls();
     Error.Empty();
     return true;
 }
@@ -104,6 +105,14 @@ void UPFTExploration::SetCursor(bool bShow)
         Player->SetInputMode(Mode);
     }
     else Player->SetInputMode(FInputModeGameOnly());
+    UpdateCameraControls();
+}
+
+void UPFTExploration::UpdateCameraControls()
+{
+    if (!Widget) return;
+    const auto* Destinations = GetWorld()->GetSubsystem<UPFTDestinations>();
+    Widget->UpdateCameraControls(IsValid(ExplorePawn), bCursorShown, Destinations && Destinations->IsRoomPreviewActive());
 }
 
 bool UPFTExploration::ViewRoom()

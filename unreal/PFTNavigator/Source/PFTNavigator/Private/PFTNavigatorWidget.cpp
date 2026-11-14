@@ -103,14 +103,14 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     ClearButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ClearRoom);
     auto* ExploreActions = WidgetTree->ConstructWidget<UHorizontalBox>();
     Column->AddChild(ExploreActions);
-    auto* ExploreButton = AddButton(ExploreActions, TEXT("Explore"), Label);
-    ExploreButton->Rename(TEXT("ExploreButton"));
-    ExploreButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ToggleExplore);
-    ExploreLabel = Label;
-    AddButton(ExploreActions, TEXT("Fly"), Label)->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::Fly);
+    auto* CameraButton = AddButton(ExploreActions, TEXT("Free camera"), Label);
+    CameraButton->Rename(TEXT("CameraModeButton"));
+    CameraButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ToggleFreeCamera);
+    CameraLabel = Label;
+    CameraHelp = AddText(TEXT("Free camera lets you fly around the building."));
+    CameraHelp->Rename(TEXT("CameraHelp"));
     Details = AddText(TEXT("Select a room to see its details."));
     Details->Rename(TEXT("RoomDetails"));
-    AddText(TEXT("WASD move | Q down | E up\nMouse look | Tab switches mouse"));
     for (auto* Child : Column->GetAllChildren())
         Cast<UVerticalBoxSlot>(Child->Slot)->SetPadding(FMargin(0, 0, 0, 6));
     RefreshResults();
@@ -194,7 +194,7 @@ void UPFTNavigatorWidget::ClearRoom()
     auto* Destinations = GetWorld()->GetSubsystem<UPFTDestinations>();
     if (Destinations->IsRoomPreviewActive())
     {
-        ToggleExplore();
+        ToggleFreeCamera();
         if (Destinations->IsRoomPreviewActive()) return;
     }
     Destinations->ClearSelection();
@@ -224,37 +224,32 @@ void UPFTNavigatorWidget::UpdateSelectedTags()
     }
 }
 
-void UPFTNavigatorWidget::ToggleExplore()
+void UPFTNavigatorWidget::ToggleFreeCamera()
 {
     auto* Exploration = GetWorld()->GetSubsystem<UPFTExploration>();
     const bool bWasExploring = IsValid(Exploration->ExplorePawn);
     const bool bSuccess = bWasExploring ? Exploration->EndExplore() : Exploration->BeginExplore();
-    ExploreLabel->SetText(FText::FromString(Exploration->ExplorePawn ? TEXT("Return") : TEXT("Explore")));
-    const FString Message = bWasExploring ? TEXT("Returned to the original player.") : TEXT("WASD/QE move. Tab opens the mouse.");
-    Status->SetText(FText::FromString(bSuccess ? Message : Exploration->Error));
+    if (!bSuccess) Status->SetText(FText::FromString(Exploration->Error));
+    else if (bWasExploring) Status->SetText(FText::FromString(TEXT("Returned to the player.")));
 }
 
-void UPFTNavigatorWidget::Fly()
+void UPFTNavigatorWidget::UpdateCameraControls(bool bFreeCamera, bool bCursorShown, bool bRoomPreview)
 {
-    auto* Exploration = GetWorld()->GetSubsystem<UPFTExploration>();
-    if (!Exploration->BeginExplore()) Status->SetText(FText::FromString(Exploration->Error));
-    else
+    CameraLabel->SetText(FText::FromString(bFreeCamera ? TEXT("Return to player") : TEXT("Free camera")));
+    const TCHAR* Help = TEXT("Free camera lets you fly around the building.");
+    if (bFreeCamera)
     {
-        Exploration->SetCursor(false);
-        ExploreLabel->SetText(FText::FromString(TEXT("Return")));
-        Status->SetText(FText::FromString(TEXT("WASD/QE move. Tab opens the mouse.")));
+        Help = TEXT("WASD move | Q down | E up\nMouse to look | Tab opens the cursor");
+        if (bCursorShown) Help = TEXT("Camera paused. Press Tab to fly again.");
+        if (bRoomPreview) Help = TEXT("Room preview. Press Tab to fly from here.");
     }
+    CameraHelp->SetText(FText::FromString(Help));
 }
 
 void UPFTNavigatorWidget::ViewRoom()
 {
     auto* Exploration = GetWorld()->GetSubsystem<UPFTExploration>();
     if (!Exploration->ViewRoom()) Status->SetText(FText::FromString(Exploration->Error));
-    else
-    {
-        ExploreLabel->SetText(FText::FromString(TEXT("Return")));
-        Status->SetText(FText::FromString(TEXT("Room preview is open.")));
-    }
 }
 
 FReply UPFTNavigatorWidget::NativeOnPreviewKeyDown(const FGeometry& Geometry, const FKeyEvent& Event)
@@ -270,7 +265,7 @@ FReply UPFTNavigatorWidget::NativeOnPreviewKeyDown(const FGeometry& Geometry, co
     auto* Exploration = GetWorld()->GetSubsystem<UPFTExploration>();
     if (Event.GetKey() == EKeys::Tab && Exploration->ExplorePawn)
     {
-        Exploration->SetCursor(!Exploration->bCursorShown);
+        if (!Event.IsRepeat()) Exploration->SetCursor(!Exploration->bCursorShown);
         return FReply::Handled();
     }
     return Super::NativeOnPreviewKeyDown(Geometry, Event);

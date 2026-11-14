@@ -24,6 +24,7 @@ public:
     UPROPERTY(BlueprintReadOnly) FString Error;
     UPROPERTY(BlueprintReadOnly) TObjectPtr<APFTExplorePawn> ExplorePawn;
 private:
+    void UpdateCameraControls();
     UPROPERTY() TObjectPtr<APawn> PreviousPawn;
     UPROPERTY() TObjectPtr<UPFTNavigatorWidget> Widget;
     FRotator PreviousRotation;
