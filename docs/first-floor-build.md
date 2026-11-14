@@ -20,6 +20,20 @@ project copies of the scripts below. Install the [Navigator plugin](navigator-pl
 then build `PFTDigitalTwinEditor Win64 Development` and restart Unreal. Use the
 Navigator room preview update to view the camera positions saved in the current shelf.
 
+To package a reviewed GitHub branch with the Unreal project and assets from
+Perforce, check out that branch and run these commands from the Git repo root.
+Use the same checkout to install or check the Navigator and run the package tools.
+
+```powershell
+$Project = 'C:\path\to\PFTDigitalTwin.uproject'
+python tools/install_navigator.py $Project --check
+& .\tools\package_first_floor_demo.ps1 -Project $Project -ReuseCook -Verify
+```
+
+If the first command reports differences, run the installer with your pending
+changelist as described in the Navigator instructions before packaging. The
+packaging script uses the launcher and verification tools beside it in Git.
+
 ## Map contents
 
 The default editor map and game map are `/Game/Level/PFTFirstFloorComplete`. Packaging

@@ -10,6 +10,9 @@ Create that pending Perforce changelist first. The installer validates the repo
 data, copies plugin source and JSON, checks out changed files, adds new files,
 and enables the plugin. It never submits. Omit `--changelist` only for projects
 outside Perforce. Re-run after changing plugin source or repo data.
+Use `python tools/install_navigator.py "<path to PFTDigitalTwin.uproject>" --check`
+to report missing or changed Navigator files and confirm the plugin is enabled.
+The check works without a Perforce login and leaves the project untouched.
 
 Build the editor target and restart Unreal to load a newly installed module.
 Blueprints can access `PFTDirectory` through **Get Game Instance Subsystem**.

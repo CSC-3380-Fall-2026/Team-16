@@ -20,6 +20,26 @@ class TestInstallNavigator(unittest.TestCase):
             self.assertTrue((plugin / "PFTNavigator.uplugin").is_file())
             self.assertTrue((plugin / "Content" / "Data" / "courses.json").is_file())
 
+    def test_check_reports_drift_without_changing_files(self):
+        with tempfile.TemporaryDirectory() as folder:
+            project = Path(folder) / "Test.uproject"
+            project.write_text('{"EngineAssociation":"5.8"}')
+            install(project)
+            install(project, check=True)
+            plugin = project.parent / "Plugins" / "PFTNavigator"
+            changed = plugin / "PFTNavigator.uplugin"
+            missing = plugin / "Content" / "Data" / "courses.json"
+            changed.write_bytes(b"local edits")
+            missing.unlink()
+            project.write_text('{"EngineAssociation":"5.8"}')
+            with self.assertRaises(ValueError) as error:
+                install(project, check=True)
+            for problem in ("Changed", "PFTNavigator.uplugin", "Missing", "courses.json", "not enabled"):
+                self.assertIn(problem, str(error.exception))
+            self.assertEqual(changed.read_bytes(), b"local edits")
+            self.assertFalse(missing.exists())
+            self.assertEqual(json.loads(project.read_text()), {"EngineAssociation": "5.8"})
+
     def test_wrong_engine_is_rejected(self):
         with tempfile.TemporaryDirectory() as folder:
             project = Path(folder) / "Test.uproject"
