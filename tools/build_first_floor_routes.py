@@ -98,7 +98,18 @@ def bake():
                 if room_id != "PFT_1140" or math.dist((point.x, point.y), target) <= 180:
                     candidates.append(node)
         if candidates:
-            destinations[room_id] = min(candidates, key=lambda node: math.dist((node[0] * STEP, node[1] * STEP), target))
+            def distance_to_target(node):
+                return math.dist((node[0] * STEP, node[1] * STEP), target)
+
+            inside = set(candidates)
+            # A connected edge across the room boundary marks a walkable entrance.
+            entrances = [node for node in candidates if any(
+                links[node] & (1 << index) and (node[0] + dx, node[1] + dy) not in inside
+                for index, (dx, dy) in enumerate(EDGES)
+            )]
+            if room_id in {"PFT_COMMONS", "PFT_1140"}:
+                entrances = []
+            destinations[room_id] = min(entrances or candidates, key=distance_to_target)
 
     if "PFT_COMMONS" not in destinations or len(destinations) < 2:
         raise RuntimeError(f"Too few rooms connect to the walking graph: {sorted(destinations)}")

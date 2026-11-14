@@ -31,7 +31,7 @@ Room, faculty, and department records include sourced directory entries; see
 lectures in PFT. Students can confirm their own section in LSU Course Offerings.
 
 On the first-floor demo map, select a room with a walking route and choose
-**Start walking route**. Follow the gold trail with WASD. The Navigator shows
+**Walk there**. Follow the gold arrows with WASD. The Navigator shows
 which way to turn and confirms arrival. Choose **Stop route** or **Clear** to end
 guidance. Room previews and free camera are available from the same panel.
 No original twin source or building assets are included in the GitHub plugin.
