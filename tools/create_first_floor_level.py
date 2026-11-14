@@ -302,6 +302,7 @@ def baked_terrain_textures(material):
 
 def finish_map(world, room_ids):
     """Finish the map and return counts for the build report."""
+    from first_floor_exit_signs import finish_exit_signs
     from first_floor_materials import restore_surface_materials
 
     subsystem = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
@@ -318,6 +319,7 @@ def finish_map(world, room_ids):
         "FixtureShadowsDisabled": disable_fixture_shadows(actors),
         "FixtureDrawLimitsApplied": limit_fixture_draw_distance(actors),
         "SurfaceMaterialsRepaired": restore_surface_materials(actors),
+        "ExitSignsFinished": finish_exit_signs(subsystem, actors),
     }
 
 

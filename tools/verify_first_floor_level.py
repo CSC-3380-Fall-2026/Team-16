@@ -16,6 +16,7 @@ from create_first_floor_level import (
     map_report_path, missing_material_assets, read_map_build_report, valid_output_map, write_report,
 )
 from first_floor_destinations import check_room_markers
+from first_floor_exit_signs import check_exit_signs
 from first_floor_materials import fallback_material_slots, replacement_material
 
 
@@ -169,6 +170,9 @@ def verification_report(world, actors, visited, paths, map_path=MAP):
     build_report = read_map_build_report(map_path)
     errors.extend(check_room_ids(rooms, build_report.get("SourceRoomIds", {})))
     errors.extend(check_location_tags(world, rooms, build_report.get("LocalLocationVolumes")))
+    exit_signs = build_report.get("ExitSignsFinished")
+    if exit_signs is not None:
+        errors.extend(check_exit_signs(actors, exit_signs))
     return {
         "Name": "FirstFloorVerification",
         "Map": map_path,
@@ -201,6 +205,7 @@ def verification_report(world, actors, visited, paths, map_path=MAP):
         "RoomMarkers": [actor.get_editor_property("room_id") for actor in markers],
         "EntranceTerrain": C1003_TERRAIN if C1003_TERRAIN in visited else None,
         "PreservedRoomIds": len(rooms),
+        "ExitSignsFinished": exit_signs,
         "Errors": errors,
     }
 
