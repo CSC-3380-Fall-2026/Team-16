@@ -187,6 +187,11 @@ The script reuses unchanged cooked packages. Pass `-FullCook` to cook everything
 again or `-EngineRoot` if UE 5.8 is installed in a different directory. The script
 copies the launcher into `Saved\FirstFloorWindows\Windows` after packaging succeeds.
 Keep the files under `Saved` local to the workspace.
+Each published package has a `PFTDemoBuild.json` file beside the launcher.
+It records the selected map and its SHA-256 hash, the Unreal version, the
+cook mode, and whether the packaged checks passed. Builds run from the Git
+checkout also record the packaging tools' commit and whether those files had
+local changes. The test report paths are relative to the package folder.
 The project settings on Perforce shelf `42426` use the Unreal 5.8 include order
 and keep local `UserEngine.ini` overrides out of the Windows package.
 
