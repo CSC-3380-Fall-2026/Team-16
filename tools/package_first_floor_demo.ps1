@@ -47,6 +47,7 @@ $launcher = Join-Path $PSScriptRoot 'Play PFT Demo.cmd'
 $frameReport = Join-Path $PSScriptRoot 'measure_demo_frames.ps1'
 $assetCheck = Join-Path $PSScriptRoot 'check_demo_assets.ps1'
 $demoGuide = Join-Path $PSScriptRoot 'Read Me - PFT Demo.txt'
+$navigatorCheck = Join-Path $PSScriptRoot 'install_navigator.py'
 $prerequisite = 'Engine\Extras\Redist\en-us\vc_redist.x64.exe'
 if (!(Test-Path -LiteralPath $mapFile -PathType Leaf)) {
     throw "Could not find $mapFile. Apply or generate the first-floor map before packaging."
@@ -177,15 +178,30 @@ function Get-ToolsRevision {
     if (!$git) { return $null }
     $files = @(
         'package_first_floor_demo.ps1', 'Play PFT Demo.cmd', 'measure_demo_frames.ps1',
-        'check_demo_assets.ps1', 'Read Me - PFT Demo.txt'
+        'check_demo_assets.ps1', 'Read Me - PFT Demo.txt', 'install_navigator.py', 'validate_data.py'
     )
     $tracked = & $git.Source -C $PSScriptRoot ls-files -- @files 2>$null
     if ($LASTEXITCODE -ne 0 -or @($tracked).Count -ne $files.Count) { return $null }
     $commit = & $git.Source -C $PSScriptRoot rev-parse HEAD 2>$null
     if ($LASTEXITCODE -ne 0) { return $null }
-    $modified = & $git.Source -C $PSScriptRoot status --porcelain -- @files 2>$null
+    $modified = & $git.Source -C $PSScriptRoot status --porcelain -- @files '../unreal/PFTNavigator' '../data' 2>$null
     if ($LASTEXITCODE -ne 0) { return $null }
     [ordered]@{ Commit = $commit; Modified = [bool]$modified }
+}
+
+function Confirm-NavigatorInstall {
+    # Perforce-only copies of the packaging tools have no Git Navigator source to compare.
+    $navigatorSource = Join-Path $PSScriptRoot '../unreal/PFTNavigator'
+    if (!(Test-Path -LiteralPath $navigatorSource -PathType Container) -and
+        !(Test-Path -LiteralPath $navigatorCheck -PathType Leaf)) { return }
+    if (!(Test-Path -LiteralPath $navigatorCheck -PathType Leaf)) { throw 'Navigator installer is missing from the Git tools.' }
+    if (!(Test-Path -LiteralPath $navigatorSource -PathType Container)) { throw 'Navigator source is missing from the Git checkout.' }
+    $python = Get-Command python -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (!$python) { throw 'Python is required to verify the Navigator installed in the Unreal project.' }
+    & $python.Source $navigatorCheck $projectFile.FullName --check
+    if ($LASTEXITCODE -ne 0) {
+        throw 'The installed Navigator could not be verified. See docs/navigator-plugin.md to install this checkout before packaging.'
+    }
 }
 
 function Write-BuildRecord($mapHash, $cookMode, $verification, $toolsRevision, $tests) {
@@ -236,6 +252,7 @@ try {
     throw "Could not lock Windows packaging for $projectRoot. Check for another packaging command."
 }
 try {
+    Confirm-NavigatorInstall
     $null = New-Item -ItemType Directory -Path $packageParent -Force
     $archiveLock = [IO.File]::Open((Join-Path $packageParent "$packageName.package.lock"), 'OpenOrCreate', 'ReadWrite', 'None')
     Confirm-DemoArchive $package
@@ -329,6 +346,7 @@ try {
         }
         $verification = 'Passed'
     }
+    Confirm-NavigatorInstall
     Write-BuildRecord $mapHash $cookMode $verification $toolsRevision $tests
     Publish-DemoArchive
     Write-Output (Join-Path $package 'Play PFT Demo.cmd')
