@@ -24,6 +24,12 @@ struct PFTNAVIGATOR_API FPFTCourse
     UPROPERTY(BlueprintReadOnly) FString CourseTitle;
     UPROPERTY(BlueprintReadOnly) FString DepartmentId;
     UPROPERTY(BlueprintReadOnly) FString RoomId;
+    UPROPERTY(BlueprintReadOnly) FString Instructor;
+    UPROPERTY(BlueprintReadOnly) FString MeetingDays;
+    UPROPERTY(BlueprintReadOnly) FString StartTime;
+
+    FString GetStartTimeLabel() const;
+    FString GetScheduleLabel() const;
 };
 
 // One department from departments.json. OfficeRoomId is the room the main department office is in
@@ -64,6 +70,7 @@ public:
     UFUNCTION(BlueprintCallable) bool LoadDirectory(const FString& Folder);
     UFUNCTION(BlueprintCallable) TArray<FPFTSearchResult> Search(const FString& Query) const;
     UFUNCTION(BlueprintCallable) TArray<FPFTSearchResult> BrowseRooms(const FString& Query, int32 Floor = 0) const;
+    TArray<FPFTSearchResult> FindClasses(const FString& Query, const FString& Instructor, TCHAR Day, const FString& StartTime, int32 Floor) const;
     const FPFTRoom* FindRoom(const FString& RoomId) const;
     UFUNCTION(BlueprintCallable) FString GetRoomDetails(const FString& RoomId) const;
     UPROPERTY(BlueprintReadOnly) TArray<FPFTRoom> Rooms;

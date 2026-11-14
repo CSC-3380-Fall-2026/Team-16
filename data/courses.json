@@ -11,7 +11,10 @@
     "CourseCode": "CSC 1350",
     "CourseTitle": "COMP SCI I-MJRS",
     "DepartmentId": "DEPT_CSE",
-    "RoomId": "PFT_1200"
+    "RoomId": "PFT_1200",
+    "Instructor": "William Duncan",
+    "MeetingDays": "MWF",
+    "StartTime": "10:30"
   },
   {
     "Name": "CSC_2259",
@@ -39,7 +42,10 @@
     "CourseCode": "CSC 3102",
     "CourseTitle": "ADV DATA STRUCTURES",
     "DepartmentId": "DEPT_CSE",
-    "RoomId": "PFT_1100"
+    "RoomId": "PFT_1100",
+    "Instructor": "William Duncan",
+    "MeetingDays": "MWF",
+    "StartTime": "09:30"
   },
   {
     "Name": "CSC_3200",

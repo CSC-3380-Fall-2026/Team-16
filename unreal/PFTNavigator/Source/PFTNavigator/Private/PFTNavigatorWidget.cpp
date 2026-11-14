@@ -27,6 +27,7 @@
 namespace
 {
     constexpr int32 RoomsPerPage = 50;
+    const TCHAR* ClassDayCodes = TEXT("MTWRFSU");
     const TCHAR* SettingsSection = TEXT("PFTNavigator");
 
     void SavePreference(const TCHAR* Name, bool bEnabled)
@@ -90,7 +91,7 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     Style.TextStyle.SetColorAndOpacity(FSlateColor(FLinearColor(PFTPalette::Ink)));
     Search->SetWidgetStyle(Style);
     Search->SetForegroundColor(FLinearColor(PFTPalette::Ink));
-    Search->SetHintText(FText::FromString(TEXT("1200, CSC 1350, or CSE")));
+    Search->SetHintText(FText::FromString(TEXT("Room, course, or department")));
     Search->OnTextChanged.AddDynamic(this, &UPFTNavigatorWidget::SearchChanged);
     Column->AddChild(Search);
     AddText(TEXT("Floor"));
@@ -104,6 +105,44 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     Floors->SetSelectedOption(TEXT("All floors"));
     Floors->OnSelectionChanged.AddDynamic(this, &UPFTNavigatorWidget::FloorChanged);
     Column->AddChild(Floors);
+    ClassesOnly = WidgetTree->ConstructWidget<UCheckBox>(UCheckBox::StaticClass(), TEXT("ClassSearchFilter"));
+    ClassesOnly->SetContent(MakeText(TEXT("Find a class by instructor or time")));
+    ClassesOnly->OnCheckStateChanged.AddDynamic(this, &UPFTNavigatorWidget::ClassFilterChanged);
+    Column->AddChild(ClassesOnly);
+    ClassFilters = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("ClassFilters"));
+    Column->AddChild(ClassFilters);
+    ClassFilters->SetVisibility(ESlateVisibility::Collapsed);
+    InstructorSearch = WidgetTree->ConstructWidget<UEditableTextBox>(UEditableTextBox::StaticClass(), TEXT("InstructorSearch"));
+    InstructorSearch->SetWidgetStyle(Style);
+    InstructorSearch->SetForegroundColor(FLinearColor(PFTPalette::Ink));
+    InstructorSearch->SetHintText(FText::FromString(TEXT("Instructor name")));
+    InstructorSearch->OnTextChanged.AddDynamic(this, &UPFTNavigatorWidget::SearchChanged);
+    ClassFilters->AddChild(InstructorSearch);
+    auto* MeetingFilters = WidgetTree->ConstructWidget<UHorizontalBox>();
+    ClassFilters->AddChild(MeetingFilters);
+    ClassDay = WidgetTree->ConstructWidget<UComboBoxString>(UComboBoxString::StaticClass(), TEXT("ClassDay"));
+    ClassDay->AddOption(TEXT("Any day"));
+    for (const TCHAR* Day : {TEXT("Monday"), TEXT("Tuesday"), TEXT("Wednesday"), TEXT("Thursday"),
+        TEXT("Friday"), TEXT("Saturday"), TEXT("Sunday")})
+    {
+        ClassDay->AddOption(Day);
+    }
+    ClassDay->SetSelectedIndex(0);
+    ClassDay->OnSelectionChanged.AddDynamic(this, &UPFTNavigatorWidget::FloorChanged);
+    MeetingFilters->AddChildToHorizontalBox(ClassDay)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
+    ClassStart = WidgetTree->ConstructWidget<UComboBoxString>(UComboBoxString::StaticClass(), TEXT("ClassStart"));
+    ClassStart->AddOption(TEXT("Any start time"));
+    TMap<FString, FString> TimeLabels;
+    for (const auto& Course : Directory->Courses)
+    {
+        if (!Course.StartTime.IsEmpty()) TimeLabels.Add(Course.StartTime, Course.GetStartTimeLabel());
+    }
+    TimeLabels.GetKeys(ClassStartTimes);
+    ClassStartTimes.Sort();
+    for (const FString& Time : ClassStartTimes) ClassStart->AddOption(TimeLabels[Time]);
+    ClassStart->SetSelectedIndex(0);
+    ClassStart->OnSelectionChanged.AddDynamic(this, &UPFTNavigatorWidget::FloorChanged);
+    MeetingFilters->AddChildToHorizontalBox(ClassStart)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
     PreviewOnly = WidgetTree->ConstructWidget<UCheckBox>(UCheckBox::StaticClass(), TEXT("PreviewOnlyFilter"));
     PreviewOnly->SetContent(MakeText(TEXT("Previewable rooms only")));
     PreviewOnly->OnCheckStateChanged.AddDynamic(this, &UPFTNavigatorWidget::PreviewFilterChanged);
@@ -235,6 +274,13 @@ void UPFTNavigatorWidget::PreviewFilterChanged(bool bChecked)
     RefreshResults();
 }
 
+void UPFTNavigatorWidget::ClassFilterChanged(bool bChecked)
+{
+    ClassFilters->SetVisibility(bChecked ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    Search->SetHintText(FText::FromString(bChecked ? TEXT("Optional course code or title") : TEXT("Room, course, or department")));
+    RefreshResults();
+}
+
 void UPFTNavigatorWidget::RefreshResults()
 {
     Results->ClearChildren();
@@ -256,7 +302,19 @@ void UPFTNavigatorWidget::AddResultPage()
 {
     const auto* Directory = GetGameInstance()->GetSubsystem<UPFTDirectory>();
     const auto* Destinations = GetWorld()->GetSubsystem<UPFTDestinations>();
-    auto Entries = Directory->BrowseRooms(Search->GetText().ToString(), FCString::Atoi(*Floors->GetSelectedOption()));
+    const FString Query = Search->GetText().ToString();
+    const int32 Floor = FCString::Atoi(*Floors->GetSelectedOption());
+    const bool bClassSearch = ClassesOnly->IsChecked();
+    const int32 DayIndex = ClassDay->GetSelectedIndex() - 1;
+    const int32 TimeIndex = ClassStart->GetSelectedIndex() - 1;
+    const TCHAR Day = DayIndex >= 0 && DayIndex < 7 ? ClassDayCodes[DayIndex] : 0;
+    const FString Start = ClassStartTimes.IsValidIndex(TimeIndex) ? ClassStartTimes[TimeIndex] : FString();
+    TArray<FPFTSearchResult> Entries;
+    if (bClassSearch)
+    {
+        Entries = Directory->FindClasses(Query, InstructorSearch->GetText().ToString(), Day, Start, Floor);
+    }
+    else Entries = Directory->BrowseRooms(Query, Floor);
     const bool bPreviewOnly = PreviewOnly->IsChecked();
     if (bPreviewOnly)
     {
@@ -276,6 +334,7 @@ void UPFTNavigatorWidget::AddResultPage()
     {
         Message = bPreviewOnly ? TEXT("No previews match. Uncheck the filter to see room details.")
             : TEXT("No matches. Try another floor or search.");
+        if (bClassSearch && !bPreviewOnly) Message = TEXT("No listed classes match. Try clearing a filter.");
     }
     for (int32 Index = FirstResult; Index < VisibleCount; ++Index)
     {
@@ -287,7 +346,7 @@ void UPFTNavigatorWidget::AddResultPage()
         const bool bHasPreview = bPreviewOnly || Destinations->HasLocation(Button->RoomId);
         const TCHAR* Availability = bHasPreview ? TEXT("Preview") : TEXT("Details only");
         Button->ResultText = FString::Printf(TEXT("%s | Floor %d | %s"), *Entries[Index].Label, Room->Floor, Availability);
-        if (Entries.Num() == 1)
+        if (Entries.Num() == 1 && !bClassSearch)
         {
             Message = bHasPreview ? TEXT("Press Enter in search to preview the room.")
                 : TEXT("Press Enter in search to see room details.");

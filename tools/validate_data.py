@@ -9,6 +9,7 @@
 import json
 import math
 import os
+import re
 import sys
 
 DATA_FOLDER = os.path.join(os.path.dirname(__file__), "..", "data")
@@ -71,6 +72,22 @@ def check_field_types(file_name, rows):
                 valid = isinstance(value, str) and value == value.strip()
             if not valid:
                 errors.append(f"{file_name}: {row.get('Name')} has invalid {field}")
+    return errors
+
+
+def check_course_schedules(rows):
+    """Validate optional instructor, meeting days, and start time as a group."""
+    errors = []
+    for row in rows:
+        if not {"Instructor", "MeetingDays", "StartTime"} & row.keys():
+            continue
+        instructor, days, start = (row.get(key) for key in ("Instructor", "MeetingDays", "StartTime"))
+        if not isinstance(instructor, str) or not instructor or instructor != instructor.strip():
+            errors.append(f"courses.json: {row.get('Name')} has invalid Instructor")
+        if not isinstance(days, str) or not days or not re.fullmatch(r"M?T?W?R?F?S?U?", days):
+            errors.append(f"courses.json: {row.get('Name')} has invalid MeetingDays")
+        if not isinstance(start, str) or not re.fullmatch(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]", start):
+            errors.append(f"courses.json: {row.get('Name')} has invalid StartTime")
     return errors
 
 
@@ -139,6 +156,8 @@ def validate(folder):
         errors += check_required_fields(file_name, rows)
         type_errors = check_field_types(file_name, rows)
         errors += type_errors
+        if file_name == "courses.json":
+            errors += check_course_schedules(rows)
         if not type_errors:
             errors += check_duplicate_ids(file_name, rows)
         if file_name == "rooms.json" and not type_errors:

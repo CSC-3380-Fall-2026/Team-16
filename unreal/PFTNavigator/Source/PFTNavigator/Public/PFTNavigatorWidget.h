@@ -40,6 +40,7 @@ private:
     UFUNCTION() void SearchChanged(const FText& Text);
     UFUNCTION() void FloorChanged(FString Floor, ESelectInfo::Type SelectionType);
     UFUNCTION() void PreviewFilterChanged(bool bChecked);
+    UFUNCTION() void ClassFilterChanged(bool bChecked);
     UFUNCTION() void ClearRoom();
     UFUNCTION() void ShowMoreRooms();
     void RefreshResults();
@@ -60,6 +61,12 @@ private:
     UPROPERTY() TObjectPtr<UEditableTextBox> Search;
     UPROPERTY() TObjectPtr<UComboBoxString> Floors;
     UPROPERTY() TObjectPtr<UCheckBox> PreviewOnly;
+    UPROPERTY() TObjectPtr<UCheckBox> ClassesOnly;
+    UPROPERTY() TObjectPtr<UVerticalBox> ClassFilters;
+    UPROPERTY() TObjectPtr<UEditableTextBox> InstructorSearch;
+    UPROPERTY() TObjectPtr<UComboBoxString> ClassDay;
+    UPROPERTY() TObjectPtr<UComboBoxString> ClassStart;
+    TArray<FString> ClassStartTimes;
     UPROPERTY() TObjectPtr<UButton> ViewButton;
     UPROPERTY() TObjectPtr<UButton> ClearButton;
     UPROPERTY() TObjectPtr<UButton> RouteButton;
