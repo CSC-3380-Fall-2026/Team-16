@@ -30,6 +30,17 @@ if ($ArchiveDirectory) {
     $archiveRoot = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($ArchiveDirectory)
     $package = Join-Path $archiveRoot 'Windows'
 }
+$package = [IO.Path]::GetFullPath($package)
+$staging = [IO.Path]::GetFullPath((Join-Path $projectRoot 'Saved\StagedBuilds'))
+if ($package.Equals($staging, [StringComparison]::OrdinalIgnoreCase) -or
+    $package.StartsWith("$staging\", [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'Choose an archive directory outside the Unreal staging folder.'
+}
+$packageParent = Split-Path -Parent $package
+$packageName = Split-Path -Leaf $package
+$buildId = [guid]::NewGuid().ToString('N')
+$candidate = Join-Path $packageParent "$packageName.pending-$buildId"
+$previous = Join-Path $packageParent "$packageName.previous-$buildId"
 $automationTool = Join-Path $EngineRoot 'Engine\Build\BatchFiles\RunUAT.bat'
 $launcher = Join-Path $PSScriptRoot 'Play PFT Demo.cmd'
 if (!(Test-Path -LiteralPath $mapFile -PathType Leaf)) {
@@ -125,13 +136,41 @@ function Get-CookStoreHash($directory) {
     Get-CombinedHash $entries
 }
 
+function Confirm-DemoArchive($directory) {
+    $existing = Get-Item -LiteralPath $directory -Force -ErrorAction SilentlyContinue
+    if (!$existing) { return }
+    if (!$existing.PSIsContainer -or ($existing.Attributes -band [IO.FileAttributes]::ReparsePoint) -or
+        !(Test-Path -LiteralPath (Join-Path $directory 'PFTDigitalTwin.exe') -PathType Leaf) -or
+        !(Test-Path -LiteralPath (Join-Path $directory 'Manifest_UFSFiles_Win64.txt') -PathType Leaf)) {
+        throw "The archive path is occupied by something other than a PFT Windows package: $directory"
+    }
+}
+
+function Publish-DemoArchive {
+    Confirm-DemoArchive $package
+    $hasPrevious = [IO.Directory]::Exists($package)
+    if ($hasPrevious) {
+        Write-Host "Moving the previous demo to $previous."
+        [IO.Directory]::Move($package, $previous)
+    }
+    try {
+        [IO.Directory]::Move($candidate, $package)
+    } catch {
+        if ($hasPrevious -and ![IO.Directory]::Exists($package)) {
+            try { [IO.Directory]::Move($previous, $package) }
+            catch { throw "Could not restore the previous demo. It is available at $previous. New build: $candidate." }
+        }
+        throw
+    }
+}
+
 $builds = Join-Path $projectRoot 'Saved\FirstFloorBuilds'
 $mapBuild = Join-Path $builds "Level\$MapName"
 $receipt = Join-Path $mapBuild 'WindowsCook.json'
 $cookDirectory = Join-Path $projectRoot 'Saved\Cooked\Windows'
 $arguments = @(
     'BuildCookRun', "-project=$($projectFile.FullName)", '-platform=Win64', '-clientconfig=Development',
-    '-build', '-stage', '-pak', '-iostore', '-archive', "-archivedirectory=$package",
+    '-build', '-stage', '-pak', '-iostore', '-archive', "-archivedirectory=$candidate",
     "-map=$map", '-unattended', '-nop4', '-utf8output', '-ubtargs=-NoHotReloadFromIDE'
 )
 if ($map -ne $defaultMap) {
@@ -147,12 +186,18 @@ if ($map -ne $defaultMap) {
 
 $null = New-Item -ItemType Directory -Path $mapBuild -Force
 # Standard and candidate builds use the same staging directory.
+$archiveLock = $null
 try {
     $lock = [IO.File]::Open((Join-Path $builds 'WindowsPackage.lock'), 'OpenOrCreate', 'ReadWrite', 'None')
 } catch [IO.IOException] {
     throw "Could not lock Windows packaging for $projectRoot. Check for another packaging command."
 }
 try {
+    $null = New-Item -ItemType Directory -Path $packageParent -Force
+    $archiveLock = [IO.File]::Open((Join-Path $packageParent "$packageName.package.lock"), 'OpenOrCreate', 'ReadWrite', 'None')
+    Confirm-DemoArchive $package
+    [IO.Directory]::CreateDirectory($candidate) > $null
+    Write-Host "Building the replacement demo in $candidate."
     $inputs = Get-CookInputs
     $saved = $null
     if ($ReuseCook -and (Test-Path -LiteralPath $receipt -PathType Leaf)) {
@@ -184,9 +229,10 @@ try {
     & $automationTool @arguments
     if ($LASTEXITCODE -ne 0) { throw "Unreal packaging failed with exit code $LASTEXITCODE." }
 
-    if (!(Test-Path -LiteralPath (Join-Path $package 'PFTDigitalTwin.exe') -PathType Leaf)) {
+    if (!(Test-Path -LiteralPath (Join-Path $candidate 'PFTDigitalTwin.exe') -PathType Leaf)) {
         throw 'Packaging finished without producing the Windows demo executable.'
     }
+    Confirm-DemoArchive $candidate
 
     $finalInputs = Get-CookInputs
     $changed = @(Get-ChangedCookInputs $inputs $finalInputs)
@@ -200,20 +246,22 @@ try {
 
     $reportTemplate = Join-Path $EngineRoot 'Engine\Content\Automation\Report-Template.html'
     if (Test-Path -LiteralPath $reportTemplate -PathType Leaf) {
-        $reportFolder = Join-Path $package 'Engine\Content\Automation'
+        $reportFolder = Join-Path $candidate 'Engine\Content\Automation'
         $null = New-Item -ItemType Directory -Path $reportFolder -Force
         Copy-Item -LiteralPath $reportTemplate -Destination $reportFolder
     }
 
-    $packageLauncher = Join-Path $package 'Play PFT Demo.cmd'
+    $packageLauncher = Join-Path $candidate 'Play PFT Demo.cmd'
     [IO.File]::WriteAllText($packageLauncher, $launcherText.Replace($defaultMap, $map))
     if ($Verify) {
         & $packageLauncher verify
         if ($LASTEXITCODE -ne 0) {
-            throw "Windows demo verification failed. Read the logs under $package\PFTDigitalTwin\Saved\Logs."
+            throw "Windows demo verification failed. Read the logs under $candidate\PFTDigitalTwin\Saved\Logs."
         }
     }
-    Write-Output $packageLauncher
+    Publish-DemoArchive
+    Write-Output (Join-Path $package 'Play PFT Demo.cmd')
 } finally {
+    if ($archiveLock) { $archiveLock.Dispose() }
     $lock.Dispose()
 }
