@@ -5,7 +5,8 @@ param(
     [switch]$ReuseCook,
     [switch]$Verify,
     [string]$ArchiveDirectory,
-    [ValidatePattern('^[A-Za-z0-9_]+$')] [string]$MapName = 'PFTFirstFloorComplete'
+    [ValidatePattern('^[A-Za-z0-9_]+$')] [string]$MapName = 'PFTFirstFloorComplete',
+    [switch]$VerifyExtended
 )
 
 $ErrorActionPreference = 'Stop'
@@ -187,15 +188,10 @@ function Get-ToolsRevision {
     [ordered]@{ Commit = $commit; Modified = [bool]$modified }
 }
 
-function Write-BuildRecord($mapHash, $cookMode, $verification, $toolsRevision) {
+function Write-BuildRecord($mapHash, $cookMode, $verification, $toolsRevision, $tests) {
     $enginePath = Join-Path $EngineRoot 'Engine\Build\Build.version'
     $engine = if (Test-Path -LiteralPath $enginePath -PathType Leaf) {
         Get-Content -LiteralPath $enginePath -Raw | ConvertFrom-Json
-    }
-    $tests = [ordered]@{}
-    if ($verification -eq 'Passed') {
-        $tests.CommonsWalk = 'PFTDigitalTwin/Saved/Automation/CommonsWalk/index.json'
-        $tests.Navigator = 'PFTDigitalTwin/Saved/Automation/Navigator/index.json'
     }
     [ordered]@{
         BuildId = $buildId
@@ -315,14 +311,25 @@ try {
     Copy-Item -LiteralPath $assetCheck -Destination $candidate
     Copy-Item -LiteralPath $demoGuide -Destination $candidate
     $verification = 'Not requested'
-    if ($Verify) {
-        & $packageLauncher verify
+    $tests = [ordered]@{}
+    if ($Verify -or $VerifyExtended) {
+        $mode = if ($VerifyExtended) { 'verifyextended' } else { 'verify' }
+        & $packageLauncher $mode
         if ($LASTEXITCODE -ne 0) {
             throw "Windows demo verification failed. Read the logs under $candidate\PFTDigitalTwin\Saved\Logs."
         }
+        $suites = @('CommonsWalk', 'Navigator')
+        if ($VerifyExtended) { $suites += 'C1007Walk' }
+        foreach ($suite in $suites) {
+            $report = "PFTDigitalTwin/Saved/Automation/$suite/index.json"
+            if (!(Test-Path -LiteralPath (Join-Path $candidate $report) -PathType Leaf)) {
+                throw "Windows demo verification did not produce $report. Read the logs under $candidate\PFTDigitalTwin\Saved\Logs."
+            }
+            $tests[$suite] = $report
+        }
         $verification = 'Passed'
     }
-    Write-BuildRecord $mapHash $cookMode $verification $toolsRevision
+    Write-BuildRecord $mapHash $cookMode $verification $toolsRevision $tests
     Publish-DemoArchive
     Write-Output (Join-Path $package 'Play PFT Demo.cmd')
 } finally {
