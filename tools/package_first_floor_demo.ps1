@@ -6,7 +6,8 @@ param(
     [switch]$Verify,
     [string]$ArchiveDirectory,
     [ValidatePattern('^[A-Za-z0-9_]+$')] [string]$MapName = 'PFTFirstFloorComplete',
-    [switch]$VerifyExtended
+    [switch]$VerifyExtended,
+    [string]$WalkingGraph
 )
 
 $ErrorActionPreference = 'Stop'
@@ -193,27 +194,31 @@ function Confirm-NavigatorInstall {
     # Perforce-only copies of the packaging tools have no Git Navigator source to compare.
     $navigatorSource = Join-Path $PSScriptRoot '../unreal/PFTNavigator'
     if (!(Test-Path -LiteralPath $navigatorSource -PathType Container) -and
-        !(Test-Path -LiteralPath $navigatorCheck -PathType Leaf)) { return }
+        !(Test-Path -LiteralPath $navigatorCheck -PathType Leaf)) {
+        if ($WalkingGraph) { throw '-WalkingGraph requires the Git checkout and its Navigator installer.' }
+        return
+    }
     if (!(Test-Path -LiteralPath $navigatorCheck -PathType Leaf)) { throw 'Navigator installer is missing from the Git tools.' }
     if (!(Test-Path -LiteralPath $navigatorSource -PathType Container)) { throw 'Navigator source is missing from the Git checkout.' }
     $python = Get-Command python -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if (!$python) { throw 'Python is required to verify the Navigator installed in the Unreal project.' }
-    & $python.Source $navigatorCheck $projectFile.FullName --check
+    $checkArguments = @($navigatorCheck, $projectFile.FullName, '--check')
+    if ($WalkingGraph) { $checkArguments += @('--walking-graph', $WalkingGraph) }
+    & $python.Source @checkArguments
     if ($LASTEXITCODE -ne 0) {
         throw 'The installed Navigator could not be verified. See docs/navigator-plugin.md to install this checkout before packaging.'
     }
 }
 
 function Confirm-WalkingMap {
-    if (!$Verify -and !$VerifyExtended) { return }
-    $path = Join-Path $projectRoot 'Plugins/PFTNavigator/Content/Data/first_floor_routes.json'
-    if (!(Test-Path -LiteralPath $path -PathType Leaf)) {
+    if (!$WalkingGraph -and !$Verify -and !$VerifyExtended) { return }
+    if (!(Test-Path -LiteralPath $installedGraph -PathType Leaf)) {
         throw "Verified packaging requires a walking graph for $map. Bake and install first_floor_routes.json before packaging."
     }
     try {
-        $graph = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+        $graph = Get-Content -LiteralPath $installedGraph -Raw | ConvertFrom-Json
     } catch {
-        throw "Could not read the walking graph at $path."
+        throw "Could not read the walking graph at $installedGraph."
     }
     if ($graph.Map -cne $map) {
         throw "The walking graph is for '$($graph.Map)'. Bake and install the graph for $map before packaging."
@@ -230,6 +235,7 @@ function Write-BuildRecord($mapHash, $cookMode, $verification, $toolsRevision, $
         PackagedAtUtc = [DateTime]::UtcNow.ToString('o')
         Map = $map
         MapSha256 = $mapHash
+        WalkingGraphSha256 = $walkingGraphHash
         Engine = $engine
         Tools = $toolsRevision
         CookMode = $cookMode
@@ -280,6 +286,7 @@ if ($map -ne $defaultMap) {
 $null = New-Item -ItemType Directory -Path $mapBuild -Force
 # Standard and candidate builds use the same staging directory.
 $archiveLock = $null
+$installedGraph = Join-Path $projectRoot 'Plugins/PFTNavigator/Content/Data/first_floor_routes.json'
 try {
     $lock = [IO.File]::Open((Join-Path $builds 'WindowsPackage.lock'), 'OpenOrCreate', 'ReadWrite', 'None')
 } catch [IO.IOException] {
@@ -288,6 +295,9 @@ try {
 try {
     Confirm-NavigatorInstall
     Confirm-WalkingMap
+    $walkingGraphHash = if (Test-Path -LiteralPath $installedGraph -PathType Leaf) {
+        (Get-FileHash -LiteralPath $installedGraph).Hash
+    }
     $null = New-Item -ItemType Directory -Path $packageParent -Force
     $archiveLock = [IO.File]::Open((Join-Path $packageParent "$packageName.package.lock"), 'OpenOrCreate', 'ReadWrite', 'None')
     Confirm-DemoArchive $package
@@ -385,6 +395,12 @@ try {
     }
     Confirm-NavigatorInstall
     Confirm-WalkingMap
+    $finalGraphHash = if (Test-Path -LiteralPath $installedGraph -PathType Leaf) {
+        (Get-FileHash -LiteralPath $installedGraph).Hash
+    }
+    if ($walkingGraphHash -ne $finalGraphHash) {
+        throw 'The installed walking graph changed during packaging. Run again with the final graph.'
+    }
     Write-BuildRecord $mapHash $cookMode $verification $toolsRevision $tests
     Publish-DemoArchive
     Write-Output (Join-Path $package 'Play PFT Demo.cmd')

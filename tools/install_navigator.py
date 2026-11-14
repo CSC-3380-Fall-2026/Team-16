@@ -7,7 +7,7 @@ import subprocess
 import validate_data
 
 
-def navigator_files(root, project):
+def navigator_files(root, project, walking_graph=None):
     """Yield each Git source and its matching destination in the Unreal project."""
     source = root / "unreal" / "PFTNavigator"
     destination = project.parent / "Plugins" / "PFTNavigator"
@@ -16,7 +16,11 @@ def navigator_files(root, project):
         if path.is_file() and not set(relative.parts) & {"Binaries", "Intermediate", "Saved"}:
             yield path, destination / relative
     for path in sorted((root / "data").glob("*.json")):
+        if walking_graph is not None and path.name == "first_floor_routes.json":
+            continue
         yield path, destination / "Content" / "Data" / path.name
+    if walking_graph is not None:
+        yield walking_graph, destination / "Content" / "Data" / "first_floor_routes.json"
 
 
 def check_install(project, settings, files):
@@ -40,7 +44,7 @@ def check_install(project, settings, files):
     return problems
 
 
-def install(project, changelist=None, *, check=False):
+def install(project, changelist=None, *, check=False, walking_graph=None):
     project = Path(project).resolve()
     root = Path(__file__).resolve().parents[1]
     if not project.is_file() or project.suffix != ".uproject":
@@ -52,12 +56,21 @@ def install(project, changelist=None, *, check=False):
     errors = validate_data.validate(root / "data")
     if errors:
         raise ValueError("\n".join(errors))
-    files = list(navigator_files(root, project))
+    if walking_graph is not None:
+        walking_graph = Path(walking_graph).resolve()
+        rooms = validate_data.load_file(root / "data", "rooms.json")
+        room_ids = {room["Name"] for room in rooms if room["Floor"] == 1}
+        graph = validate_data.load_file(walking_graph.parent, walking_graph.name)
+        errors = validate_data.check_walking_graph(graph, room_ids)
+        if errors:
+            raise ValueError(f"{walking_graph}: " + "\n".join(errors))
+    files = list(navigator_files(root, project, walking_graph))
     if check:
         problems = check_install(project, settings, files)
         if problems:
             raise ValueError("\n".join(problems))
-        print(f"PFTNavigator matches this checkout ({len(files)} files).")
+        source = "this checkout and the supplied walking graph" if walking_graph else "this checkout"
+        print(f"PFTNavigator matches {source} ({len(files)} files).")
         return
     p4 = shutil.which("p4") or r"C:\Program Files\Perforce\p4.exe"
 
@@ -96,11 +109,12 @@ def install(project, changelist=None, *, check=False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("project", type=Path)
+    parser.add_argument("--walking-graph", type=Path, help="Use a reviewed graph file for the selected map")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--changelist", type=int)
     mode.add_argument("--check", action="store_true", help="Compare installed files without changing the project")
     args = parser.parse_args()
     try:
-        install(args.project, args.changelist, check=args.check)
+        install(args.project, args.changelist, check=args.check, walking_graph=args.walking_graph)
     except (OSError, ValueError) as error:
         parser.exit(1, f"{error}\n")

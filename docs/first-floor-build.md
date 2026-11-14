@@ -282,9 +282,19 @@ graph is available until you choose which map to package.
 ```
 
 Use forward slashes in the script and output paths passed to the Python
-commandlet. Review the graph, then update the Git data and run the Navigator
-installer for the candidate. Verified packaging checks the installed graph's
-map before starting Unreal. The graph must match the selected `-MapName`.
+commandlet. Pass the reviewed graph to both the installer and packager. Use
+your pending changelist for the install in a Perforce workspace.
+
+```powershell
+python tools/install_navigator.py $Project --walking-graph ./first_floor_routes.json --changelist CHANGE_NUMBER
+& ./tools/package_first_floor_demo.ps1 -Project $Project -MapName PFTFirstFloorUpdated `
+  -WalkingGraph ./first_floor_routes.json -ReuseCook -VerifyExtended
+```
+
+Packaging checks that the installed graph matches the supplied file and the
+selected map before starting Unreal. The build record includes the installed
+graph's SHA-256 hash. To switch back to the default map, run the installer
+without `--walking-graph`.
 
 The launcher opens the demo at native 720p with DirectX 11 and a 30 FPS cap.
 Run `& '.\Play PFT Demo.cmd' smooth` to use a 45 FPS cap at the same resolution
