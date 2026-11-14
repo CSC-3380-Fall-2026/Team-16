@@ -47,3 +47,17 @@ class TestInstallNavigator(unittest.TestCase):
             with self.assertRaises(ValueError):
                 install(project)
             self.assertFalse((Path(folder) / "Plugins").exists())
+
+    def test_check_reports_extra_build_inputs(self):
+        with tempfile.TemporaryDirectory() as folder:
+            project = Path(folder) / "Test.uproject"
+            project.write_text('{"EngineAssociation":"5.8"}')
+            install(project)
+            plugin = project.parent / "Plugins" / "PFTNavigator"
+            extra = (plugin / "Source" / "OldRoom.cpp", plugin / "Content" / "Data" / "old_rooms.json")
+            for path in extra:
+                path.write_text("old branch files")
+            with self.assertRaisesRegex(ValueError, "Unexpected .*OldRoom.cpp") as error:
+                install(project, check=True)
+            self.assertIn("old_rooms.json", str(error.exception))
+            self.assertTrue(all(path.is_file() for path in extra))

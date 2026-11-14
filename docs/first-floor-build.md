@@ -26,13 +26,16 @@ Use the same checkout to install or check the Navigator and run the package tool
 
 ```powershell
 $Project = 'C:\path\to\PFTDigitalTwin.uproject'
-python tools/install_navigator.py $Project --check
 & .\tools\package_first_floor_demo.ps1 -Project $Project -ReuseCook -Verify
 ```
 
-If the first command reports differences, run the installer with your pending
-changelist as described in the Navigator instructions before packaging. The
-packaging script uses the launcher and verification tools beside it in Git.
+Packaging from the Git checkout uses Python to check that the installed
+Navigator source and directory data match that checkout. If the check reports
+differences, run the installer with your pending changelist as described in
+the Navigator instructions. If it reports unexpected source or data files,
+review those files and move them out of the plugin if they are leftovers from
+another branch. The packaging script uses the launcher and verification tools
+beside it in Git.
 
 ## Map contents
 
@@ -190,8 +193,9 @@ Keep the files under `Saved` local to the workspace.
 Each published package has a `PFTDemoBuild.json` file beside the launcher.
 It records the selected map and its SHA-256 hash, the Unreal version, the
 cook mode, and whether the packaged checks passed. Builds run from the Git
-checkout also record the packaging tools' commit and whether those files had
-local changes. The test report paths are relative to the package folder.
+checkout also record its commit and whether the packaging tools, Navigator
+source, or directory data had local changes. The test report paths are relative
+to the package folder.
 The archive includes Unreal's bundled Microsoft Visual C++ x64 installer and
 first-run instructions in `Read Me - PFT Demo.txt`. Extract the entire package
 before running the launcher.
