@@ -21,6 +21,7 @@ void UPFTExploration::Tick(float DeltaTime)
     if (Widget)
     {
         Widget->UpdateRouteControls();
+        Widget->UpdateMyClassesClock();
         return;
     }
     if (!GetWorld()->HasBegunPlay() || IsRunningDedicatedServer()) return;
