@@ -251,7 +251,7 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
         if (!TestNotNull(TEXT("A preview pawn is available before switching rooms"), PreviewPawn)) return true;
         const FVector PreviousView = PreviewPawn->GetActorLocation();
         TestTrue(TEXT("Commons is clickable during the room preview"), ClickVisibleWidget(Results[0]));
-        if (!TestEqual(TEXT("Switching previews keeps the same exploration pawn"), Player->GetPawn(), PreviewPawn)) return true;
+        if (!TestTrue(TEXT("Switching previews keeps the same exploration pawn"), Player->GetPawn() == PreviewPawn)) return true;
         auto* Destinations = World->GetSubsystem<UPFTDestinations>();
         TestTrue(TEXT("The camera stays in room preview mode"), Destinations->IsRoomPreviewActive());
         TestTrue(TEXT("Switching previews keeps the cursor available"), Player->bShowMouseCursor);
@@ -268,7 +268,7 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
         TestTrue(TEXT("The search box can be focused during a preview"), ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("RoomSearch"))));
         SetSearch(Panel, TEXT("CSC 1350"));
         TestTrue(TEXT("Enter switches back to the course room preview"), PressKey(EKeys::Enter));
-        if (TestEqual(TEXT("The keyboard switch keeps the same exploration pawn"), Player->GetPawn(), PreviewPawn))
+        if (TestTrue(TEXT("The keyboard switch keeps the same exploration pawn"), Player->GetPawn() == PreviewPawn))
         {
             TestTrue(TEXT("The camera returns to the course room preview point"), PreviewPawn->GetActorLocation().Equals(PreviousView, 1.0));
         }
