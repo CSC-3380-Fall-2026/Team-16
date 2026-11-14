@@ -7,6 +7,27 @@ from install_navigator import install
 
 
 class TestInstallNavigator(unittest.TestCase):
+    def test_candidate_graph_is_installed_and_checked_separately(self):
+        with tempfile.TemporaryDirectory() as folder:
+            project = Path(folder) / "Test.uproject"
+            project.write_text('{"EngineAssociation":"5.8"}')
+            candidate = Path(folder) / "candidate.json"
+            graph = {
+                "Map": "/Game/Level/Candidate",
+                "Step": 60,
+                "Destinations": {"PFT_COMMONS": [0, 0], "PFT_1200": [1, 0]},
+                "Nodes": [[0, 0, 0, 1], [1, 0, 0, 4]],
+            }
+            candidate.write_text(json.dumps(graph))
+            install(project, walking_graph=candidate)
+            install(project, check=True, walking_graph=candidate)
+            with self.assertRaisesRegex(ValueError, "Changed .*first_floor_routes"):
+                install(project, check=True)
+            graph["Nodes"][1][3] = 0
+            candidate.write_text(json.dumps(graph))
+            with self.assertRaisesRegex(ValueError, "no return edge"):
+                install(project, walking_graph=candidate)
+
     def test_install_preserves_project_and_repeated_install(self):
         with tempfile.TemporaryDirectory() as folder:
             project = Path(folder) / "Test.uproject"
