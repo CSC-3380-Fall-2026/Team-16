@@ -131,6 +131,8 @@ room ID uniqueness, room preview coverage, camera clearance and sightlines,
 references, fixture shadows and draw limits, checkerboard and unassigned static-mesh slots, and
 material dependencies. Its `FallbackMaterialSlots` field identifies the actor,
 component, mesh, and slot for each missing surface.
+`MissingRequiredPackages` lists the reference chain from the saved map to each
+missing required package, such as a texture referenced by a material instance.
 Rendered gameplay and packaging need separate checks.
 
 For a selection preview, run `create_first_floor_level.py --dry-run` with
