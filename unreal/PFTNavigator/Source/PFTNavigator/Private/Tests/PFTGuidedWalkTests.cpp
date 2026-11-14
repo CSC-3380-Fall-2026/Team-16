@@ -6,6 +6,7 @@
 #include "PFTRoutes.h"
 #include "PFTViewportTest.h"
 #include "Components/EditableTextBox.h"
+#include "Components/LineBatchComponent.h"
 #include "Components/TextBlock.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
@@ -63,13 +64,29 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
             TestFalse(TEXT("The player can walk"), Player->IsMoveInputIgnored());
             TestFalse(TEXT("The player can look"), Player->IsLookInputIgnored());
 
-            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Player, Character, Routes, Tree,
+            auto* Trail = FindObject<ULineBatchComponent>(Routes, TEXT("PFTWalkingTrail"));
+            if (!TestNotNull(TEXT("The route creates a trail component"), Trail)) return true;
+            if (!TestTrue(TEXT("The trail draws multiple arrows"), Trail->BatchedLines.Num() >= 8)) return true;
+            const TArray<FBatchedLine> InitialArrows = Trail->BatchedLines;
+            ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.4f));
+            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Trail, InitialArrows]()
+            {
+                if (!TestTrue(TEXT("Arrows stay visible while standing still"), Trail->BatchedLines.Num() >= 8)) return true;
+                const auto& Arrow = Trail->BatchedLines[2];
+                TestTrue(TEXT("The arrows move while the player is stationary"),
+                    !InitialArrows[2].End.Equals(Arrow.End, 2.0));
+                TestTrue(TEXT("The two arms meet at the arrow tip"), Arrow.End.Equals(Trail->BatchedLines[3].Start));
+                return true;
+            }));
+
+            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Player, Character, Routes, Tree, Trail,
                 Deadline = FPlatformTime::Seconds() + 65.0]()
             {
                 const FVector Position = Character->GetActorLocation();
                 if (Routes->HasArrived())
                 {
                     TestTrue(TEXT("The player reaches the Commons"), FVector::Dist2D(Position, FVector(14900, -5160, 0)) < 180);
+                    TestTrue(TEXT("Arrival clears the arrow trail"), Trail->BatchedLines.IsEmpty());
                     auto* Hint = Cast<UTextBlock>(Tree->FindWidget(TEXT("RouteHint")));
                     if (TestNotNull(TEXT("Walking instructions"), Hint))
                         TestTrue(TEXT("The arrival message names the Commons"), Hint->GetText().ToString().Contains(TEXT("Arrived at PFT Commons")));

@@ -18,6 +18,26 @@ namespace
     constexpr double ArrivalRadius = 65.0;
     constexpr double FloorTolerance = 45.0;
     constexpr int32 StartSearchCells = 3;
+    constexpr double ArrowSpacing = 125.0;
+    constexpr double ArrowSpeed = 85.0;
+    constexpr double TrailLength = 1600.0;
+
+    void AddArrow(TArray<FBatchedLine>& Lines, const FVector& Center, const FVector& Forward, float Opacity)
+    {
+        const FVector Side(-Forward.Y, Forward.X, 0);
+        const FVector Tip = Center + Forward * 17;
+        const FVector Back = Center - Forward * 15;
+        const FVector Left = Back - Side * 17;
+        const FVector Right = Back + Side * 17;
+        const FLinearColor Outline(0.045f, 0.02f, 0.055f, Opacity);
+        FLinearColor Gold(PFTPalette::Gold);
+        Gold.A = Opacity;
+        const FVector Lift(0, 0, 0.5);
+        Lines.Emplace(Left, Tip, Outline, -1, 10, SDPG_World);
+        Lines.Emplace(Tip, Right, Outline, -1, 10, SDPG_World);
+        Lines.Emplace(Left + Lift, Tip + Lift, Gold, -1, 6, SDPG_World);
+        Lines.Emplace(Tip + Lift, Right + Lift, Gold, -1, 6, SDPG_World);
+    }
 
     FVector CapsuleCenter(const ACharacter& Character, const FVector& Floor)
     {
@@ -174,7 +194,6 @@ bool UPFTRoutes::Start(ACharacter& Character, const FString& RoomId, const FStri
     Destination = RoomName;
     Walker = &Character;
     Tick(0);
-    if (IsGuiding()) DrawPath();
     return IsGuiding() || HasArrived();
 }
 
@@ -189,6 +208,7 @@ void UPFTRoutes::Tick(float DeltaTime)
         Stop();
         return;
     }
+    DrawPath();
     UpdateTime -= DeltaTime;
     if (UpdateTime > 0) return;
     UpdateTime = 0.15f;
@@ -204,7 +224,6 @@ void UPFTRoutes::Tick(float DeltaTime)
         return;
     }
 
-    const int32 PreviousIndex = NextIndex;
     // Skip nearby points only if the walking capsule can reach the next point directly.
     while (NextIndex + 1 < Path.Num()
         && FVector::Dist2D(Position, Path[NextIndex]) <= WaypointRadius
@@ -220,9 +239,7 @@ void UPFTRoutes::Tick(float DeltaTime)
             EndGuidance(FText::FromString(TEXT("Route lost. Return to a first-floor hallway and try again.")));
             return;
         }
-        DrawPath();
     }
-    else if (PreviousIndex != NextIndex) DrawPath();
 
     const double Distance = FVector::Dist2D(Position, NextPoint());
     const FVector Toward = (NextPoint() - Position).GetSafeNormal2D();
@@ -240,18 +257,40 @@ void UPFTRoutes::DrawPath()
 {
     if (!Trail)
     {
-        Trail = NewObject<ULineBatchComponent>(this);
+        Trail = NewObject<ULineBatchComponent>(this, TEXT("PFTWalkingTrail"));
         Trail->bCalculateAccurateBounds = true;
         Trail->RegisterComponentWithWorld(GetWorld());
     }
     Trail->Flush();
-    const FVector Lift(0, 0, 8);
-    const FLinearColor Color(PFTPalette::Gold);
-    for (int32 Index = NextIndex; Index < FMath::Min(Path.Num() - 1, NextIndex + 32); ++Index)
+
+    // Grid edges are one Step long in XY. Keep the animation phase when the first edge is skipped.
+    const double Phase = GetWorld()->GetTimeSeconds() * ArrowSpeed - NextIndex * Step;
+    double ArrowDistance = FMath::Fmod(FMath::Fmod(Phase, ArrowSpacing) + ArrowSpacing, ArrowSpacing);
+    TArray<FBatchedLine> Lines;
+    Lines.Reserve(56);
+    const FVector FloorLift(0, 0, 8);
+    const double VisibleLength = FMath::Min(TrailLength, static_cast<double>(Path.Num() - NextIndex - 1) * Step);
+    double EdgeStart = 0;
+    for (int32 Index = NextIndex; EdgeStart < VisibleLength; ++Index)
     {
-        Trail->DrawLine(Path[Index] + Lift, Path[Index + 1] + Lift, Color, SDPG_World, 4, -1);
+        const double EdgeEnd = EdgeStart + Step;
+        const FVector Direction = (Path[Index + 1] - Path[Index]).GetSafeNormal2D();
+        while (ArrowDistance < EdgeEnd && ArrowDistance < VisibleLength)
+        {
+            const double FadeIn = FMath::Clamp(ArrowDistance / 65.0, 0.0, 1.0);
+            const double FadeOut = FMath::Clamp((VisibleLength - ArrowDistance) / 100.0, 0.0, 1.0);
+            const FVector Center = FMath::Lerp(Path[Index], Path[Index + 1], (ArrowDistance - EdgeStart) / Step);
+            AddArrow(Lines, Center + FloorLift, Direction, static_cast<float>(FadeIn * FadeOut));
+            ArrowDistance += ArrowSpacing;
+        }
+        EdgeStart = EdgeEnd;
     }
-    Trail->DrawPoint(NextPoint() + Lift, Color, 10, SDPG_World, -1);
+    if (Lines.IsEmpty() && Path.Num() >= 2)
+    {
+        const FVector Direction = (Path.Last() - Path[Path.Num() - 2]).GetSafeNormal2D();
+        AddArrow(Lines, Path.Last() + FloorLift, Direction, 1.0f);
+    }
+    Trail->DrawLines(Lines);
 }
 
 void UPFTRoutes::EndGuidance(const FText& NewMessage)
