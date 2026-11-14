@@ -123,6 +123,17 @@ in Unreal to review it before updating `EditorStartupMap`, `GameDefaultMap`,
 and `MapsToCook`. Use `p4 add` for the selected new map and `p4 edit` before
 changing any versioned map, script, or configuration.
 
+For a finished map copied from a Perforce shelf or another workspace, use
+`-VerifyExisting` in place of `-Resume`. It verifies the saved map without
+regenerating it or requiring the original build report. Install the matching
+graph first if you also pass `-PackageDemo`. Use a short archive path to avoid
+Windows path length limits when Unreal loads the packaged game.
+
+```powershell
+& ./tools/rebuild_first_floor.ps1 -Project $Project -MapName PFTFirstFloorRebuildReview `
+  -VerifyExisting -PackageDemo -WalkingGraph $Graph -ArchiveDirectory "$env:USERPROFILE\PFTReview"
+```
+
 Select `/Game/Level/PatrickFTaylorHall` manually to work on the complete building.
 To package the complete twin again, change the startup maps and packaging map
 list back to that map. Changing only `MapsToCook` leaves the game startup map
