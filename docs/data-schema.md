@@ -69,3 +69,7 @@ numbers, and broken references. Each course row identifies one selected lecture
 location. Use LSU Course Offerings to check a specific section and its meeting times.
 
 Run `python tools/validate_data.py` after changing anything in here.
+
+If `first_floor_routes.json` is present, validation also checks its grid,
+two-way links, and connectivity from the Commons to every listed first-floor
+destination. Unreal's walkthrough tests check movement on the actual map.
