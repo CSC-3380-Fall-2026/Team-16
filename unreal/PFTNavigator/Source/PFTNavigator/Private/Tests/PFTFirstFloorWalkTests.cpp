@@ -31,9 +31,9 @@ namespace
     {
     public:
         FWalkFirstFloor(FAutomationTestBase& InTest, APlayerController* InPlayer, ACharacter* InCharacter,
-            TArray<FVector2D> InWaypoints, double InTimeLimit, UTextBlock* InRoomHud)
+            TArray<FVector2D> InWaypoints, double InTimeLimit, UTextBlock* InRoomHud, const FString& InDestination)
             : Test(InTest), Player(InPlayer), Character(InCharacter), Waypoints(MoveTemp(InWaypoints)),
-              TimeLimit(InTimeLimit), RoomHud(InRoomHud), bCheckLocation(InRoomHud != nullptr)
+              TimeLimit(InTimeLimit), RoomHud(InRoomHud), Destination(InRoomHud ? InDestination : FString())
         {
             #if CSV_PROFILER
             FCsvProfiler::Get()->BeginCapture();
@@ -70,10 +70,10 @@ namespace
                     {
                         return Finish(TEXT("The route ended off the floor"));
                     }
-                    if (bCheckLocation)
+                    if (!Destination.IsEmpty())
                     {
                         const FString RoomNumber = RoomHud.IsValid() ? RoomHud->GetText().ToString() : FString();
-                        Test.TestEqual(TEXT("The Commons HUD shows C1008"), RoomNumber, FString(TEXT("C1008")));
+                        Test.TestEqual(TEXT("The HUD shows the destination hallway"), RoomNumber, Destination);
                     }
                     Test.AddInfo(FString::Printf(TEXT("Reached all %d route points in %.2f seconds"),
                         Waypoints.Num(), FPlatformTime::Seconds() - StartTime));
@@ -107,7 +107,7 @@ namespace
         const TArray<FVector2D> Waypoints;
         const double TimeLimit;
         TWeakObjectPtr<UTextBlock> RoomHud;
-        const bool bCheckLocation;
+        const FString Destination;
         double StartTime = FPlatformTime::Seconds();
         int32 NextPoint = 0;
         #if CSV_PROFILER
@@ -117,8 +117,9 @@ namespace
     const TArray<FVector2D> Zone1200Waypoints = {
         {10300, -6280}, {10300, -6400}, {10660, -6400}, {10660, -6640}, {11860, -6640}, {11860, -6520}
     };
+    const TArray<FVector2D> CommonsWaypoints = {{14020, -5720}, {14820, -5160}, {14900, -5160}};
 
-    bool StartWalk(FAutomationTestBase& Test, TArray<FVector2D> Waypoints, double TimeLimit, bool bCheckLocation = false)
+    bool StartWalk(FAutomationTestBase& Test, TArray<FVector2D> Waypoints, double TimeLimit, const FString& Destination = FString())
     {
         UWorld* World = GEngine && GEngine->GameViewport ? GEngine->GameViewport->GetWorld() : nullptr;
         FString ExpectedMap = TEXT("/Game/Level/PFTFirstFloorComplete");
@@ -140,13 +141,13 @@ namespace
             return false;
         }
         UTextBlock* RoomHud = nullptr;
-        if (bCheckLocation && World->GetWorldSettings()->ActorHasTag(TEXT("PFTLocalLocation")))
+        if (!Destination.IsEmpty() && World->GetWorldSettings()->ActorHasTag(TEXT("PFTLocalLocation")))
         {
             RoomHud = FindRoomHud(Player);
             if (!Test.TestNotNull(TEXT("First-floor room HUD"), RoomHud)) return false;
             Test.TestEqual(TEXT("The entrance HUD shows C1003"), RoomHud->GetText().ToString(), FString(TEXT("C1003")));
         }
-        ADD_LATENT_AUTOMATION_COMMAND(FWalkFirstFloor(Test, Player, Character, MoveTemp(Waypoints), TimeLimit, RoomHud));
+        ADD_LATENT_AUTOMATION_COMMAND(FWalkFirstFloor(Test, Player, Character, MoveTemp(Waypoints), TimeLimit, RoomHud, Destination));
         return true;
     }
 }
@@ -165,8 +166,19 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPFTCommonsWalkTest, "PFTFirstFloor.WalkToCommo
 bool FPFTCommonsWalkTest::RunTest(const FString& Parameters)
 {
     TArray<FVector2D> Waypoints = Zone1200Waypoints;
-    Waypoints.Append({ {14020, -5720}, {14820, -5160}, {14900, -5160} });
-    return StartWalk(*this, MoveTemp(Waypoints), 45.0, true);
+    Waypoints.Append(CommonsWaypoints);
+    return StartWalk(*this, MoveTemp(Waypoints), 45.0, TEXT("C1008"));
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPFTCrossBuildingWalkTest, "PFTFirstFloor.WalkToC1007",
+    EAutomationTestFlags::ClientContext | EAutomationTestFlags::PerfFilter)
+
+bool FPFTCrossBuildingWalkTest::RunTest(const FString& Parameters)
+{
+    TArray<FVector2D> Waypoints = Zone1200Waypoints;
+    Waypoints.Append(CommonsWaypoints);
+    Waypoints.Append({ {13700, -600}, {13700, 200}, {13380, 1080}, {12980, 920} });
+    return StartWalk(*this, MoveTemp(Waypoints), 65.0, TEXT("C1007"));
 }
 
 #endif
