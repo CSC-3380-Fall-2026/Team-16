@@ -86,7 +86,7 @@ Use **Show more rooms** to load the next set of results in a broad search. The
 list starts over when you change the search or floor.
 Press Enter in the search box when there is one result to open its preview.
 For a room without a map location, Enter shows its directory details.
-**View selected room** moves the exploration camera near that marker. Unbound
+**Preview room** moves the exploration camera near that marker. Unbound
 rooms show an explanation and never move the camera to an invented location.
 
 The room and camera buttons appear above the room details. Click **Free camera**
@@ -117,11 +117,12 @@ all rooms, or choose a floor to narrow the list. Floor choices come from the
 loaded room data. Searches for rooms and courses also respect the selected floor;
 course results use the floor of their assigned room. Department and faculty
 results use their office floor. Blank-query room lists are ordered by floor
-and room number. Searches preserve their result order, and up to 50 are shown.
+and room number. Searches preserve their result order. The first 50 are shown, and
+**Show more rooms** loads the rest.
 
 Selecting a result shows the room number, floor, room type, and department offices, faculty, and any courses
 assigned in the directory. Unbound rooms still show their details, but
-**View selected room** stays disabled. **Clear selected room** hides the marker
+**Preview room** stays disabled. **Clear** hides the marker
 and clears the details without moving the camera. Results for the selected room get
 a gold **Selected** tag that stays when you search or change floors and goes away
 when you clear the room. Scroll the panel to reach

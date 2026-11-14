@@ -104,7 +104,7 @@ bool FPFTExplorationTest::RunTest(const FString& Parameters)
     TestTrue(TEXT("Selected details show floor"), Details->GetText().ToString().Contains(TEXT("Floor 1")));
     TestTrue(TEXT("Selected details show course"), Details->GetText().ToString().Contains(TEXT("CSC 1350")));
     TestTrue(TEXT("Bound room enables view"), ViewButton->GetIsEnabled());
-    if (!TestTrue(TEXT("View selected room"), Exploration->ViewRoom()))
+    if (!TestTrue(TEXT("Preview room"), Exploration->ViewRoom()))
     {
         AddError(Exploration->Error);
         Cleanup();
