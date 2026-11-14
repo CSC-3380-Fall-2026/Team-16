@@ -80,6 +80,8 @@ Turn on **Find a class by instructor or time** to search the bundled Fall 2026
 meetings. Enter part of the instructor's name and optionally pick a meeting
 day and start time. For example, Duncan on Wednesday at 10:30 AM shows CSC 1350
 in PFT 1200. Select the match to preview the room or start a walking route.
+Use **Reset class search** to clear the course, instructor, day, time, floor,
+and preview filters and see all included meetings again.
 Use **Show more rooms** to load the next set of results in a broad search. The
 list starts over when you change the search or floor.
 Press Enter in the search box when there is one result to open its preview.

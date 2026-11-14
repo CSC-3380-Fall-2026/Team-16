@@ -41,6 +41,7 @@ private:
     UFUNCTION() void FloorChanged(FString Floor, ESelectInfo::Type SelectionType);
     UFUNCTION() void PreviewFilterChanged(bool bChecked);
     UFUNCTION() void ClassFilterChanged(bool bChecked);
+    UFUNCTION() void ResetClassSearch();
     UFUNCTION() void ClearRoom();
     UFUNCTION() void ShowMoreRooms();
     void RefreshResults();
@@ -85,5 +86,6 @@ private:
     // Room that's currently picked, empty when nothing is selected
     FString SelectedRoomId;
     bool bCompactDirections = false;
+    bool bResettingClassSearch = false;
     float StandardRenderScale = 100.0f;
 };

@@ -390,6 +390,29 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
         TestTrue(TEXT("The result can start a walk"), Panel->WidgetTree->FindWidget(TEXT("RouteButton"))->IsVisible());
         return true;
     }));
+    ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
+    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World]()
+    {
+        auto* Panel = FindNavigator(World);
+        if (!Panel) return true;
+        auto* Tree = Panel->WidgetTree.Get();
+        auto* Floor = CastChecked<UComboBoxString>(Tree->FindWidget(TEXT("FloorFilter")));
+        auto* Preview = CastChecked<UCheckBox>(Tree->FindWidget(TEXT("PreviewOnlyFilter")));
+        Floor->SetSelectedOption(TEXT("3"));
+        SetSearch(Panel, TEXT("CSC 1350"));
+        Preview->SetIsChecked(true);
+        Preview->OnCheckStateChanged.Broadcast(true);
+        TestEqual(TEXT("The combined filters can leave no results"), GetResults(Panel).Num(), 0);
+        if (!TestTrue(TEXT("Reset is clickable with no results"), ClickVisibleWidget(Tree->FindWidget(TEXT("ResetClassSearchButton")))))
+            return true;
+        TestEqual(TEXT("Reset shows both bundled meetings"), GetResults(Panel).Num(), 2);
+        TestEqual(TEXT("Reset restores all floors"), Floor->GetSelectedOption(), FString(TEXT("All floors")));
+        TestFalse(TEXT("Reset clears preview-only browsing"), Preview->IsChecked());
+        TestTrue(TEXT("Reset keeps class search active"), CastChecked<UCheckBox>(Tree->FindWidget(TEXT("ClassSearchFilter")))->IsChecked());
+        TestTrue(TEXT("Reset clears the instructor"), CastChecked<UEditableTextBox>(Tree->FindWidget(TEXT("InstructorSearch")))->GetText().IsEmpty());
+        TestFalse(TEXT("Reset deactivates walking to the previous result"), Tree->FindWidget(TEXT("RouteButton"))->IsVisible());
+        return true;
+    }));
     return true;
 }
 #endif
