@@ -49,6 +49,7 @@ private:
 
     TMap<FIntPoint, FNode> Nodes;
     TMap<FString, FIntPoint> Destinations;
+    TMap<FString, FVector2D> Landmarks;
     TArray<FVector> Path;
     TArray<double> TurnSeconds;
     UPROPERTY() TObjectPtr<ULineBatchComponent> Trail;
