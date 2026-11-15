@@ -124,7 +124,9 @@ bool FPFTExplorationTest::RunTest(const FString& Parameters)
     TestTrue(TEXT("Clear hides previous marker"), Marker->IsHidden());
     TestFalse(TEXT("Clear disables room view"), ViewButton->GetIsEnabled());
     Panel->ChooseRoom(TEXT("PFT_3307"));
-    TestTrue(TEXT("Unbound room still shows details"), Details->GetText().ToString().Contains(TEXT("3307")));
+    const auto* SelectedRoom = CastChecked<UTextBlock>(Panel->WidgetTree->FindWidget(TEXT("SelectedRoomLabel")));
+    TestTrue(TEXT("Unbound room still shows its number"), SelectedRoom->GetText().ToString().Contains(TEXT("3307")));
+    TestTrue(TEXT("Unbound room still shows details"), Details->GetText().ToString().Contains(TEXT("Floor 3")));
     TestFalse(TEXT("Unbound room cannot move camera"), ViewButton->GetIsEnabled());
     TestTrue(TEXT("Unbound room can be cleared"), ClearButton->GetIsEnabled());
     FloorFilter->SetSelectedOption(TEXT("3"));
