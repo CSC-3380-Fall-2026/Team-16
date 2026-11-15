@@ -561,6 +561,9 @@ void UPFTNavigatorWidget::StopRoute()
 {
     GetWorld()->GetSubsystem<UPFTRoutes>()->Stop();
     UpdateRouteControls();
+    Browser->ScrollToStart();
+    if (RouteButton->IsVisible()) RouteButton->SetKeyboardFocus();
+    else Search->SetKeyboardFocus();
 }
 
 void UPFTNavigatorWidget::FindAnotherRoom()

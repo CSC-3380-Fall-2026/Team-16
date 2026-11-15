@@ -14,7 +14,10 @@
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "Misc/AutomationTest.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 #include "Tests/AutomationCommon.h"
+#include "UnrealClient.h"
 #include "PFTViewportTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -130,6 +133,14 @@ namespace
         return bHandled;
     }
 
+    void CaptureQAView(const TCHAR* Name)
+    {
+        if (FParse::Param(FCommandLine::Get(), TEXT("PFTQAScreenshots")))
+        {
+            FScreenshotRequest::RequestScreenshot(Name, true, true, false);
+        }
+    }
+
     UPFTNavigatorWidget* FindNavigator(UWorld* World)
     {
         TArray<UUserWidget*> Widgets;
@@ -232,6 +243,7 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
         TestNotNull(TEXT("The preview possesses the exploration pawn"), Cast<APFTExplorePawn>(Player->GetPawn()));
         TestTrue(TEXT("The preview keeps the cursor available"), Player->bShowMouseCursor);
         TestTrue(TEXT("Preview explains how to leave its fixed view"), GetCameraHelp(Panel).StartsWith(TEXT("Room preview")));
+        CaptureQAView(TEXT("PFTQA-RoomPreview"));
         auto* Marker = World->GetSubsystem<UPFTDestinations>()->ActiveMarker.Get();
         if (TestNotNull(TEXT("The preview keeps the room selected"), Marker))
         {
@@ -433,6 +445,7 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
         TestTrue(TEXT("The classroom result is clickable"), ClickVisibleWidget(Results[0]));
         TestTrue(TEXT("The classroom is selected"), GetTaggedRooms(Panel).Contains(TEXT("PFT_1200")));
         TestTrue(TEXT("The result can start a walk"), Panel->WidgetTree->FindWidget(TEXT("RouteButton"))->IsVisible());
+        CaptureQAView(TEXT("PFTQA-ClassSearch"));
         return true;
     }));
     ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
@@ -478,6 +491,21 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
         if (!TestTrue(TEXT("Tab from search reaches Walk there first"), Walk->HasKeyboardFocus())) return true;
         PressKey(EKeys::Enter);
         TestTrue(TEXT("Enter starts the selected walk"), Tree->FindWidget(TEXT("DirectionsHud"))->IsVisible());
+        CaptureQAView(TEXT("PFTQA-ActiveRoute"));
+        return true;
+    }));
+    ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
+    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World]()
+    {
+        auto* Panel = FindNavigator(World);
+        if (!Panel) return true;
+        auto* Tree = Panel->WidgetTree.Get();
+        auto* Stop = Tree->FindWidget(TEXT("StopRouteButton"));
+        if (!TestTrue(TEXT("The active walk can be stopped"), Stop->IsVisible())) return true;
+        Stop->SetKeyboardFocus();
+        PressKey(EKeys::Enter);
+        TestTrue(TEXT("Stopping the walk reopens the browser"), Tree->FindWidget(TEXT("RoomBrowser"))->IsVisible());
+        TestTrue(TEXT("Stopping the walk restores focus to Walk there"), Tree->FindWidget(TEXT("RouteButton"))->HasKeyboardFocus());
         return true;
     }));
     return true;
