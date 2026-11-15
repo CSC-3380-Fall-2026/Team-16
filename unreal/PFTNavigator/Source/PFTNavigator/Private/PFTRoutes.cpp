@@ -462,6 +462,18 @@ void UPFTRoutes::Stop()
     EndGuidance(FText::GetEmpty());
 }
 
+TArrayView<const FVector> UPFTRoutes::GetRemainingPath() const
+{
+    if (!IsGuiding() || bReplanning || !Path.IsValidIndex(NextIndex)) return {};
+    return MakeArrayView(Path).RightChop(NextIndex);
+}
+
+int32 UPFTRoutes::CopyWalkableCells(TArray<FIntPoint>& Cells) const
+{
+    Nodes.GenerateKeyArray(Cells);
+    return Step;
+}
+
 void UPFTRoutes::Deinitialize()
 {
     Stop();

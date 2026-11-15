@@ -15,8 +15,11 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
+#include "Misc/CommandLine.h"
 #include "Misc/ConfigCacheIni.h"
+#include "Misc/Parse.h"
 #include "Tests/AutomationCommon.h"
+#include "UnrealClient.h"
 
 namespace
 {
@@ -105,6 +108,41 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
             auto* Trail = FindObject<ULineBatchComponent>(Routes, TEXT("PFTWalkingTrail"));
             if (!TestNotNull(TEXT("The route creates a trail component"), Trail)) return true;
             if (!TestTrue(TEXT("The trail draws multiple arrows"), Trail->BatchedLines.Num() >= 8)) return true;
+            auto* Overview = Tree->FindWidget(TEXT("RouteOverview"));
+            auto* MapButton = Tree->FindWidget(TEXT("RouteOverviewButton"));
+            if (!TestNotNull(TEXT("The route overview exists"), Overview)) return true;
+            TestFalse(TEXT("The map starts closed"), Overview->IsVisible());
+            ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
+            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, MapButton, Overview]()
+            {
+                TestTrue(TEXT("Show map is clickable"), PFTViewportTest::ClickVisibleWidget(MapButton));
+                TestTrue(TEXT("Show map opens the route overview"), Overview->IsVisible());
+                return true;
+            }));
+            ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.2f));
+            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, MapButton, Overview, Player, Character, Routes]()
+            {
+                TestTrue(TEXT("The map has room to render"), Overview->GetCachedGeometry().GetLocalSize().Y >= 184);
+                TestTrue(TEXT("The route map leaves walking active"), Player->GetPawn() == Character
+                    && !Player->IsMoveInputIgnored() && !Routes->GetRemainingPath().IsEmpty());
+                if (FParse::Param(FCommandLine::Get(), TEXT("PFTQAOverview")))
+                    FScreenshotRequest::RequestScreenshot(TEXT("PFTQA-RouteOverview"), true, true, false);
+                return true;
+            }));
+            ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.2f));
+            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, MapButton, Overview]()
+            {
+                TestTrue(TEXT("Hide map is clickable"), PFTViewportTest::ClickVisibleWidget(MapButton));
+                TestFalse(TEXT("Hide map restores compact directions"), Overview->IsVisible());
+                return true;
+            }));
+            ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.2f));
+            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, MapButton, Overview]()
+            {
+                TestTrue(TEXT("The overview can be reopened"), PFTViewportTest::ClickVisibleWidget(MapButton));
+                TestTrue(TEXT("The overview is visible again"), Overview->IsVisible());
+                return true;
+            }));
             const TArray<FBatchedLine> InitialArrows = Trail->BatchedLines;
             auto StationaryTip = MakeShared<FVector>();
             ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.4f));
@@ -150,6 +188,8 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
                     ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
                     ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Navigator, Tree, Character, Routes, ArrivalLabel]()
                     {
+                        TestFalse(TEXT("Arrival closes the overview"), Tree->FindWidget(TEXT("RouteOverview"))->IsVisible());
+                        TestTrue(TEXT("Arrival clears the overview path"), Routes->GetRemainingPath().IsEmpty());
                         TestTrue(TEXT("Find another room is clickable after arrival"),
                             PFTViewportTest::ClickVisibleWidget(Tree->FindWidget(TEXT("FindAnotherRoomButton"))));
                         TestTrue(TEXT("Find another room restores the browser"), Tree->FindWidget(TEXT("RoomBrowser"))->IsVisible());
