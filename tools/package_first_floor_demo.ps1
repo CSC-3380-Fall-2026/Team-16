@@ -156,6 +156,25 @@ function Confirm-DemoArchive($directory) {
     }
 }
 
+function Remove-FailedDemoArchive {
+    $directory = Get-Item -LiteralPath $candidate -Force -ErrorAction SilentlyContinue
+    if (!$directory) { return }
+    if (!$directory.PSIsContainer -or $directory.FullName -ine $candidate -or
+        $directory.Parent.FullName -ine $packageParent -or
+        ($directory.Attributes -band [IO.FileAttributes]::ReparsePoint) -or
+        (Get-ChildItem -LiteralPath $candidate -Recurse -Force |
+            Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint } | Select-Object -First 1)) {
+        throw "Unexpected contents in the failed archive at $candidate."
+    }
+    $saved = Join-Path $candidate 'PFTDigitalTwin\Saved'
+    if ([IO.Directory]::Exists($saved)) {
+        $diagnostics = Join-Path $packageParent "$packageName.failed-$buildId"
+        [IO.Directory]::Move($saved, $diagnostics)
+        Write-Host "Saved failed demo logs and reports in $diagnostics."
+    }
+    Remove-Item -LiteralPath $candidate -Recurse -Force
+}
+
 function Publish-DemoArchive {
     Confirm-DemoArchive $package
     $hasPrevious = [IO.Directory]::Exists($package)
@@ -177,6 +196,8 @@ function Publish-DemoArchive {
 function Get-ToolsRevision {
     $git = Get-Command git -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if (!$git) { return $null }
+    # Git can report that the tools are outside a checkout on Windows PowerShell.
+    $ErrorActionPreference = 'Continue'
     $files = @(
         'package_first_floor_demo.ps1', 'Play PFT Demo.cmd', 'measure_demo_frames.ps1',
         'check_demo_assets.ps1', 'Read Me - PFT Demo.txt', 'install_navigator.py', 'validate_data.py'
@@ -286,6 +307,7 @@ if ($map -ne $defaultMap) {
 $null = New-Item -ItemType Directory -Path $mapBuild -Force
 # Standard and candidate builds use the same staging directory.
 $archiveLock = $null
+$removeCandidateOnFailure = $false
 $installedGraph = Join-Path $projectRoot 'Plugins/PFTNavigator/Content/Data/first_floor_routes.json'
 try {
     $lock = [IO.File]::Open((Join-Path $builds 'WindowsPackage.lock'), 'OpenOrCreate', 'ReadWrite', 'None')
@@ -302,6 +324,7 @@ try {
     $archiveLock = [IO.File]::Open((Join-Path $packageParent "$packageName.package.lock"), 'OpenOrCreate', 'ReadWrite', 'None')
     Confirm-DemoArchive $package
     [IO.Directory]::CreateDirectory($candidate) > $null
+    $removeCandidateOnFailure = $true
     Write-Host "Building the replacement demo in $candidate."
     $mapHash = (Get-FileHash -LiteralPath $mapFile).Hash
     $toolsRevision = Get-ToolsRevision
@@ -378,7 +401,7 @@ try {
         $mode = if ($VerifyExtended) { 'verifyextended' } else { 'verify' }
         & $packageLauncher $mode
         if ($LASTEXITCODE -ne 0) {
-            throw "Windows demo verification failed. Read the logs under $candidate\PFTDigitalTwin\Saved\Logs."
+            throw 'Windows demo verification failed. See the walkthrough results.'
         }
         $suites = [ordered]@{
             CommonsWalk = 'PFTFirstFloor.WalkToCommons'
@@ -402,8 +425,15 @@ try {
         throw 'The installed walking graph changed during packaging. Run again with the final graph.'
     }
     Write-BuildRecord $mapHash $cookMode $verification $toolsRevision $tests
+    $removeCandidateOnFailure = $false
     Publish-DemoArchive
     Write-Output (Join-Path $package 'Play PFT Demo.cmd')
+} catch {
+    if ($removeCandidateOnFailure) {
+        try { Remove-FailedDemoArchive }
+        catch { Write-Warning "Could not clean the failed archive at $candidate. $($_.Exception.Message)" }
+    }
+    throw
 } finally {
     if ($archiveLock) { $archiveLock.Dispose() }
     $lock.Dispose()

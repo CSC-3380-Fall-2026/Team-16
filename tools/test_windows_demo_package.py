@@ -24,12 +24,18 @@ def stage_fixture(archive, case):
     """Stand in for UAT staging and the game's automation report export."""
     package, = Path(archive).glob("Windows.pending-*")
     (package / "PFTDigitalTwin.exe").write_text(case)
+    if case == "cook failure":
+        sys.exit(7)
     (package / "Manifest_UFSFiles_Win64.txt").touch()
     redist = package / "Engine" / "Extras" / "Redist" / "en-us"
     redist.mkdir(parents=True)
     (redist / "vc_redist.x64.exe").touch()
+    saved = package / "PFTDigitalTwin" / "Saved"
+    logs = saved / "Logs"
+    logs.mkdir(parents=True)
+    (logs / "Navigator.log").write_text(case)
     for suite, test_path in REPORTS.items():
-        report = package / "PFTDigitalTwin" / "Saved" / "Automation" / suite / "index.json"
+        report = saved / "Automation" / suite / "index.json"
         report.parent.mkdir(parents=True)
         failed = case == "bad report" and suite == "Navigator"
         report.write_text(json.dumps({
@@ -118,6 +124,27 @@ class TestWindowsDemoPackage(unittest.TestCase):
         self.assertIn("did not confirm a successful PFTNavigator.Panel.AfterOnboarding", failed.stderr)
         self.assertEqual(manifest.read_bytes(), original)
         self.assertEqual((package / "PFTDigitalTwin.exe").read_text(), "passed")
+        self.assertEqual(list(self.archive.glob("Windows.pending-*")), [])
+        diagnostics, = self.archive.glob("Windows.failed-*")
+        failed_report = diagnostics / "Automation" / "Navigator" / "index.json"
+        self.assertEqual(json.loads(failed_report.read_text())["failed"], 1)
+        self.assertEqual((diagnostics / "Logs" / "Navigator.log").read_text(), "bad report")
+        self.assertIn(str(diagnostics), failed.stdout)
+        self.assertFalse((diagnostics / "PFTDigitalTwin.exe").exists())
+
+        cook_failure = self.run_package("cook failure", *graph_options)
+        self.assertNotEqual(cook_failure.returncode, 0)
+        self.assertIn("Unreal packaging failed with exit code 7", cook_failure.stderr)
+        self.assertEqual(list(self.archive.glob("Windows.pending-*")), [])
+        self.assertEqual(list(self.archive.glob("Windows.failed-*")), [diagnostics])
+        self.assertEqual(manifest.read_bytes(), original)
+
+        retry = self.run_package("retried", *graph_options)
+        self.assertEqual(retry.returncode, 0, retry.stdout + retry.stderr)
+        self.assertEqual((package / "PFTDigitalTwin.exe").read_text(), "retried")
+        self.assertEqual(list(self.archive.glob("Windows.pending-*")), [])
+        previous, = self.archive.glob("Windows.previous-*")
+        self.assertEqual((previous / "PFTDemoBuild.json").read_bytes(), original)
 
 
 if __name__ == "__main__":
