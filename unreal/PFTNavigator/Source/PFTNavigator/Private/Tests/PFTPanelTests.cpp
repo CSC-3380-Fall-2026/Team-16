@@ -122,7 +122,7 @@ bool FPFTSelectedTagTest::RunTest(const FString& Parameters)
     ClassSearch->OnCheckStateChanged.Broadcast(true);
     Panel->ChooseRoom(TEXT("PFT_1206"), TEXT("CSC_4330"));
     const auto* ClassLabel = CastChecked<UTextBlock>(Panel->WidgetTree->FindWidget(TEXT("SelectedCourseLabel")));
-    TestTrue(TEXT("The selected class is shown by the room actions"), ClassLabel->IsVisible());
+    TestTrue(TEXT("The selected class is shown by the room actions"), ClassLabel->GetVisibility() == ESlateVisibility::Visible);
     TestTrue(TEXT("The class summary identifies the selected class and its instructor"),
         ClassLabel->GetText().ToString().Contains(TEXT("CSC 4330")) && ClassLabel->GetText().ToString().Contains(TEXT("David C. Shepherd")));
     TestEqual(TEXT("Only the selected class gets tagged in a shared classroom"), GetTaggedRooms(Panel).Num(), 1);
@@ -133,12 +133,12 @@ bool FPFTSelectedTagTest::RunTest(const FString& Parameters)
             Button->CourseId == TEXT("CSC_4330"));
     }
     Panel->ChooseRoom(TEXT("PFT_1206"), TEXT("CSC_1350"));
-    TestFalse(TEXT("A course from another room does not appear in the summary"), ClassLabel->IsVisible());
+    TestTrue(TEXT("A course from another room leaves the summary collapsed"), ClassLabel->GetVisibility() == ESlateVisibility::Collapsed);
     TestEqual(TEXT("Choosing a room does not tag its classes"), GetTaggedRooms(Panel).Num(), 0);
     Panel->ChooseRoom(TEXT("PFT_1200"), TEXT("CSC_1253"));
     TestEqual(TEXT("A course without a schedule still shows its code"), ClassLabel->GetText().ToString(), FString(TEXT("CSC 1253")));
-    TestFalse(TEXT("A class without a time cannot be added to the schedule"),
-        Panel->WidgetTree->FindWidget(TEXT("SaveClassButton"))->IsVisible());
+    TestTrue(TEXT("A class without a time has no save action"),
+        Panel->WidgetTree->FindWidget(TEXT("SaveClassButton"))->GetVisibility() == ESlateVisibility::Collapsed);
     Cleanup();
     return true;
 }
