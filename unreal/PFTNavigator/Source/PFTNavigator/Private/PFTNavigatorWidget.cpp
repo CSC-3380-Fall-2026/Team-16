@@ -97,6 +97,9 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     SelectedRoomLabel->Rename(TEXT("SelectedRoomLabel"));
     SelectedRoomLabel->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), 14));
     SelectedRoomLabel->SetVisibility(ESlateVisibility::Collapsed);
+    SelectedCourseLabel = AddText(FString());
+    SelectedCourseLabel->Rename(TEXT("SelectedCourseLabel"));
+    SelectedCourseLabel->SetVisibility(ESlateVisibility::Collapsed);
     auto* RoomActions = WidgetTree->ConstructWidget<UHorizontalBox>();
     Column->AddChild(RoomActions);
     RoomActions->SetVisibility(ESlateVisibility::Collapsed);
@@ -447,13 +450,25 @@ void UPFTNavigatorWidget::ChooseRoom(const FString& RoomId, const FString& Cours
         return;
     }
     SelectedRoomId = RoomId;
-    SelectedCourseId = CourseId;
+    const auto* Course = Directory->FindCourse(CourseId);
+    if (Course && Course->RoomId != RoomId) Course = nullptr;
+    SelectedCourseId = Course ? Course->Name : FString();
+    FString Summary;
+    if (Course)
+    {
+        Summary = Course->CourseCode;
+        const FString Schedule = Course->GetScheduleLabel();
+        if (!Schedule.IsEmpty()) Summary += TEXT("\n") + Schedule;
+    }
+    SelectedCourseLabel->SetText(FText::FromString(Summary));
+    SelectedCourseLabel->SetVisibility(Course ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
     UpdateSelectedTags();
     UpdateSaveClassButton();
     const bool bSelected = bHasLocation && Destinations->SelectRoom(RoomId);
     if (bSwitchPreview && !bSelected) ToggleFreeCamera();
     SelectedRoomLabel->SetText(FText::FromString(Room->DisplayName));
-    Details->SetText(FText::FromString(Directory->GetRoomDetails(RoomId).RightChop(Room->DisplayName.Len() + 1)));
+    const FString RoomDetails = Directory->GetRoomDetailsForSelection(RoomId, SelectedCourseId);
+    Details->SetText(FText::FromString(RoomDetails.RightChop(Room->DisplayName.Len() + 1)));
     ViewButton->SetIsEnabled(bSelected);
     ClearButton->SetIsEnabled(true);
     FString Message = TEXT("Room preview is unavailable on this map.");
@@ -477,6 +492,8 @@ void UPFTNavigatorWidget::ClearRoom()
     GetWorld()->GetSubsystem<UPFTRoutes>()->Stop();
     SelectedRoomId.Empty();
     SelectedCourseId.Empty();
+    SelectedCourseLabel->SetText(FText::GetEmpty());
+    SelectedCourseLabel->SetVisibility(ESlateVisibility::Collapsed);
     UpdateSelectedTags();
     UpdateSaveClassButton();
     Details->SetText(FText::FromString(TEXT("Select a room to see its details.")));
@@ -487,18 +504,15 @@ void UPFTNavigatorWidget::ClearRoom()
     if (bWasPreview) Search->SetKeyboardFocus();
 }
 
-// Puts a gold "Selected" tag on every result that points at the selected room.
-// It runs after the list is rebuilt and whenever the selection changes, so the tag
-// stays on the right room when you search or switch floors.
-// No params. Result: selected results start with "Selected | " and have a gold background,
-// everything else goes back to normal.
+// Tags the selected room and the exact class when a class is picked.
 void UPFTNavigatorWidget::UpdateSelectedTags()
 {
     for (auto* Child : Results->GetAllChildren())
     {
         auto* Button = Cast<UPFTSearchButton>(Child);
         if (!Button || !Button->Label) continue;
-        const bool bSelected = !SelectedRoomId.IsEmpty() && Button->RoomId == SelectedRoomId;
+        const bool bSelected = !SelectedRoomId.IsEmpty() && Button->RoomId == SelectedRoomId
+            && (Button->CourseId.IsEmpty() || Button->CourseId == SelectedCourseId);
         const FString Text = bSelected ? TEXT("Selected | ") + Button->ResultText : Button->ResultText;
         Button->Label->SetText(FText::FromString(Text));
         Button->SetBackgroundColor(bSelected ? FLinearColor(PFTPalette::Gold) : FLinearColor::White);

@@ -116,6 +116,25 @@ bool FPFTSelectedTagTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("Clear removes the tag"), GetTaggedRooms(Panel).Num(), 0);
     SetSearch(Panel, TEXT(""));
     TestEqual(TEXT("Tag stays off after the list is rebuilt"), GetTaggedRooms(Panel).Num(), 0);
+
+    auto* ClassSearch = CastChecked<UCheckBox>(Panel->WidgetTree->FindWidget(TEXT("ClassSearchFilter")));
+    ClassSearch->SetIsChecked(true);
+    ClassSearch->OnCheckStateChanged.Broadcast(true);
+    Panel->ChooseRoom(TEXT("PFT_1206"), TEXT("CSC_4330"));
+    const auto* ClassLabel = CastChecked<UTextBlock>(Panel->WidgetTree->FindWidget(TEXT("SelectedCourseLabel")));
+    TestTrue(TEXT("The selected class is shown by the room actions"), ClassLabel->IsVisible());
+    TestTrue(TEXT("The class summary identifies the selected class and its instructor"),
+        ClassLabel->GetText().ToString().Contains(TEXT("CSC 4330")) && ClassLabel->GetText().ToString().Contains(TEXT("David C. Shepherd")));
+    TestEqual(TEXT("Only the selected class gets tagged in a shared classroom"), GetTaggedRooms(Panel).Num(), 1);
+    for (auto* Button : GetResults(Panel))
+    {
+        if (Button->RoomId != TEXT("PFT_1206")) continue;
+        TestEqual(TEXT("The tag matches the exact course"), Button->Label->GetText().ToString().StartsWith(TEXT("Selected | ")),
+            Button->CourseId == TEXT("CSC_4330"));
+    }
+    Panel->ChooseRoom(TEXT("PFT_1206"), TEXT("CSC_1350"));
+    TestFalse(TEXT("A course from another room does not appear in the summary"), ClassLabel->IsVisible());
+    TestEqual(TEXT("Choosing a room does not tag its classes"), GetTaggedRooms(Panel).Num(), 0);
     Cleanup();
     return true;
 }
@@ -449,7 +468,16 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
             && Results[0]->ResultText.Contains(TEXT("10:30 AM")));
         TestTrue(TEXT("The classroom result is clickable"), ClickVisibleWidget(Results[0]));
         TestTrue(TEXT("The classroom is selected"), GetTaggedRooms(Panel).Contains(TEXT("PFT_1200")));
-        TestTrue(TEXT("The result can start a walk"), Panel->WidgetTree->FindWidget(TEXT("RouteButton"))->IsVisible());
+        auto* Tree = Panel->WidgetTree.Get();
+        TestTrue(TEXT("The result can start a walk"), Tree->FindWidget(TEXT("RouteButton"))->IsVisible());
+        const auto* ClassLabel = CastChecked<UTextBlock>(Tree->FindWidget(TEXT("SelectedCourseLabel")));
+        const FString Summary = ClassLabel->GetText().ToString();
+        TestTrue(TEXT("The selected course and instructor are next to Walk there"),
+            ClassLabel->IsVisible() && Summary.Contains(TEXT("CSC 1350")) && Summary.Contains(TEXT("William Duncan"))
+            && Summary.Contains(TEXT("10:30 AM")));
+        const FString Details = CastChecked<UTextBlock>(Tree->FindWidget(TEXT("RoomDetails")))->GetText().ToString();
+        TestTrue(TEXT("The selected class has its own details"), Details.Contains(TEXT("CSC 1350")));
+        TestFalse(TEXT("The details omit unrelated classes in the same room"), Details.Contains(TEXT("CSC 1253")));
         CaptureQAView(TEXT("PFTQA-ClassSearch"));
         return true;
     }));

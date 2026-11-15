@@ -91,6 +91,7 @@ public:
     // Turns a date into the day letter the course data uses. Result: one of M T W R F S U
     static TCHAR GetDayCode(const FDateTime& Time);
     UFUNCTION(BlueprintCallable) FString GetRoomDetails(const FString& RoomId) const;
+    FString GetRoomDetailsForSelection(const FString& RoomId, const FString& CourseId) const;
     UPROPERTY(BlueprintReadOnly) TArray<FPFTRoom> Rooms;
     UPROPERTY(BlueprintReadOnly) TArray<FPFTCourse> Courses;
     UPROPERTY(BlueprintReadOnly) TArray<FPFTDepartment> Departments;
