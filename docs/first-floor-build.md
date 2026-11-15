@@ -203,18 +203,18 @@ before running the launcher.
 The project settings on Perforce shelf `42426` use the Unreal 5.8 include order
 and keep local `UserEngine.ini` overrides out of the Windows package.
 
-Pass `-Verify` to run the Commons walkthrough and the Navigator click test
-before replacing the playable archive. Verification also checks both runtime
+Pass `-Verify` to run the Commons walkthrough, Navigator click test, and guided
+walk before replacing the playable archive. Verification also checks runtime
 logs for missing packages, missing imports, and default-material fallbacks.
 Use `-VerifyExtended` to also walk through the Commons to C1007 before
-publishing a review build. Its result is recorded in `PFTDemoBuild.json`.
+publishing a review build. Use `-VerifyOffline` to run the extended checks
+with Unreal HTTP requests disabled. `PFTDemoBuild.json` records the mode and
+result.
 Before publishing, packaging confirms that each report names the expected test
 and records a completed success.
-If a check fails, the command exits
-with an error and leaves the new build and its logs in the printed `pending`
-folder. Successful builds move into the launcher location. The previous archive
-is kept in a `previous` folder beside it. Delete old `previous` and `pending`
-folders once you no longer need them.
+If a check fails, the command exits with an error and keeps available logs and
+reports in the printed `failed` folder. Successful builds move into the launcher
+location. The previous archive is kept in a `previous` folder beside it.
 
 For C++ implementation edits, pass `-ReuseCook` to rebuild the executable and
 package the saved Windows cook. The script checks the selected map, project and

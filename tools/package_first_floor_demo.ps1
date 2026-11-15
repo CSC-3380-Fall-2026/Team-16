@@ -7,12 +7,20 @@ param(
     [string]$ArchiveDirectory,
     [ValidatePattern('^[A-Za-z0-9_]+$')] [string]$MapName = 'PFTFirstFloorComplete',
     [switch]$VerifyExtended,
-    [string]$WalkingGraph
+    [string]$WalkingGraph,
+    [switch]$VerifyOffline
 )
 
 $ErrorActionPreference = 'Stop'
 if (!$EngineRoot) { $EngineRoot = 'C:\Program Files\Epic Games\UE_5.8' }
 if ($FullCook -and $ReuseCook) { throw 'Choose either -FullCook or -ReuseCook.' }
+$verifyMode = if ($VerifyOffline) {
+    'verifyoffline'
+} elseif ($VerifyExtended) {
+    'verifyextended'
+} elseif ($Verify) {
+    'verify'
+}
 
 $projectFile = Get-Item -LiteralPath $Project
 if ($projectFile.PSIsContainer -or $projectFile.Extension -ne '.uproject') {
@@ -232,7 +240,7 @@ function Confirm-NavigatorInstall {
 }
 
 function Confirm-WalkingMap {
-    if (!$WalkingGraph -and !$Verify -and !$VerifyExtended) { return }
+    if (!$WalkingGraph -and !$verifyMode) { return }
     if (!(Test-Path -LiteralPath $installedGraph -PathType Leaf)) {
         throw "Verified packaging requires a walking graph for $map. Bake and install first_floor_routes.json before packaging."
     }
@@ -262,6 +270,7 @@ function Write-BuildRecord($mapHash, $cookMode, $verification, $toolsRevision, $
         CookMode = $cookMode
         VisualCppInstaller = $prerequisite.Replace('\', '/')
         Verification = $verification
+        VerificationMode = $verifyMode
         TestReports = $tests
     } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $candidate 'PFTDemoBuild.json') -Encoding UTF8
 }
@@ -397,9 +406,8 @@ try {
     Copy-Item -LiteralPath $demoGuide -Destination $candidate
     $verification = 'Not requested'
     $tests = [ordered]@{}
-    if ($Verify -or $VerifyExtended) {
-        $mode = if ($VerifyExtended) { 'verifyextended' } else { 'verify' }
-        & $packageLauncher $mode
+    if ($verifyMode) {
+        & $packageLauncher $verifyMode
         if ($LASTEXITCODE -ne 0) {
             throw 'Windows demo verification failed. See the walkthrough results.'
         }
@@ -408,7 +416,7 @@ try {
             Navigator = 'PFTNavigator.Panel.AfterOnboarding'
             GuidedWalk = 'PFTFirstFloor.GuidedWalk'
         }
-        if ($VerifyExtended) { $suites['C1007Walk'] = 'PFTFirstFloor.WalkToC1007' }
+        if ($verifyMode -ne 'verify') { $suites['C1007Walk'] = 'PFTFirstFloor.WalkToC1007' }
         foreach ($suite in $suites.Keys) {
             $report = "PFTDigitalTwin/Saved/Automation/$suite/index.json"
             Confirm-WalkthroughReport (Join-Path $candidate $report) $suites[$suite]
