@@ -108,6 +108,34 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
             auto* Trail = FindObject<ULineBatchComponent>(Routes, TEXT("PFTWalkingTrail"));
             if (!TestNotNull(TEXT("The route creates a trail component"), Trail)) return true;
             if (!TestTrue(TEXT("The trail draws multiple arrows"), Trail->BatchedLines.Num() >= 8)) return true;
+            const TArray<FBatchedLine> InitialArrows = Trail->BatchedLines;
+            auto StationaryTip = MakeShared<FVector>();
+            ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.4f));
+            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Routes, Trail, InitialArrows]()
+            {
+                if (!TestTrue(TEXT("Arrows stay visible while standing still"), Trail->BatchedLines.Num() >= 8)) return true;
+                const auto& Arrow = Trail->BatchedLines[2];
+                TestTrue(TEXT("The arrows move while the player is stationary"),
+                    !InitialArrows[2].End.Equals(Arrow.End, 2.0));
+                TestTrue(TEXT("The two arms meet at the arrow tip"), Arrow.End.Equals(Trail->BatchedLines[3].Start));
+                Routes->SetReducedMotion(true);
+                return true;
+            }));
+            ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.2f));
+            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Trail, StationaryTip]()
+            {
+                if (Trail->BatchedLines.IsValidIndex(2)) *StationaryTip = Trail->BatchedLines[2].End;
+                return true;
+            }));
+            ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
+            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Routes, Trail, StationaryTip]()
+            {
+                TestTrue(TEXT("Reduced motion keeps the arrows still"),
+                    Trail->BatchedLines.IsValidIndex(2) && Trail->BatchedLines[2].End.Equals(*StationaryTip));
+                Routes->SetReducedMotion(false);
+                return true;
+            }));
+
             auto* Overview = Tree->FindWidget(TEXT("RouteOverview"));
             auto* MapButton = Tree->FindWidget(TEXT("RouteOverviewButton"));
             if (!TestNotNull(TEXT("The route overview exists"), Overview)) return true;
@@ -141,33 +169,6 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
             {
                 TestTrue(TEXT("The overview can be reopened"), PFTViewportTest::ClickVisibleWidget(MapButton));
                 TestTrue(TEXT("The overview is visible again"), Overview->IsVisible());
-                return true;
-            }));
-            const TArray<FBatchedLine> InitialArrows = Trail->BatchedLines;
-            auto StationaryTip = MakeShared<FVector>();
-            ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.4f));
-            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Routes, Trail, InitialArrows]()
-            {
-                if (!TestTrue(TEXT("Arrows stay visible while standing still"), Trail->BatchedLines.Num() >= 8)) return true;
-                const auto& Arrow = Trail->BatchedLines[2];
-                TestTrue(TEXT("The arrows move while the player is stationary"),
-                    !InitialArrows[2].End.Equals(Arrow.End, 2.0));
-                TestTrue(TEXT("The two arms meet at the arrow tip"), Arrow.End.Equals(Trail->BatchedLines[3].Start));
-                Routes->SetReducedMotion(true);
-                return true;
-            }));
-            ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.2f));
-            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Trail, StationaryTip]()
-            {
-                if (Trail->BatchedLines.IsValidIndex(2)) *StationaryTip = Trail->BatchedLines[2].End;
-                return true;
-            }));
-            ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
-            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Routes, Trail, StationaryTip]()
-            {
-                TestTrue(TEXT("Reduced motion keeps the arrows still"),
-                    Trail->BatchedLines.IsValidIndex(2) && Trail->BatchedLines[2].End.Equals(*StationaryTip));
-                Routes->SetReducedMotion(false);
                 return true;
             }));
 
