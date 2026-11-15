@@ -673,8 +673,10 @@ void UPFTNavigatorWidget::ToggleSavedClass()
 void UPFTNavigatorWidget::UpdateSaveClassButton()
 {
     if (!SaveClassButton) return;
-    SaveClassButton->SetVisibility(SelectedCourseId.IsEmpty() ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
     const bool bSaved = MyClasses.Contains(SelectedCourseId);
+    const auto* Course = GetGameInstance()->GetSubsystem<UPFTDirectory>()->FindCourse(SelectedCourseId);
+    const bool bCanSave = Course && !Course->StartTime.IsEmpty();
+    SaveClassButton->SetVisibility(bCanSave || bSaved ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
     SaveClassLabel->SetText(FText::FromString(bSaved ? TEXT("Remove from my classes") : TEXT("Add to my classes")));
 }
 

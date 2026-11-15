@@ -135,6 +135,10 @@ bool FPFTSelectedTagTest::RunTest(const FString& Parameters)
     Panel->ChooseRoom(TEXT("PFT_1206"), TEXT("CSC_1350"));
     TestFalse(TEXT("A course from another room does not appear in the summary"), ClassLabel->IsVisible());
     TestEqual(TEXT("Choosing a room does not tag its classes"), GetTaggedRooms(Panel).Num(), 0);
+    Panel->ChooseRoom(TEXT("PFT_1200"), TEXT("CSC_1253"));
+    TestEqual(TEXT("A course without a schedule still shows its code"), ClassLabel->GetText().ToString(), FString(TEXT("CSC 1253")));
+    TestFalse(TEXT("A class without a time cannot be added to the schedule"),
+        Panel->WidgetTree->FindWidget(TEXT("SaveClassButton"))->IsVisible());
     Cleanup();
     return true;
 }
@@ -242,6 +246,9 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
             break;
         }
         TestTrue(TEXT("The course selects PFT 1200"), GetTaggedRooms(Panel).Contains(TEXT("PFT_1200")));
+        const auto* ClassLabel = CastChecked<UTextBlock>(Panel->WidgetTree->FindWidget(TEXT("SelectedCourseLabel")));
+        TestTrue(TEXT("Regular search shows the selected course"), ClassLabel->IsVisible()
+            && ClassLabel->GetText().ToString().Contains(TEXT("CSC 1350")));
         return true;
     }));
     ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));

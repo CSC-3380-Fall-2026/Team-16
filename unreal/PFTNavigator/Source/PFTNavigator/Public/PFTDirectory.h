@@ -65,7 +65,7 @@ struct PFTNAVIGATOR_API FPFTSearchResult
     GENERATED_BODY()
     UPROPERTY(BlueprintReadOnly) FString RoomId;
     UPROPERTY(BlueprintReadOnly) FString Label;
-    // Only filled in for class search results, so the panel knows which course was picked
+    // Filled in when the result represents a class.
     UPROPERTY(BlueprintReadOnly) FString CourseId;
 };
 

@@ -277,7 +277,7 @@ TArray<FPFTSearchResult> UPFTDirectory::Search(const FString& Query) const
     {
         if (MatchesCourse(Course, Text))
         {
-            Results.Add({ Course.RoomId, Course.CourseCode + TEXT(" - ") + Course.CourseTitle });
+            Results.Add({ Course.RoomId, Course.CourseCode + TEXT(" - ") + Course.CourseTitle, Course.Name });
         }
     }
     // Departments match on their full name or their short code. The first result is the department office,

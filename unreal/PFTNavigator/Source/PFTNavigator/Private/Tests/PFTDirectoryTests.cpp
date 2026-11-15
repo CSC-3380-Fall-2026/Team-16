@@ -28,7 +28,11 @@ bool FPFTDirectoryTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("Course search ignores case and outer spaces"), Directory->Search(TEXT(" csc 3380 ")).Num(), 1);
     const auto Results = Directory->Search(TEXT("Design"));
     TestEqual(TEXT("Title search"), Results.Num(), 1);
-    if (!Results.IsEmpty()) TestEqual(TEXT("Course resolves to room"), Results[0].RoomId, FString(TEXT("PFT_1200")));
+    if (!Results.IsEmpty())
+    {
+        TestEqual(TEXT("Course resolves to room"), Results[0].RoomId, FString(TEXT("PFT_1200")));
+        TestEqual(TEXT("Title search keeps the course identity"), Results[0].CourseId, FString(TEXT("CSC_3380")));
+    }
     TestEqual(TEXT("Room search"), Directory->Search(TEXT("1200")).Num(), 1);
     TestEqual(TEXT("Empty search"), Directory->Search(TEXT("  ")).Num(), 0);
     TestEqual(TEXT("Missing search"), Directory->Search(TEXT("missing")).Num(), 0);
