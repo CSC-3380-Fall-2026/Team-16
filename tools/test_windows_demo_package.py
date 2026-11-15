@@ -129,7 +129,7 @@ class TestWindowsDemoPackage(unittest.TestCase):
         failed_report = diagnostics / "Automation" / "Navigator" / "index.json"
         self.assertEqual(json.loads(failed_report.read_text())["failed"], 1)
         self.assertEqual((diagnostics / "Logs" / "Navigator.log").read_text(), "bad report")
-        self.assertIn(str(diagnostics), failed.stdout)
+        self.assertIn(diagnostics.name, failed.stdout)
         self.assertFalse((diagnostics / "PFTDigitalTwin.exe").exists())
 
         cook_failure = self.run_package("cook failure", *graph_options)
