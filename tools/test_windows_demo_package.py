@@ -68,7 +68,8 @@ class TestWindowsDemoPackage(unittest.TestCase):
             '@echo off\nrem /Game/Level/PFTFirstFloorComplete\nif not "%~1"=="%PFT_TEST_MODE%" exit /b 1\nexit /b 0\n'
         )
         for name in ("package_first_floor_demo.ps1", "install_navigator.py", "validate_data.py",
-                     "measure_demo_frames.ps1", "check_demo_assets.ps1", "Read Me - PFT Demo.txt"):
+                     "measure_demo_frames.ps1", "check_demo_assets.ps1", "Read Me - PFT Demo.txt",
+                     "Play PFT Demo Offline.cmd"):
             shutil.copyfile(ROOT / "tools" / name, self.tools / name)
         for directory in ("unreal", "data"):
             shutil.copytree(ROOT / directory, self.root / directory)
@@ -163,6 +164,13 @@ class TestWindowsDemoPackage(unittest.TestCase):
         self.assertEqual(record["Verification"], "Passed")
         self.assertEqual(record["VerificationMode"], "verifyoffline")
         self.assertEqual(set(record["TestReports"]), set(REPORTS))
+
+        offline_launcher = self.archive / "Windows" / "Play PFT Demo Offline.cmd"
+        self.assertTrue(offline_launcher.is_file())
+        command = [os.environ.get("ComSpec", "cmd.exe"), "/d", "/c", "call", str(offline_launcher)]
+        launch = subprocess.run(command, cwd=self.root, env={**os.environ, "PFT_TEST_MODE": "offline"},
+                                capture_output=True, text=True, timeout=10, check=False)
+        self.assertEqual(launch.returncode, 0, launch.stdout + launch.stderr)
 
 
 if __name__ == "__main__":
