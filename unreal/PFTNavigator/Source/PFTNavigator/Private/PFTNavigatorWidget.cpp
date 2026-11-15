@@ -93,6 +93,10 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     Search->SetHintText(FText::FromString(TEXT("Find a room or class")));
     Search->OnTextChanged.AddDynamic(this, &UPFTNavigatorWidget::SearchChanged);
     Column->AddChild(Search);
+    SelectedRoomLabel = AddText(FString());
+    SelectedRoomLabel->Rename(TEXT("SelectedRoomLabel"));
+    SelectedRoomLabel->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), 14));
+    SelectedRoomLabel->SetVisibility(ESlateVisibility::Collapsed);
     auto* RoomActions = WidgetTree->ConstructWidget<UHorizontalBox>();
     Column->AddChild(RoomActions);
     RoomActions->SetVisibility(ESlateVisibility::Collapsed);
@@ -448,7 +452,8 @@ void UPFTNavigatorWidget::ChooseRoom(const FString& RoomId, const FString& Cours
     UpdateSaveClassButton();
     const bool bSelected = bHasLocation && Destinations->SelectRoom(RoomId);
     if (bSwitchPreview && !bSelected) ToggleFreeCamera();
-    Details->SetText(FText::FromString(Directory->GetRoomDetails(RoomId)));
+    SelectedRoomLabel->SetText(FText::FromString(Room->DisplayName));
+    Details->SetText(FText::FromString(Directory->GetRoomDetails(RoomId).RightChop(Room->DisplayName.Len() + 1)));
     ViewButton->SetIsEnabled(bSelected);
     ClearButton->SetIsEnabled(true);
     FString Message = TEXT("Room preview is unavailable on this map.");
@@ -588,6 +593,7 @@ void UPFTNavigatorWidget::UpdateRouteControls()
     const auto* Routes = GetWorld()->GetSubsystem<UPFTRoutes>();
     const bool bAvailable = Routes->HasDestination(SelectedRoomId);
     const bool bSelected = !SelectedRoomId.IsEmpty();
+    SelectedRoomLabel->SetVisibility(bSelected ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
     RouteButton->GetParent()->SetVisibility(bSelected ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
     RouteButton->SetVisibility(bAvailable ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
     const bool bCanPreview = ViewButton->GetIsEnabled();

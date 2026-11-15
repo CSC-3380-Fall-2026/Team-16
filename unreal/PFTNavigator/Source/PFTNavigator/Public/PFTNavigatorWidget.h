@@ -71,6 +71,7 @@ private:
     void SetCompactDirections(bool bCompact);
     UPROPERTY() TObjectPtr<UTextBlock> Status;
     UPROPERTY() TObjectPtr<UTextBlock> Details;
+    UPROPERTY() TObjectPtr<UTextBlock> SelectedRoomLabel;
     UPROPERTY() TObjectPtr<UEditableTextBox> Search;
     UPROPERTY() TObjectPtr<UComboBoxString> Floors;
     UPROPERTY() TObjectPtr<UCheckBox> PreviewOnly;

@@ -250,6 +250,8 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
             TestTrue(TEXT("The preview keeps the room marker out of view"), Marker->IsHidden());
         }
         SetSearch(Panel, TEXT("Commons"));
+        const auto* SelectedRoom = CastChecked<UTextBlock>(Panel->WidgetTree->FindWidget(TEXT("SelectedRoomLabel")));
+        TestEqual(TEXT("Typing a new query keeps the named action target"), SelectedRoom->GetText().ToString(), FString(TEXT("PFT 1200")));
         return true;
     }));
     ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
@@ -277,6 +279,8 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
             TestTrue(TEXT("The Commons marker stays hidden"), Marker->IsHidden());
         }
         TestTrue(TEXT("The Commons result has the selected tag"), GetTaggedRooms(Panel).Contains(TEXT("PFT_COMMONS")));
+        const auto* SelectedRoom = CastChecked<UTextBlock>(Panel->WidgetTree->FindWidget(TEXT("SelectedRoomLabel")));
+        TestEqual(TEXT("Switching rooms updates the action target"), SelectedRoom->GetText().ToString(), FString(TEXT("PFT Commons")));
         TestTrue(TEXT("The search box can be focused during a preview"), ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("RoomSearch"))));
         SetSearch(Panel, TEXT("CSC 1350"));
         TestTrue(TEXT("Enter switches back to the course room preview"), PressKey(EKeys::Enter));
@@ -300,6 +304,7 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
             Panel->WidgetTree->FindWidget(TEXT("ViewRoomButton"))->HasKeyboardFocus());
         TestTrue(TEXT("Clear is clickable"), ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("ClearRoomButton"))));
         TestEqual(TEXT("Clear removes the room tag"), GetTaggedRooms(Panel).Num(), 0);
+        TestFalse(TEXT("Clear hides the action target"), Panel->WidgetTree->FindWidget(TEXT("SelectedRoomLabel"))->IsVisible());
         SetSearch(Panel, TEXT("CSC"));
         TestTrue(TEXT("The search box is clickable"), ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("RoomSearch"))));
         TestTrue(TEXT("A broad search has multiple results"), GetResults(Panel).Num() > 1);
