@@ -238,6 +238,11 @@ const FPFTRoom* UPFTDirectory::FindRoom(const FString& RoomId) const
 //         Empty if the room isn't in rooms.json
 FString UPFTDirectory::GetRoomDetails(const FString& RoomId) const
 {
+    return GetRoomDetailsForSelection(RoomId, FString());
+}
+
+FString UPFTDirectory::GetRoomDetailsForSelection(const FString& RoomId, const FString& CourseId) const
+{
     const FPFTRoom* Room = FindRoom(RoomId);
     if (!Room) return FString();
     FString Details = Room->DisplayName + TEXT("\n") + Room->RoomType + TEXT(" | Floor ") + FString::FromInt(Room->Floor);
@@ -251,9 +256,9 @@ FString UPFTDirectory::GetRoomDetails(const FString& RoomId) const
     }
     for (const auto& Course : Courses)
     {
-        if (Course.RoomId != RoomId) continue;
+        if (Course.RoomId != RoomId || (!CourseId.IsEmpty() && Course.Name != CourseId)) continue;
         Details += TEXT("\nClass here: ") + Course.CourseCode + TEXT(" - ") + Course.CourseTitle;
-        if (!Course.StartTime.IsEmpty()) Details += TEXT("\n") + Course.GetScheduleLabel();
+        if (CourseId.IsEmpty() && !Course.StartTime.IsEmpty()) Details += TEXT("\n") + Course.GetScheduleLabel();
     }
     return Details;
 }
@@ -272,7 +277,7 @@ TArray<FPFTSearchResult> UPFTDirectory::Search(const FString& Query) const
     {
         if (MatchesCourse(Course, Text))
         {
-            Results.Add({ Course.RoomId, Course.CourseCode + TEXT(" - ") + Course.CourseTitle });
+            Results.Add({ Course.RoomId, Course.CourseCode + TEXT(" - ") + Course.CourseTitle, Course.Name });
         }
     }
     // Departments match on their full name or their short code. The first result is the department office,

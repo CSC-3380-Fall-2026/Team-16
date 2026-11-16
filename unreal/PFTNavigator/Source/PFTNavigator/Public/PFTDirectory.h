@@ -65,7 +65,7 @@ struct PFTNAVIGATOR_API FPFTSearchResult
     GENERATED_BODY()
     UPROPERTY(BlueprintReadOnly) FString RoomId;
     UPROPERTY(BlueprintReadOnly) FString Label;
-    // Only filled in for class search results, so the panel knows which course was picked
+    // Filled in when the result represents a class.
     UPROPERTY(BlueprintReadOnly) FString CourseId;
 };
 
@@ -91,6 +91,7 @@ public:
     // Turns a date into the day letter the course data uses. Result: one of M T W R F S U
     static TCHAR GetDayCode(const FDateTime& Time);
     UFUNCTION(BlueprintCallable) FString GetRoomDetails(const FString& RoomId) const;
+    FString GetRoomDetailsForSelection(const FString& RoomId, const FString& CourseId) const;
     UPROPERTY(BlueprintReadOnly) TArray<FPFTRoom> Rooms;
     UPROPERTY(BlueprintReadOnly) TArray<FPFTCourse> Courses;
     UPROPERTY(BlueprintReadOnly) TArray<FPFTDepartment> Departments;
