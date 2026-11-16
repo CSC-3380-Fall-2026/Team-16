@@ -27,6 +27,15 @@ namespace
     constexpr double TrailLength = 1600.0;
     constexpr double SecondsPerQuarterTurn = 0.25;
 
+    FString WalkingTimeLabel(double Seconds)
+    {
+        if (Seconds < 5.0) return TEXT("Under 5 sec left");
+        const int32 Rounded = FMath::RoundToInt(Seconds / 5.0) * 5;
+        if (Rounded < 60) return FString::Printf(TEXT("About %d sec left"), Rounded);
+        if (Rounded % 60 == 0) return FString::Printf(TEXT("About %d min left"), Rounded / 60);
+        return FString::Printf(TEXT("About %d min %d sec left"), Rounded / 60, Rounded % 60);
+    }
+
     struct FRouteVisit
     {
         double Seconds;
@@ -265,6 +274,15 @@ bool UPFTRoutes::Plan(ACharacter& Character, const FIntPoint& Target)
     if (Reversed.IsEmpty()) return false;
     Path.Reset(Reversed.Num());
     for (int32 Index = Reversed.Num() - 1; Index >= 0; --Index) Path.Add(Nodes.FindChecked(Reversed[Index]).Floor);
+    TurnSeconds.Init(0.0, Path.Num());
+    for (int32 Index = Path.Num() - 3; Index >= 0; --Index)
+    {
+        const int32 From = Reversed.Num() - 1 - Index;
+        const FIntPoint First = Reversed[From - 1] - Reversed[From];
+        const FIntPoint Second = Reversed[From - 2] - Reversed[From - 1];
+        const int32 Turns = 1 - First.X * Second.X - First.Y * Second.Y;
+        TurnSeconds[Index] = TurnSeconds[Index + 1] + Turns * SecondsPerQuarterTurn;
+    }
     NextIndex = 0;
     return true;
 }
@@ -350,10 +368,10 @@ void UPFTRoutes::Tick(float DeltaTime)
         Message = FText::FromString(FString::Printf(TEXT("%s\nUpdating route…"), *Destination));
         return;
     }
-    UpdateDirections(Position, Player->GetControlRotation());
+    UpdateDirections(Position, Player->GetControlRotation(), Character->GetCharacterMovement()->MaxWalkSpeed);
 }
 
-void UPFTRoutes::UpdateDirections(const FVector& Position, const FRotator& View)
+void UPFTRoutes::UpdateDirections(const FVector& Position, const FRotator& View, double WalkSpeed)
 {
     const FVector Toward = (NextPoint() - Position).GetSafeNormal2D();
     const FVector Right = FRotationMatrix(FRotator(0, View.Yaw, 0)).GetUnitAxis(EAxis::Y);
@@ -363,10 +381,11 @@ void UPFTRoutes::UpdateDirections(const FVector& Position, const FRotator& View)
     if (Forward < -0.35) Instruction = TEXT("Turn around to follow the arrows");
     else if (Side > 0.55) Instruction = TEXT("Follow the arrows to your right");
     else if (Side < -0.55) Instruction = TEXT("Follow the arrows to your left");
+    const double DistanceToPath = FVector::Dist2D(Position, NextPoint());
+    const double DistanceLeft = DistanceToPath + (Path.Num() - 1 - NextIndex) * Step;
     if (Instruction.IsEmpty())
     {
         const int32 LookAhead = FMath::Max(2, FMath::CeilToInt(180.0 / Step));
-        const double DistanceToPath = FVector::Dist2D(Position, NextPoint());
         for (int32 Index = NextIndex + LookAhead; Index + LookAhead < Path.Num(); ++Index)
         {
             const FVector Incoming = (Path[Index] - Path[Index - LookAhead]).GetSafeNormal2D();
@@ -381,11 +400,12 @@ void UPFTRoutes::UpdateDirections(const FVector& Position, const FRotator& View)
         }
         if (Instruction.IsEmpty())
         {
-            const int32 Metres = FMath::RoundToInt((DistanceToPath + (Path.Num() - 1 - NextIndex) * Step) / 100.0);
+            const int32 Metres = FMath::RoundToInt(DistanceLeft / 100.0);
             Instruction = FString::Printf(TEXT("Continue to the destination · %d m"), Metres);
         }
     }
-    Message = FText::FromString(Destination + TEXT("\n") + Instruction);
+    const double SecondsLeft = DistanceLeft / FMath::Max(1.0, WalkSpeed) + TurnSeconds[NextIndex];
+    Message = FText::FromString(Destination + TEXT("\n") + Instruction + TEXT("\n") + WalkingTimeLabel(SecondsLeft));
 }
 
 void UPFTRoutes::DrawPath()
@@ -449,6 +469,7 @@ void UPFTRoutes::EndGuidance(const FText& NewMessage)
     if (Trail) Trail->Flush();
     Walker.Reset();
     Path.Reset();
+    TurnSeconds.Reset();
     UpdateTime = 0;
     bReplanning = false;
     Message = NewMessage;
@@ -476,6 +497,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPFTFastestPathTest, "PFTNavigator.Routes.Faste
 
 bool FPFTFastestPathTest::RunTest(const FString& Parameters)
 {
+    TestEqual(TEXT("Short walks use a relative time"), WalkingTimeLabel(3.0), FString(TEXT("Under 5 sec left")));
+    TestEqual(TEXT("Walking time is rounded to five seconds"), WalkingTimeLabel(23.0), FString(TEXT("About 25 sec left")));
+    TestEqual(TEXT("Long walks show minutes and seconds"), WalkingTimeLabel(72.0), FString(TEXT("About 1 min 10 sec left")));
     TMap<FIntPoint, uint8> Graph;
     const auto LinkPath = [&](const TArray<FIntPoint>& Points)
     {
