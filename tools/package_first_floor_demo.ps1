@@ -416,7 +416,10 @@ try {
             Navigator = 'PFTNavigator.Panel.AfterOnboarding'
             GuidedWalk = 'PFTFirstFloor.GuidedWalk'
         }
-        if ($verifyMode -ne 'verify') { $suites['C1007Walk'] = 'PFTFirstFloor.WalkToC1007' }
+        if ($verifyMode -ne 'verify') {
+            $suites['C1007Walk'] = 'PFTFirstFloor.WalkToC1007'
+            $suites['Reroute'] = 'PFTFirstFloor.RefocusAfterReroute'
+        }
         foreach ($suite in $suites.Keys) {
             $report = "PFTDigitalTwin/Saved/Automation/$suite/index.json"
             Confirm-WalkthroughReport (Join-Path $candidate $report) $suites[$suite]

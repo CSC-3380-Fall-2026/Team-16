@@ -217,8 +217,9 @@ and keep local `UserEngine.ini` overrides out of the Windows package.
 Pass `-Verify` to run the Commons walkthrough, Navigator click test, and guided
 walk before replacing the playable archive. Verification also checks runtime
 logs for missing packages, missing imports, and default-material fallbacks.
-Use `-VerifyExtended` to also walk through the Commons to C1007 before
-publishing a review build. Use `-VerifyOffline` to run the extended checks
+Use `-VerifyExtended` to also walk through the Commons to C1007 and check that
+the walking map refocuses after an automatic reroute before publishing a review
+build. Use `-VerifyOffline` to run the extended checks
 with Unreal HTTP requests disabled. `PFTDemoBuild.json` records the mode and
 result.
 Before publishing, packaging confirms that each report names the expected test
@@ -332,8 +333,9 @@ run the shorter Zone 1200 route on its own. The game exits after each test.
 Use `& '.\Play PFT Demo.cmd' crossbuilding` to continue beyond the Commons to
 hallway C1007. This extended walk checks floor collision, the destination HUD
 label on maps with local room data, and the runtime log for asset failures.
-Use `& '.\Play PFT Demo.cmd' verifyextended` to run all four checks on an
-existing package.
+Use `& '.\Play PFT Demo.cmd' reroute` to verify that guidance and the map
+update from C1007. Use `& '.\Play PFT Demo.cmd' verifyextended` to run all
+five checks on an existing package.
 
 Logs are in `PFTDigitalTwin\Saved\Logs`. The `CommonsWalk` and `Navigator`
 folders under `PFTDigitalTwin\Saved\Automation` each contain an `index.json`

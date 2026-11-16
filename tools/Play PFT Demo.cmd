@@ -20,6 +20,7 @@ if /i "%~1"=="verifyextended" goto verify
 if /i "%~1"=="verifyoffline" goto verify
 if /i "%~1"=="crossbuilding" goto crossbuilding
 if /i "%~1"=="guidedwalk" goto guidedwalk
+if /i "%~1"=="reroute" goto reroute
 if /i "%~1"=="profile" goto profile
 
 if /i "%~1"=="offline" set "DemoArgs=%DemoArgs% %DemoHttp%"
@@ -39,6 +40,10 @@ goto checks_done
 call :walk_with_guidance
 goto checks_done
 
+:reroute
+call :check_reroute -RenderOffscreen
+goto checks_done
+
 :walk_with_guidance
 call :run_check GuidedWalk PFTFirstFloor.GuidedWalk GuidedWalk %~1
 if errorlevel 1 exit /b %errorlevel%
@@ -47,6 +52,12 @@ exit /b %errorlevel%
 
 :walk_to_c1007
 call :run_check C1007Walk PFTFirstFloor.WalkToC1007 WalkToC1007 %~1
+if errorlevel 1 exit /b %errorlevel%
+call :check_assets
+exit /b %errorlevel%
+
+:check_reroute
+call :run_check Reroute PFTFirstFloor.RefocusAfterReroute RefocusAfterReroute %~1
 if errorlevel 1 exit /b %errorlevel%
 call :check_assets
 exit /b %errorlevel%
@@ -63,7 +74,10 @@ call :check_assets
 if errorlevel 1 goto checks_done
 call :walk_with_guidance -RenderOffscreen
 if errorlevel 1 goto checks_done
-if /i not "%~1"=="verify" call :walk_to_c1007 -RenderOffscreen
+if /i "%~1"=="verify" goto checks_done
+call :walk_to_c1007 -RenderOffscreen
+if errorlevel 1 goto checks_done
+call :check_reroute -RenderOffscreen
 goto checks_done
 
 :profile
