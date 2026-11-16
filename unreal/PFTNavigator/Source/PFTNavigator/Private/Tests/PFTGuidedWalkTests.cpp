@@ -18,6 +18,7 @@
 #include "Misc/CommandLine.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Misc/Parse.h"
+#include "ProfilingDebugging/CsvProfiler.h"
 #include "Tests/AutomationCommon.h"
 #include "UnrealClient.h"
 
@@ -47,6 +48,21 @@ namespace
         RenderScale->Set(OriginalScale, ECVF_SetByConsole);
         SettingsButton->OnClicked.Broadcast();
     }
+
+    void BeginGuidanceProfile()
+    {
+#if CSV_PROFILER
+        FCsvProfiler::Get()->BeginCapture();
+#endif
+    }
+
+    void FinishGuidanceProfile()
+    {
+#if CSV_PROFILER
+        const auto Capture = FCsvProfiler::Get()->EndCapture();
+        ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([Capture]() { return Capture.IsReady(); }));
+#endif
+    }
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPFTGuidedWalkTest, "PFTFirstFloor.GuidedWalk",
@@ -54,6 +70,14 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPFTGuidedWalkTest, "PFTFirstFloor.GuidedWalk",
 
 bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
 {
+    const bool bProfileGuidance = FParse::Param(FCommandLine::Get(), TEXT("PFTProfileGuidance"));
+#if !CSV_PROFILER
+    if (bProfileGuidance)
+    {
+        AddError(TEXT("Guidance profiling requires a build with the CSV profiler."));
+        return false;
+    }
+#endif
     UWorld* World = GEngine && GEngine->GameViewport ? GEngine->GameViewport->GetWorld() : nullptr;
     if (!TestNotNull(TEXT("First-floor demo world"), World)) return false;
     auto* Player = World->GetFirstPlayerController();
@@ -62,7 +86,7 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
     auto* Routes = World->GetSubsystem<UPFTRoutes>();
     if (!TestTrue(TEXT("Skip tour is clickable"), PFTViewportTest::SkipWelcome(World))) return false;
 
-    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World, Player, Character, Routes,
+    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World, Player, Character, Routes, bProfileGuidance,
         ReadyBy = FPlatformTime::Seconds() + 10.0]()
     {
         TArray<UUserWidget*> Widgets;
@@ -133,7 +157,7 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
             return true;
         }));
         ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
-        ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Navigator, Tree, Player, Character, Routes]()
+        ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Navigator, Tree, Player, Character, Routes, bProfileGuidance]()
         {
             if (!TestTrue(TEXT("Walk there is clickable"),
                 PFTViewportTest::ClickVisibleWidget(Tree->FindWidget(TEXT("RouteButton"))))) return true;
@@ -241,14 +265,15 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
                 return true;
             }));
             ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.2f));
-            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, MapButton, Overview]()
+            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, MapButton, Overview, bProfileGuidance]()
             {
                 TestTrue(TEXT("The overview can be reopened"), PFTViewportTest::ClickVisibleWidget(MapButton));
                 TestTrue(TEXT("The overview is visible again"), Overview->IsVisible());
+                if (bProfileGuidance) BeginGuidanceProfile();
                 return true;
             }));
 
-            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Navigator, Player, Character, Routes, Tree, Trail,
+            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Navigator, Player, Character, Routes, Tree, Trail, bProfileGuidance,
                 SawZoneSign = MakeShared<bool>(false), Deadline = FPlatformTime::Seconds() + 65.0]()
             {
                 const FVector Position = Character->GetActorLocation();
@@ -274,6 +299,11 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
                     if (TestNotNull(TEXT("Walking instructions"), Hint))
                         TestEqual(TEXT("Arrival replaces the walking estimate"), Hint->GetText().ToString(), FString(TEXT("Arrived at PFT Commons.")));
                     AddInfo(FString::Printf(TEXT("Reached the Commons with route guidance at %s"), *Position.ToCompactString()));
+                    if (bProfileGuidance)
+                    {
+                        FinishGuidanceProfile();
+                        return true;
+                    }
                     ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
                     ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Navigator, Tree, Character, Routes, ArrivalLabel]()
                     {
@@ -340,6 +370,7 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
                 }
                 if (!Routes->IsGuiding() || Position.Z < 65 || FPlatformTime::Seconds() > Deadline)
                 {
+                    if (bProfileGuidance) FinishGuidanceProfile();
                     AddError(FString::Printf(TEXT("Guided walk stopped at %s with next point %s. %s"),
                         *Position.ToCompactString(), *Routes->NextPoint().ToCompactString(), *Routes->GetMessage().ToString()));
                     return true;
