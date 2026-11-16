@@ -37,6 +37,8 @@ the entire floor or **Focus route** to return to the closer view. These controls
 are also available under **Show map** during guidance. The map marks the first
 landmark along the route when the floor data includes one.
 The closer view fits the updated route when guidance reroutes from a new hallway.
+Choose **Show steps** in either map view to read upcoming turns, nearby landmarks,
+and the distance for each leg. During guidance, the list updates as you walk or reroute.
 Choose **Walk there** and follow the gold arrows with WASD.
 The Navigator shows which way to turn and confirms arrival. Choose **Stop route**
 or **Clear** to end guidance. Room previews and free camera are available from

@@ -11,7 +11,9 @@ class UScrollBox;
 class UEditableTextBox;
 class UCheckBox;
 class UVerticalBox;
+class UWidgetSwitcher;
 class UPFTRouteMap;
+class UPFTRoutes;
 
 UCLASS()
 class UPFTSearchButton : public UButton
@@ -62,6 +64,7 @@ private:
     UFUNCTION() void ToggleRoutePreview();
     UFUNCTION() void ToggleRouteOverview();
     UFUNCTION() void ToggleRouteMapScale();
+    UFUNCTION() void ToggleRouteSteps();
     UFUNCTION() void FindAnotherRoom();
     UFUNCTION() void ToggleSettings();
     UFUNCTION() void MotionChanged(bool bChecked);
@@ -75,6 +78,9 @@ private:
     void SetCompactDirections(bool bCompact);
     void SetRouteOverviewVisible(bool bVisible);
     void SetRoutePreviewVisible(bool bVisible);
+    void SetRouteStepsVisible(bool bPreview, bool bVisible);
+    void RefreshWalkingSteps(const UPFTRoutes& Routes);
+    void SetDirectionsTextSize(bool bLarge);
     UPROPERTY() TObjectPtr<UTextBlock> Status;
     UPROPERTY() TObjectPtr<UTextBlock> Details;
     UPROPERTY() TObjectPtr<UTextBlock> SelectedRoomLabel;
@@ -99,6 +105,9 @@ private:
     UPROPERTY() TObjectPtr<UVerticalBox> RoutePreviewMapBox;
     UPROPERTY() TObjectPtr<UPFTRouteMap> PreviewMap;
     UPROPERTY() TObjectPtr<UTextBlock> PreviewMapScaleLabel;
+    UPROPERTY() TObjectPtr<UWidgetSwitcher> PreviewRouteViews;
+    UPROPERTY() TObjectPtr<UTextBlock> PreviewSteps;
+    UPROPERTY() TObjectPtr<UTextBlock> PreviewStepsLabel;
     UPROPERTY() TObjectPtr<UTextBlock> RouteUnavailable;
     UPROPERTY() TObjectPtr<UTextBlock> RouteHint;
     UPROPERTY() TObjectPtr<UScrollBox> Browser;
@@ -110,6 +119,9 @@ private:
     UPROPERTY() TObjectPtr<UVerticalBox> RouteOverview;
     UPROPERTY() TObjectPtr<UPFTRouteMap> RouteMap;
     UPROPERTY() TObjectPtr<UTextBlock> RouteMapScaleLabel;
+    UPROPERTY() TObjectPtr<UWidgetSwitcher> WalkingRouteViews;
+    UPROPERTY() TObjectPtr<UTextBlock> WalkingSteps;
+    UPROPERTY() TObjectPtr<UTextBlock> WalkingStepsLabel;
     UPROPERTY() TObjectPtr<UButton> RetryRouteButton;
     UPROPERTY() TObjectPtr<UButton> FindAnotherRoomButton;
     UPROPERTY() TObjectPtr<UTextBlock> CameraLabel;
@@ -132,6 +144,8 @@ private:
     // Room that's currently picked, empty when nothing is selected
     FString SelectedRoomId;
     FVector RoutePreviewOrigin = FVector::ZeroVector;
+    double NextStepsUpdate = 0.0;
+    uint32 StepsPlanRevision = 0;
     bool bCompactDirections = false;
     bool bResettingClassSearch = false;
     float StandardRenderScale = 100.0f;

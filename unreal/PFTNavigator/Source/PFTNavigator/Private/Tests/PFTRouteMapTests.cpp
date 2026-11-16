@@ -52,12 +52,15 @@ bool FPFTRefocusAfterRerouteTest::RunTest(const FString& Parameters)
             TestTrue(TEXT("The initial frame fits the Commons route"), OldBounds.bIsValid && OldBounds.IsInside(FVector2D(Start)));
             TestFalse(TEXT("The C1007 hallway is outside the original frame"), OldBounds.IsInside(FVector2D(Hallway)));
             const uint32 OriginalPlan = Routes->GetPlanRevision();
+            const FString OriginalSteps = Routes->GetRemainingSteps().ToString();
             Character->SetActorLocation(Hallway, false, nullptr, ETeleportType::TeleportPhysics);
             Character->GetCharacterMovement()->StopMovementImmediately();
             Character->GetCharacterMovement()->SetMovementMode(MOVE_Walking);
             ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Player, Routes, Map, Overview, Hallway, Destination,
-                OriginalPlan, Deadline = FPlatformTime::Seconds() + 5.0]()
+                OriginalPlan, OriginalSteps, SawUpdate = MakeShared<bool>(false), Deadline = FPlatformTime::Seconds() + 5.0]()
             {
+                if (Routes->IsReplanning())
+                    *SawUpdate = Routes->GetRemainingSteps().ToString() == TEXT("Updating route…");
                 const auto& Bounds = Map->GetFocusBoundsForTests();
                 const bool bRerouted = Routes->GetPlanRevision() != OriginalPlan && !Routes->GetRemainingPath().IsEmpty();
                 const bool bRefocused = Bounds.bIsValid && Bounds.IsInside(FVector2D(Hallway));
@@ -66,6 +69,10 @@ bool FPFTRefocusAfterRerouteTest::RunTest(const FString& Parameters)
                 TestTrue(TEXT("The map refocuses to include the new hallway and destination"),
                     bRefocused && Bounds.IsInside(FVector2D(Destination)));
                 TestTrue(TEXT("The reroute keeps the Commons destination"), Routes->GetRemainingPath().Last().Equals(Destination));
+                TestTrue(TEXT("Replanning hides the obsolete route steps"), *SawUpdate);
+                const FString UpdatedSteps = Routes->GetRemainingSteps().ToString();
+                TestTrue(TEXT("The reroute replaces the steps and keeps the final leg"),
+                    UpdatedSteps != OriginalSteps && UpdatedSteps.EndsWith(TEXT("to the destination")));
                 TestTrue(TEXT("The map and walking controls stay available"), Overview->IsVisible() && !Player->IsMoveInputIgnored());
                 if (FParse::Param(FCommandLine::Get(), TEXT("PFTQAScreenshots")))
                 {

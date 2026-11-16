@@ -34,6 +34,8 @@ public:
     const FText& GetMessage() const { return Message; }
     uint32 GetPlanRevision() const { return PlanRevision; }
     TArrayView<const FVector> GetRemainingPath() const;
+    FText DescribeSteps(const FVector& Position, TArrayView<const FVector> Points) const;
+    FText GetRemainingSteps() const;
     const TPair<FString, FVector2D>* GetRouteLandmark(TArrayView<const FVector> Points) const;
     int32 CopyWalkableCells(TArray<FIntPoint>& Cells) const;
 
@@ -58,6 +60,7 @@ private:
     TMap<FString, FVector2D> Landmarks;
     TArray<FVector> Path;
     TArray<double> TurnSeconds;
+    TArray<int32> TurnPoints;
     UPROPERTY() TObjectPtr<ULineBatchComponent> Trail;
     UPROPERTY() TObjectPtr<UTextRenderComponent> ArrivalLabel;
     TWeakObjectPtr<ACharacter> Walker;

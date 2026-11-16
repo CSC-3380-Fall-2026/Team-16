@@ -157,6 +157,22 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
             return true;
         }));
         ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
+        ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Tree, Routes]()
+        {
+            auto* Button = CastChecked<UButton>(Tree->FindWidget(TEXT("PreviewStepsButton")));
+            const auto* Label = CastChecked<UTextBlock>(Button->GetContent());
+            TestTrue(TEXT("Show steps is clickable in the preview"), PFTViewportTest::ClickVisibleWidget(Button));
+            TestEqual(TEXT("The preview can switch back to the map"), Label->GetText().ToString(), FString(TEXT("Show map")));
+            const auto* Steps = CastChecked<UTextBlock>(Tree->FindWidget(TEXT("PreviewRouteSteps")));
+            TestTrue(TEXT("The preview lists a turn and the final leg"),
+                Steps->GetText().ToString().Contains(TEXT("then turn")) && Steps->GetText().ToString().EndsWith(TEXT("to the destination")));
+            TestFalse(TEXT("Steps hide the map scale control"), Tree->FindWidget(TEXT("RoutePreviewScaleButton"))->IsVisible());
+            TestFalse(TEXT("Reading the preview steps leaves guidance off"), Routes->IsGuiding());
+            if (FParse::Param(FCommandLine::Get(), TEXT("PFTQAScreenshots")))
+                FScreenshotRequest::RequestScreenshot(TEXT("PFTQA-PreviewSteps"), true, true, false);
+            return true;
+        }));
+        ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
         ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Navigator, Tree, Player, Character, Routes, bProfileGuidance]()
         {
             if (!TestTrue(TEXT("Walk there is clickable"),
@@ -260,8 +276,8 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
             ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.2f));
             ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, MapButton, Overview]()
             {
-                TestTrue(TEXT("Hide map is clickable"), PFTViewportTest::ClickVisibleWidget(MapButton));
-                TestFalse(TEXT("Hide map restores compact directions"), Overview->IsVisible());
+                TestTrue(TEXT("Hide route is clickable"), PFTViewportTest::ClickVisibleWidget(MapButton));
+                TestFalse(TEXT("Hide route restores compact directions"), Overview->IsVisible());
                 return true;
             }));
             ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.2f));
@@ -273,10 +289,40 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
                 return true;
             }));
 
+            if (!bProfileGuidance)
+            {
+                ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.2f));
+                ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Tree, Routes, Player]()
+                {
+                    auto* Button = CastChecked<UButton>(Tree->FindWidget(TEXT("WalkingStepsButton")));
+                    const auto* Label = CastChecked<UTextBlock>(Button->GetContent());
+                    TestTrue(TEXT("Show steps is clickable while walking"), PFTViewportTest::ClickVisibleWidget(Button));
+                    TestEqual(TEXT("Live steps can switch back to the map"), Label->GetText().ToString(), FString(TEXT("Show map")));
+                    const auto* Steps = CastChecked<UTextBlock>(Tree->FindWidget(TEXT("WalkingRouteSteps")));
+                    TestTrue(TEXT("Live steps name an upcoming turn"), Steps->GetText().ToString().Contains(TEXT("then turn")));
+                    TestTrue(TEXT("Reading the steps leaves movement active"), Routes->IsGuiding() && !Player->IsMoveInputIgnored());
+                    if (FParse::Param(FCommandLine::Get(), TEXT("PFTQAScreenshots")))
+                        FScreenshotRequest::RequestScreenshot(TEXT("PFTQA-WalkingSteps"), true, true, false);
+                    return true;
+                }));
+                ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.2f));
+            }
+
             ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Navigator, Player, Character, Routes, Tree, Trail, bProfileGuidance,
-                SawZoneSign = MakeShared<bool>(false), Deadline = FPlatformTime::Seconds() + 65.0]()
+                SawZoneSign = MakeShared<bool>(false), StepCounts = MakeShared<FIntPoint>(0, 0), Deadline = FPlatformTime::Seconds() + 65.0]()
             {
                 const FVector Position = Character->GetActorLocation();
+                if (!bProfileGuidance && Routes->IsGuiding() && !Routes->IsReplanning())
+                {
+                    const auto* Steps = CastChecked<UTextBlock>(Tree->FindWidget(TEXT("WalkingRouteSteps")));
+                    TArray<FString> Lines;
+                    const int32 Count = Steps->GetText().ToString().ParseIntoArrayLines(Lines);
+                    if (Count > 0 && Lines.Last() != TEXT("Updating route…"))
+                    {
+                        if (StepCounts->X == 0) StepCounts->X = Count;
+                        StepCounts->Y = Count;
+                    }
+                }
                 if (!*SawZoneSign && Routes->GetMessage().ToString().Contains(TEXT("near Zone 1200 sign")))
                 {
                     *SawZoneSign = true;
@@ -304,10 +350,11 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
                         FinishGuidanceProfile();
                         return true;
                     }
+                    TestTrue(TEXT("Passed turns drop out of the walking steps"), StepCounts->Y > 0 && StepCounts->Y < StepCounts->X);
                     ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
                     ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Navigator, Tree, Character, Routes, ArrivalLabel]()
                     {
-                        TestFalse(TEXT("Arrival closes the overview"), Tree->FindWidget(TEXT("RouteOverview"))->IsVisible());
+                        TestFalse(TEXT("Arrival closes the walking steps"), Tree->FindWidget(TEXT("RouteOverview"))->IsVisible());
                         TestTrue(TEXT("Arrival clears the overview path"), Routes->GetRemainingPath().IsEmpty());
                         TestTrue(TEXT("Find another room is clickable after arrival"),
                             PFTViewportTest::ClickVisibleWidget(Tree->FindWidget(TEXT("FindAnotherRoomButton"))));

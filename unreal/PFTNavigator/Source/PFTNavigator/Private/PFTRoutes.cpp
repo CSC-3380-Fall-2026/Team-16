@@ -1,5 +1,6 @@
 #include "PFTRoutes.h"
 #include "PFTPalette.h"
+#include "Algo/BinarySearch.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/LineBatchComponent.h"
 #include "Components/TextRenderComponent.h"
@@ -64,6 +65,51 @@ namespace
         }
         return Metres <= 1 ? FString::Printf(TEXT("Turn %s ahead"), Side)
             : FString::Printf(TEXT("Turn %s in %d m"), Side, Metres);
+    }
+
+    double RouteBend(TArrayView<const FVector> Points, int32 Index, int32 Span)
+    {
+        const FVector Before = (Points[Index] - Points[FMath::Max(0, Index - Span)]).GetSafeNormal2D();
+        const FVector After = (Points[FMath::Min(Points.Num() - 1, Index + Span)] - Points[Index]).GetSafeNormal2D();
+        return FVector::CrossProduct(Before, After).Z;
+    }
+
+    TArray<int32> FindRouteTurns(TArrayView<const FVector> Points, int32 Step)
+    {
+        TArray<int32> Turns;
+        if (Step <= 0) return Turns;
+        const int32 LookAhead = FMath::Max(2, FMath::CeilToInt(180.0 / Step));
+        for (int32 Index = 1; Index + 1 < Points.Num(); ++Index)
+        {
+            // A real corner changes the route heading beyond the adjacent grid cells.
+            const double Bend = RouteBend(Points, Index, 1);
+            if (FMath::Abs(Bend) < 0.85 || Bend * RouteBend(Points, Index, LookAhead) < 0.9) continue;
+            Turns.Add(Index);
+        }
+        return Turns;
+    }
+
+    FText FormatRouteSteps(const FVector& Position, TArrayView<const FVector> Points, TArrayView<const int32> Turns,
+        int32 Start, int32 Step, const TMap<FString, FVector2D>& Landmarks)
+    {
+        if (!Points.IsValidIndex(Start)) return FText::GetEmpty();
+        TArray<FString> Steps;
+        double Approach = FVector::Dist2D(Position, Points[Start]);
+        for (int32 Turn : Turns.RightChop(Algo::LowerBound(Turns, Start)))
+        {
+            const int32 Metres = FMath::RoundToInt((Approach + (Turn - Start) * Step) / 100.0);
+            const TCHAR* Side = RouteBend(Points, Turn, 1) > 0 ? TEXT("right") : TEXT("left");
+            const auto* Landmark = FindNearbyLandmark(FVector2D(Points[Turn]), Landmarks);
+            FString Line = Metres > 0 ? FString::Printf(TEXT("Walk %d m, then turn %s"), Metres, Side)
+                : FString::Printf(TEXT("Turn %s"), Side);
+            if (Landmark) Line += TEXT(" near ") + Landmark->Key;
+            Steps.Add(MoveTemp(Line));
+            Start = Turn;
+            Approach = 0.0;
+        }
+        const int32 Metres = FMath::RoundToInt((Approach + (Points.Num() - 1 - Start) * Step) / 100.0);
+        Steps.Add(Metres > 0 ? FString::Printf(TEXT("Walk %d m to the destination"), Metres) : TEXT("Destination ahead"));
+        return FText::FromString(FString::Join(Steps, TEXT("\n\n")));
     }
 
     FString WalkingTimeLabel(double Seconds)
@@ -344,6 +390,7 @@ bool UPFTRoutes::Plan(const ACharacter& Character, const FIntPoint& Target)
 {
     if (!BuildPath(Character, Target, Path, TurnSeconds)) return false;
     NextIndex = 0;
+    TurnPoints = FindRouteTurns(Path, Step);
     ++PlanRevision;
     return true;
 }
@@ -462,16 +509,12 @@ void UPFTRoutes::UpdateDirections(const FVector& Position, const FRotator& View,
     const double DistanceLeft = DistanceToPath + (Path.Num() - 1 - NextIndex) * Step;
     if (Instruction.IsEmpty())
     {
-        const int32 LookAhead = FMath::Max(2, FMath::CeilToInt(180.0 / Step));
-        for (int32 Index = NextIndex + LookAhead; Index + LookAhead < Path.Num(); ++Index)
+        const int32 Turn = Algo::LowerBound(TurnPoints, NextIndex);
+        if (TurnPoints.IsValidIndex(Turn))
         {
-            const FVector Incoming = (Path[Index] - Path[Index - LookAhead]).GetSafeNormal2D();
-            const FVector Outgoing = (Path[Index + LookAhead] - Path[Index]).GetSafeNormal2D();
-            const double Turn = FVector::CrossProduct(Incoming, Outgoing).Z;
-            if (FMath::Abs(Turn) < 0.85) continue;
+            const int32 Index = TurnPoints[Turn];
             const int32 Metres = FMath::RoundToInt((DistanceToPath + (Index - NextIndex) * Step) / 100.0);
-            Instruction = DescribeTurn(Turn, Metres, FVector2D(Path[Index]), Landmarks);
-            break;
+            Instruction = DescribeTurn(RouteBend(Path, Index, 1), Metres, FVector2D(Path[Index]), Landmarks);
         }
         if (Instruction.IsEmpty())
         {
@@ -545,6 +588,7 @@ void UPFTRoutes::EndGuidance(const FText& NewMessage)
     Walker.Reset();
     Path.Reset();
     TurnSeconds.Reset();
+    TurnPoints.Reset();
     UpdateTime = 0;
     bReplanning = false;
     Message = NewMessage;
@@ -562,6 +606,19 @@ TArrayView<const FVector> UPFTRoutes::GetRemainingPath() const
 {
     if (!IsGuiding() || bReplanning || !Path.IsValidIndex(NextIndex)) return {};
     return MakeArrayView(Path).RightChop(NextIndex);
+}
+
+FText UPFTRoutes::DescribeSteps(const FVector& Position, TArrayView<const FVector> Points) const
+{
+    return FormatRouteSteps(Position, Points, FindRouteTurns(Points, Step), 0, Step, Landmarks);
+}
+
+FText UPFTRoutes::GetRemainingSteps() const
+{
+    const auto* Character = Walker.Get();
+    if (!Character) return FText::GetEmpty();
+    if (bReplanning) return FText::FromString(TEXT("Updating route…"));
+    return FormatRouteSteps(Character->GetActorLocation(), Path, TurnPoints, NextIndex, Step, Landmarks);
 }
 
 const TPair<FString, FVector2D>* UPFTRoutes::GetRouteLandmark(TArrayView<const FVector> Points) const
@@ -584,6 +641,39 @@ void UPFTRoutes::Deinitialize()
 }
 
 #if WITH_DEV_AUTOMATION_TESTS
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPFTRouteStepsTest, "PFTNavigator.Routes.Steps",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::EngineFilter)
+
+bool FPFTRouteStepsTest::RunTest(const FString& Parameters)
+{
+    const TArray<FVector> Path = {
+        {0, 0, 0}, {60, 0, 0}, {120, 0, 0}, {180, 0, 0},
+        {180, 60, 0}, {180, 120, 0}, {180, 180, 0}, {180, 240, 0}, {180, 300, 0}, {180, 360, 0},
+        {240, 360, 0}, {300, 360, 0}, {360, 360, 0}};
+    const TMap<FString, FVector2D> Signs = {{TEXT("Zone 1200 sign"), FVector2D(180, 0)}};
+    const auto Turns = FindRouteTurns(Path, 60);
+    TestTrue(TEXT("Each real corner appears once and in order"), Turns == TArray<int32>{3, 9});
+    TestEqual(TEXT("The preview includes turns, a landmark, and a final leg"),
+        FormatRouteSteps(FVector::ZeroVector, Path, Turns, 0, 60, Signs).ToString(),
+        FString(TEXT("Walk 2 m, then turn right near Zone 1200 sign\n\nWalk 4 m, then turn left\n\nWalk 2 m to the destination")));
+    TestEqual(TEXT("The remaining steps omit a passed turn and shorten the current leg"),
+        FormatRouteSteps(Path[4], Path, Turns, 4, 60, Signs).ToString(),
+        FString(TEXT("Walk 3 m, then turn left\n\nWalk 2 m to the destination")));
+    TestEqual(TEXT("A turn at the next point stays visible"), FormatRouteSteps(Path[9], Path, Turns, 9, 60, Signs).ToString(),
+        FString(TEXT("Turn left\n\nWalk 2 m to the destination")));
+
+    const TArray<FVector> Zigzag = {{0, 0, 0}, {60, 0, 0}, {60, 60, 0}, {120, 60, 0}, {120, 120, 0},
+        {180, 120, 0}, {180, 180, 0}};
+    TestTrue(TEXT("Grid zigzags don't produce a list of spurious turns"), FindRouteTurns(Zigzag, 60).IsEmpty());
+    const TArray<FVector> ShortRoute = {{0, 0, 0}, {60, 0, 0}, {60, 60, 0}};
+    TestTrue(TEXT("A short route can still have a turn"), FindRouteTurns(ShortRoute, 60) == TArray<int32>{1});
+    TestEqual(TEXT("The final waypoint alone shows the destination"),
+        FormatRouteSteps(Path.Last(), Path, Turns, Path.Num() - 1, 60, Signs).ToString(),
+        FString(TEXT("Destination ahead")));
+    TestTrue(TEXT("An empty route has no steps"), FormatRouteSteps({}, {}, {}, 0, 60, {}).IsEmpty());
+    return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPFTFastestPathTest, "PFTNavigator.Routes.FastestPath",
     EAutomationTestFlags::EditorContext | EAutomationTestFlags::ClientContext | EAutomationTestFlags::EngineFilter)
 
