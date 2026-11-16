@@ -90,9 +90,12 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     Style.TextStyle.SetColorAndOpacity(FSlateColor(FLinearColor(PFTPalette::Ink)));
     Search->SetWidgetStyle(Style);
     Search->SetForegroundColor(FLinearColor(PFTPalette::Ink));
-    Search->SetHintText(FText::FromString(TEXT("Room, course, or department")));
+    Search->SetHintText(FText::FromString(TEXT("Find a room or class")));
     Search->OnTextChanged.AddDynamic(this, &UPFTNavigatorWidget::SearchChanged);
     Column->AddChild(Search);
+    auto* RoomActions = WidgetTree->ConstructWidget<UHorizontalBox>();
+    Column->AddChild(RoomActions);
+    RoomActions->SetVisibility(ESlateVisibility::Collapsed);
     AddText(TEXT("Floor"));
     Floors = WidgetTree->ConstructWidget<UComboBoxString>(UComboBoxString::StaticClass(), TEXT("FloorFilter"));
     Floors->AddOption(TEXT("All floors"));
@@ -184,19 +187,22 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     Details = MakeText(TEXT("Select a room to see its details."));
     Details->Rename(TEXT("RoomDetails"));
     RoomCard->AddChild(Details);
-    auto* RoomActions = WidgetTree->ConstructWidget<UHorizontalBox>();
-    RoomCard->AddChild(RoomActions);
-    ViewButton = AddButton(RoomActions, TEXT("Preview room"), Label);
-    ViewButton->Rename(TEXT("ViewRoomButton"));
-    ViewButton->SetIsEnabled(false);
-    ViewButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ViewRoom);
     RouteButton = AddButton(RoomActions, TEXT("Walk there"), Label);
+    RouteButton->SetBackgroundColor(FLinearColor(PFTPalette::Gold));
+    Label->SetColorAndOpacity(FSlateColor(FLinearColor(PFTPalette::Ink)));
     RouteButton->Rename(TEXT("RouteButton"));
     RouteButton->SetVisibility(ESlateVisibility::Collapsed);
     RouteButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::StartRoute);
+    ViewButton = AddButton(RoomActions, TEXT("Preview room"), Label);
+    ViewButton->Rename(TEXT("ViewRoomButton"));
+    ViewButton->SetIsEnabled(false);
+    ViewButton->SetVisibility(ESlateVisibility::Collapsed);
+    ViewButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ToggleRoomPreview);
+    PreviewLabel = Label;
     ClearButton = AddButton(RoomActions, TEXT("Clear"), Label);
     ClearButton->Rename(TEXT("ClearRoomButton"));
     ClearButton->SetIsEnabled(false);
+    CastChecked<UHorizontalBoxSlot>(ClearButton->Slot)->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
     ClearButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ClearRoom);
     RouteUnavailable = MakeText(TEXT("Walking directions unavailable"));
     RouteUnavailable->Rename(TEXT("RouteUnavailable"));
@@ -450,11 +456,13 @@ void UPFTNavigatorWidget::ChooseRoom(const FString& RoomId, const FString& Cours
     Status->SetText(FText::FromString(Message));
     UpdateRouteControls();
     if (bSwitchPreview && bSelected) ViewRoom();
+    Browser->ScrollToStart();
 }
 
 void UPFTNavigatorWidget::ClearRoom()
 {
     auto* Destinations = GetWorld()->GetSubsystem<UPFTDestinations>();
+    const bool bWasPreview = Destinations->IsRoomPreviewActive();
     if (Destinations->IsRoomPreviewActive())
     {
         ToggleFreeCamera();
@@ -471,6 +479,7 @@ void UPFTNavigatorWidget::ClearRoom()
     ClearButton->SetIsEnabled(false);
     Status->SetText(FText::FromString(TEXT("Room selection cleared.")));
     UpdateRouteControls();
+    if (bWasPreview) Search->SetKeyboardFocus();
 }
 
 // Puts a gold "Selected" tag on every result that points at the selected room.
@@ -495,14 +504,25 @@ void UPFTNavigatorWidget::ToggleFreeCamera()
 {
     auto* Exploration = GetWorld()->GetSubsystem<UPFTExploration>();
     const bool bWasExploring = IsValid(Exploration->ExplorePawn);
+    const bool bWasPreview = GetWorld()->GetSubsystem<UPFTDestinations>()->IsRoomPreviewActive();
     const bool bSuccess = bWasExploring ? Exploration->EndExplore() : Exploration->BeginExplore();
     if (!bSuccess) Status->SetText(FText::FromString(Exploration->Error));
-    else if (bWasExploring) Status->SetText(FText::FromString(TEXT("Returned to the player.")));
+    else if (bWasExploring)
+    {
+        Status->SetText(FText::FromString(TEXT("Returned to the player.")));
+        if (bWasPreview)
+        {
+            UWidget* Focus = ViewButton->GetIsEnabled() && ViewButton->IsVisible() ? static_cast<UWidget*>(ViewButton.Get()) : Search.Get();
+            Browser->ScrollToStart();
+            Focus->SetKeyboardFocus();
+        }
+    }
 }
 
 void UPFTNavigatorWidget::UpdateCameraControls(bool bFreeCamera, bool bCursorShown, bool bRoomPreview)
 {
     CameraLabel->SetText(FText::FromString(bFreeCamera ? TEXT("Return to player") : TEXT("Free camera")));
+    PreviewLabel->SetText(FText::FromString(bRoomPreview ? TEXT("Exit preview") : TEXT("Preview room")));
     const TCHAR* Help = TEXT("Free camera lets you fly around the building.");
     if (bFreeCamera)
     {
@@ -564,8 +584,17 @@ void UPFTNavigatorWidget::UpdateRouteControls()
     if (!RouteButton) return;
     const auto* Routes = GetWorld()->GetSubsystem<UPFTRoutes>();
     const bool bAvailable = Routes->HasDestination(SelectedRoomId);
+    const bool bSelected = !SelectedRoomId.IsEmpty();
+    RouteButton->GetParent()->SetVisibility(bSelected ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
     RouteButton->SetVisibility(bAvailable ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-    RouteUnavailable->SetVisibility(!bAvailable && !SelectedRoomId.IsEmpty() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    const bool bCanPreview = ViewButton->GetIsEnabled();
+    ViewButton->SetVisibility(bCanPreview ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    RouteUnavailable->SetVisibility(!bAvailable && bSelected ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    if (!bAvailable && bSelected)
+    {
+        RouteUnavailable->SetText(FText::FromString(bCanPreview ? TEXT("Walking directions unavailable. You can preview this room.")
+            : TEXT("Walking directions and preview unavailable. Room details are below.")));
+    }
     SetCompactDirections(Routes->IsGuiding() || Routes->CanRetry() || Routes->HasArrived());
     StopRouteButton->SetVisibility(Routes->IsGuiding() || Routes->CanRetry() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
     RetryRouteButton->SetVisibility(Routes->CanRetry() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
@@ -701,6 +730,12 @@ void UPFTNavigatorWidget::ViewRoom()
 {
     auto* Exploration = GetWorld()->GetSubsystem<UPFTExploration>();
     if (!Exploration->ViewRoom()) Status->SetText(FText::FromString(Exploration->Error));
+}
+
+void UPFTNavigatorWidget::ToggleRoomPreview()
+{
+    if (GetWorld()->GetSubsystem<UPFTDestinations>()->IsRoomPreviewActive()) ToggleFreeCamera();
+    else ViewRoom();
 }
 
 FReply UPFTNavigatorWidget::NativeOnPreviewKeyDown(const FGeometry& Geometry, const FKeyEvent& Event)

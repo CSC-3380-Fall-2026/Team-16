@@ -54,7 +54,8 @@ private:
     void AddResultPage();
     void UpdateSelectedTags();
     UFUNCTION() void ToggleFreeCamera();
-    UFUNCTION() void ViewRoom();
+    void ViewRoom();
+    UFUNCTION() void ToggleRoomPreview();
     UFUNCTION() void StartRoute();
     UFUNCTION() void StopRoute();
     UFUNCTION() void FindAnotherRoom();
@@ -80,6 +81,7 @@ private:
     UPROPERTY() TObjectPtr<UComboBoxString> ClassStart;
     TArray<FString> ClassStartTimes;
     UPROPERTY() TObjectPtr<UButton> ViewButton;
+    UPROPERTY() TObjectPtr<UTextBlock> PreviewLabel;
     UPROPERTY() TObjectPtr<UButton> ClearButton;
     UPROPERTY() TObjectPtr<UButton> RouteButton;
     UPROPERTY() TObjectPtr<UTextBlock> RouteUnavailable;
