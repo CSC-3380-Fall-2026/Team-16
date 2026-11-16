@@ -15,6 +15,7 @@ RADIUS = 42
 HALF_HEIGHT = 92
 EDGES = ((1, 0), (0, 1), (-1, 0), (0, -1))
 COMMONS = (14900, -5160)
+LANDMARK_ACTORS = {"SM_Zone1200SouthWest3": "Zone 1200 sign"}
 
 
 def bake(map_path, output):
@@ -114,9 +115,17 @@ def bake(map_path, output):
 
     if "PFT_COMMONS" not in destinations or len(destinations) < 2:
         raise RuntimeError(f"Too few rooms connect to the walking graph: {sorted(destinations)}")
+    landmarks = {}
+    for actor in actors:
+        label = LANDMARK_ACTORS.get(actor.get_actor_label())
+        if label:
+            center, _ = actor.get_actor_bounds(False)
+            if 0 <= center.z <= 350:
+                landmarks[label] = [round(center.x), round(center.y)]
     nodes = (json.dumps([x, y, round(positions[x, y].z - HALF_HEIGHT - 4, 2), links[x, y]], separators=(",", ":"))
              for x, y in sorted(links))
-    text = json.dumps({"Map": map_path, "Step": STEP, "Destinations": destinations}, separators=(",", ":"))
+    text = json.dumps({"Map": map_path, "Step": STEP, "Destinations": destinations, "Landmarks": landmarks},
+                      separators=(",", ":"))
     output.write_text(text[:-1] + ',"Nodes":[\n' + ",\n".join(nodes) + "\n]}\n", encoding="utf-8")
     unreal.log(f"PFT routes: {len(links)} connected points, {len(destinations)} destinations: {', '.join(destinations)}")
 

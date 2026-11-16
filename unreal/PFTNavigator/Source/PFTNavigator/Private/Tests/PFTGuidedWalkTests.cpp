@@ -15,8 +15,11 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
+#include "Misc/CommandLine.h"
 #include "Misc/ConfigCacheIni.h"
+#include "Misc/Parse.h"
 #include "Tests/AutomationCommon.h"
+#include "UnrealClient.h"
 
 namespace
 {
@@ -141,11 +144,23 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
             }));
 
             ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Navigator, Player, Character, Routes, Tree, Trail,
-                Deadline = FPlatformTime::Seconds() + 65.0]()
+                SawZoneSign = MakeShared<bool>(false), Deadline = FPlatformTime::Seconds() + 65.0]()
             {
                 const FVector Position = Character->GetActorLocation();
+                if (!*SawZoneSign && Routes->GetMessage().ToString().Contains(TEXT("near Zone 1200 sign")))
+                {
+                    *SawZoneSign = true;
+                    if (FParse::Param(FCommandLine::Get(), TEXT("PFTQAScreenshots")))
+                    {
+                        FScreenshotRequest::RequestScreenshot(TEXT("PFTQA-LandmarkTurn"), true, true, false);
+                    }
+                }
                 if (Routes->HasArrived())
                 {
+                    if (FParse::Param(FCommandLine::Get(), TEXT("PFTVerifyLandmarks")))
+                    {
+                        TestTrue(TEXT("The Commons route names the Zone 1200 sign before a nearby turn"), *SawZoneSign);
+                    }
                     TestTrue(TEXT("The player reaches the Commons"), FVector::Dist2D(Position, FVector(14900, -5160, 0)) < 180);
                     TestTrue(TEXT("Arrival clears the arrow trail"), Trail->BatchedLines.IsEmpty());
                     const auto* ArrivalLabel = FindObject<UTextRenderComponent>(Routes, TEXT("PFTArrivalLabel"));

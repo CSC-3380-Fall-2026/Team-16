@@ -70,6 +70,9 @@ class TestValidateData(unittest.TestCase):
         self.data["first_floor_routes.json"] = graph
         self.write_files()
         self.assertEqual(validate_data.validate(self.folder), [])
+        self.data["first_floor_routes.json"] = {**graph, "Landmarks": {"Zone 1200 sign": [25, -60]}}
+        self.write_files()
+        self.assertEqual(validate_data.validate(self.folder), [])
         cases = [
             ({"Nodes": [[0, 0, 0, 1], [1, 0, 0, 0]]}, "no return edge"),
             ({"Nodes": [[0, 0, 0, 0], [1, 0, 0, 0]]}, "disconnected"),
@@ -78,6 +81,9 @@ class TestValidateData(unittest.TestCase):
             ({"Destinations": {"PFT_COMMONS": [0, 0], "PFT_3325": [1, 0]}}, "not a first-floor"),
             ({"Destinations": {"PFT_COMMONS": [0, 0], "PFT_1200": [2, 0]}}, "does not point"),
             ({"Step": True}, "Step must be an integer"),
+            ({"Landmarks": []}, "Landmarks must be an object"),
+            ({"Landmarks": {"": [0, 0]}}, "invalid landmark"),
+            ({"Landmarks": {"Zone 1200 sign": [True, 0]}}, "invalid landmark"),
         ]
         for overrides, message in cases:
             with self.subTest(message=message):

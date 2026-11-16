@@ -27,6 +27,29 @@ namespace
     constexpr double TrailLength = 1600.0;
     constexpr double SecondsPerQuarterTurn = 0.25;
 
+    FString DescribeTurn(double Turn, int32 Metres, const FVector2D& Corner,
+        const TMap<FString, FVector2D>& Landmarks)
+    {
+        const TCHAR* Side = Turn > 0 ? TEXT("right") : TEXT("left");
+        if (Metres <= 8)
+        {
+            const FString* Nearest = nullptr;
+            double DistanceSquared = FMath::Square(220.0);
+            for (const auto& Landmark : Landmarks)
+            {
+                const double Candidate = FVector2D::DistSquared(Corner, Landmark.Value);
+                if (Candidate < DistanceSquared)
+                {
+                    Nearest = &Landmark.Key;
+                    DistanceSquared = Candidate;
+                }
+            }
+            if (Nearest) return FString::Printf(TEXT("Turn %s near %s"), Side, **Nearest);
+        }
+        return Metres <= 1 ? FString::Printf(TEXT("Turn %s ahead"), Side)
+            : FString::Printf(TEXT("Turn %s in %d m"), Side, Metres);
+    }
+
     FString WalkingTimeLabel(double Seconds)
     {
         if (Seconds < 5.0) return TEXT("Under 5 sec left");
@@ -203,6 +226,21 @@ void UPFTRoutes::LoadGraph(const FString& Map)
     }
     Step = GridStep;
     Nodes = MoveTemp(GraphNodes);
+    const TSharedPtr<FJsonObject>* GraphLandmarks;
+    if (Graph->TryGetObjectField(TEXT("Landmarks"), GraphLandmarks))
+    {
+        for (const auto& Landmark : (*GraphLandmarks)->Values)
+        {
+            const TArray<TSharedPtr<FJsonValue>>* Point;
+            double X, Y;
+            if (!Landmark.Key.IsEmpty() && Landmark.Value->TryGetArray(Point) && Point->Num() == 2
+                && (*Point)[0]->TryGetNumber(X) && (*Point)[1]->TryGetNumber(Y)
+                && FMath::Abs(X) <= 1000000 && FMath::Abs(Y) <= 1000000)
+            {
+                Landmarks.Add(FString(Landmark.Key), FVector2D(X, Y));
+            }
+        }
+    }
 }
 
 bool UPFTRoutes::CanCross(ACharacter& Character, const FVector& Start, const FVector& End) const
@@ -393,9 +431,7 @@ void UPFTRoutes::UpdateDirections(const FVector& Position, const FRotator& View,
             const double Turn = FVector::CrossProduct(Incoming, Outgoing).Z;
             if (FMath::Abs(Turn) < 0.85) continue;
             const int32 Metres = FMath::RoundToInt((DistanceToPath + (Index - NextIndex) * Step) / 100.0);
-            const TCHAR* SideName = Turn > 0 ? TEXT("right") : TEXT("left");
-            Instruction = Metres <= 1 ? FString::Printf(TEXT("Turn %s ahead"), SideName)
-                : FString::Printf(TEXT("Turn %s in %d m"), SideName, Metres);
+            Instruction = DescribeTurn(Turn, Metres, FVector2D(Path[Index]), Landmarks);
             break;
         }
         if (Instruction.IsEmpty())
@@ -497,6 +533,15 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPFTFastestPathTest, "PFTNavigator.Routes.Faste
 
 bool FPFTFastestPathTest::RunTest(const FString& Parameters)
 {
+    const TMap<FString, FVector2D> Signs = {{TEXT("Zone 1200 sign"), FVector2D(100, 100)}};
+    TestEqual(TEXT("An upcoming turn can use a nearby sign"), DescribeTurn(1.0, 3, FVector2D::ZeroVector, Signs),
+        FString(TEXT("Turn right near Zone 1200 sign")));
+    TestEqual(TEXT("A distant sign does not describe the turn"), DescribeTurn(-1.0, 3, FVector2D(500, 500), Signs),
+        FString(TEXT("Turn left in 3 m")));
+    TestEqual(TEXT("A distant turn keeps its distance"), DescribeTurn(-1.0, 12, FVector2D::ZeroVector, Signs),
+        FString(TEXT("Turn left in 12 m")));
+    TestEqual(TEXT("Graphs without landmarks keep the existing directions"), DescribeTurn(1.0, 1, FVector2D::ZeroVector, {}),
+        FString(TEXT("Turn right ahead")));
     TestEqual(TEXT("Short walks use a relative time"), WalkingTimeLabel(3.0), FString(TEXT("Under 5 sec left")));
     TestEqual(TEXT("Walking time is rounded to five seconds"), WalkingTimeLabel(23.0), FString(TEXT("About 25 sec left")));
     TestEqual(TEXT("Long walks show minutes and seconds"), WalkingTimeLabel(72.0), FString(TEXT("About 1 min 10 sec left")));

@@ -233,6 +233,16 @@ def check_walking_graph(graph, room_ids):
     if not isinstance(destinations, dict) or len(destinations) < 2 or "PFT_COMMONS" not in destinations:
         return [f"{prefix} expected the Commons and at least one other destination"]
 
+    landmarks = graph.get("Landmarks", {})
+    if not isinstance(landmarks, dict):
+        return [f"{prefix} Landmarks must be an object"]
+    for label, point in landmarks.items():
+        if (not isinstance(label, str) or not label.strip() or label != label.strip()
+                or any(char in label for char in "\r\n")
+                or not isinstance(point, list) or len(point) != 2
+                or any(type(value) is not int or abs(value) > 1_000_000 for value in point)):
+            return [f"{prefix} invalid landmark {label!r}"]
+
     nodes = {}
     for index, row in enumerate(rows, start=1):
         if not isinstance(row, list) or len(row) != 4 or not is_grid_cell(row[:2]):
