@@ -33,6 +33,8 @@ class PFTNAVIGATOR_API UPFTNavigatorWidget : public UUserWidget
 {
     GENERATED_BODY()
 public:
+    // The whole panel is drawn this much larger so it can be read on a projector at 720p
+    static constexpr float PanelScale = 1.25f;
     void ChooseRoom(const FString& RoomId, const FString& CourseId = FString());
     void UpdateCameraControls(bool bFreeCamera, bool bCursorShown, bool bRoomPreview);
     void UpdateRouteControls();
@@ -73,6 +75,7 @@ private:
     void UpdateSaveClassButton();
     FDateTime GetNow() const;
     void SetCompactDirections(bool bCompact);
+    float GetPanelWidth() const;
     void SetRouteOverviewVisible(bool bVisible);
     void SetRoutePreviewVisible(bool bVisible);
     UPROPERTY() TObjectPtr<UTextBlock> Status;
@@ -100,7 +103,10 @@ private:
     UPROPERTY() TObjectPtr<UPFTRouteMap> PreviewMap;
     UPROPERTY() TObjectPtr<UTextBlock> PreviewMapScaleLabel;
     UPROPERTY() TObjectPtr<UTextBlock> RouteUnavailable;
+    // The walking panel shows where you're going, the next instruction, and the time left on separate lines
+    UPROPERTY() TObjectPtr<UTextBlock> RouteDestination;
     UPROPERTY() TObjectPtr<UTextBlock> RouteHint;
+    UPROPERTY() TObjectPtr<UTextBlock> RouteTime;
     UPROPERTY() TObjectPtr<UScrollBox> Browser;
     UPROPERTY() TObjectPtr<UVerticalBox> Directions;
     UPROPERTY() TObjectPtr<UVerticalBox> Settings;
@@ -133,6 +139,11 @@ private:
     FString SelectedRoomId;
     FVector RoutePreviewOrigin = FVector::ZeroVector;
     bool bCompactDirections = false;
+    // Last route message split into the walking panel, and the height the panel was fitted to
+    FString ShownRouteMessage;
+    float CompactHeight = 0.0f;
+    // Frame when the walking panel last changed shape. Its new size is only known after that frame is drawn
+    uint64 CompactLayoutFrame = 0;
     bool bResettingClassSearch = false;
     float StandardRenderScale = 100.0f;
 };
