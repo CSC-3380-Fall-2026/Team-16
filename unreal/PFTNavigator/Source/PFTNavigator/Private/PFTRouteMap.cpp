@@ -3,9 +3,13 @@
 #include "PFTRoutes.h"
 #include "Algo/AllOf.h"
 #include "Engine/Texture2D.h"
+#include "Fonts/FontMeasure.h"
+#include "Framework/Application/SlateApplication.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "Rendering/DrawElements.h"
+#include "Rendering/SlateRenderer.h"
+#include "Styling/CoreStyle.h"
 
 namespace
 {
@@ -40,6 +44,38 @@ namespace
         FVector2D Origin;
         double Scale;
     };
+
+    void DrawLandmark(const FGeometry& Geometry, FSlateWindowElementList& Draw, int32 Layer,
+        const FVector2f& Pin, const FString& Name)
+    {
+        constexpr float Inset = 4.0f;
+        const FVector2f Area(Geometry.GetLocalSize());
+        if (Pin.X < Inset || Pin.X > Area.X - Inset || Pin.Y < Inset || Pin.Y > Area.Y - Inset) return;
+
+        const FSlateFontInfo Font = FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), 12);
+        const auto FontMeasure = FSlateApplication::Get().GetRenderer()->GetFontMeasureService();
+        const FVector2f TextSize(FontMeasure->Measure(Name, Font));
+        const FVector2f Padding(6, 3);
+        const FVector2f LabelSize = TextSize + Padding * 2.0f;
+        if (LabelSize.X + Inset * 2.0f > Area.X || LabelSize.Y + Inset * 2.0f > Area.Y) return;
+
+        const float AbovePin = Pin.Y - LabelSize.Y - 7.0f;
+        const FVector2f LabelCorner(
+            FMath::Clamp(Pin.X - LabelSize.X * 0.5f, Inset, Area.X - LabelSize.X - Inset),
+            FMath::Clamp(AbovePin >= Inset ? AbovePin : Pin.Y + 7.0f, Inset, Area.Y - LabelSize.Y - Inset));
+        const auto* Brush = FCoreStyle::Get().GetBrush(TEXT("WhiteBrush"));
+        const auto Place = [&](const FVector2f& Size, const FVector2f& Corner)
+        {
+            return Geometry.ToPaintGeometry(Size, FSlateLayoutTransform(Corner));
+        };
+        const FLinearColor Ink(PFTPalette::Ink);
+        FSlateDrawElement::MakeBox(Draw, Layer, Place(FVector2f(8, 8), Pin - FVector2f(4, 4)), Brush);
+        FSlateDrawElement::MakeBox(Draw, Layer + 1, Place(FVector2f(4, 4), Pin - FVector2f(2, 2)), Brush,
+            ESlateDrawEffect::None, Ink);
+        FSlateDrawElement::MakeBox(Draw, Layer, Place(LabelSize, LabelCorner), Brush);
+        FSlateDrawElement::MakeText(Draw, Layer + 1, Place(TextSize, LabelCorner + Padding), Name, Font,
+            ESlateDrawEffect::None, Ink);
+    }
 }
 
 bool UPFTRouteMap::Load(UPFTRoutes& InRoutes, APlayerController& InPlayer)
@@ -134,6 +170,11 @@ int32 UPFTRouteMap::NativePaint(const FPaintArgs& Args, const FGeometry& Geometr
         FSlateDrawElement::MakeLines(Draw, Layer + 2, Paint, Diamond, ESlateDrawEffect::None, Purple, true, 4.0f);
         FSlateDrawElement::MakeLines(Draw, Layer + 3, Paint, MoveTemp(Diamond), ESlateDrawEffect::None,
             FLinearColor(PFTPalette::Gold), true, 2.0f);
+
+        if (const auto* Landmark = Routes->GetRouteLandmark(Path))
+        {
+            DrawLandmark(Geometry, Draw, Layer + 4, Projection.Point(Landmark->Value), Landmark->Key);
+        }
     }
     if (FloorBounds.IsInside(Position))
     {
@@ -142,11 +183,11 @@ int32 UPFTRouteMap::NativePaint(const FPaintArgs& Args, const FGeometry& Geometr
         const FVector2f Side(-Ahead.Y, Ahead.X);
         const FVector2f Nose = Here + Ahead * 7.0f;
         TArray<FVector2f> Arrow = {Nose, Here - Ahead * 4.0f + Side * 5.0f, Here - Ahead * 4.0f - Side * 5.0f, Nose};
-        FSlateDrawElement::MakeLines(Draw, Layer + 4, Paint, Arrow, ESlateDrawEffect::None, FLinearColor::White, true, 5.0f);
-        FSlateDrawElement::MakeLines(Draw, Layer + 5, Paint, MoveTemp(Arrow), ESlateDrawEffect::None,
+        FSlateDrawElement::MakeLines(Draw, Layer + 6, Paint, Arrow, ESlateDrawEffect::None, FLinearColor::White, true, 5.0f);
+        FSlateDrawElement::MakeLines(Draw, Layer + 7, Paint, MoveTemp(Arrow), ESlateDrawEffect::None,
             FLinearColor(FColor(30, 77, 142)), true, 2.8f);
     }
-    return Layer + 5;
+    return Layer + 7;
 }
 
 #if WITH_DEV_AUTOMATION_TESTS

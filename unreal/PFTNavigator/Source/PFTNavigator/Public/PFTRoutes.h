@@ -33,6 +33,7 @@ public:
     FVector NextPoint() const { return Path.IsValidIndex(NextIndex) ? Path[NextIndex] : FVector::ZeroVector; }
     const FText& GetMessage() const { return Message; }
     TArrayView<const FVector> GetRemainingPath() const;
+    const TPair<FString, FVector2D>* GetRouteLandmark(TArrayView<const FVector> Points) const;
     int32 CopyWalkableCells(TArray<FIntPoint>& Cells) const;
 
 private:

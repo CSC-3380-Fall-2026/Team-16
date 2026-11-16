@@ -34,7 +34,8 @@ In Walk mode on the first-floor demo map, select a room with a walking route. Ch
 **Preview route** to see the path from your position, estimated walking time,
 and distance. The map fits the route on screen. Choose **Full floor** to see
 the entire floor or **Focus route** to return to the closer view. These controls
-are also available under **Show map** during guidance.
+are also available under **Show map** during guidance. The map marks the first
+landmark along the route when the floor data includes one.
 Choose **Walk there** and follow the gold arrows with WASD.
 The Navigator shows which way to turn and confirms arrival. Choose **Stop route**
 or **Clear** to end guidance. Room previews and free camera are available from

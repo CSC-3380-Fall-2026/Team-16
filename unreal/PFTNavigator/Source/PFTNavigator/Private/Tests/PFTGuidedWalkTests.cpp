@@ -205,6 +205,11 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
                 TestTrue(TEXT("The map has room to render"), Overview->GetCachedGeometry().GetLocalSize().Y >= 184);
                 TestTrue(TEXT("The route map leaves walking active"), Player->GetPawn() == Character
                     && !Player->IsMoveInputIgnored() && !Routes->GetRemainingPath().IsEmpty());
+                if (FParse::Param(FCommandLine::Get(), TEXT("PFTVerifyLandmarks")))
+                {
+                    const auto* Sign = Routes->GetRouteLandmark(Routes->GetRemainingPath());
+                    TestTrue(TEXT("The Commons map marks the Zone 1200 sign"), Sign && Sign->Key == TEXT("Zone 1200 sign"));
+                }
                 if (FParse::Param(FCommandLine::Get(), TEXT("PFTQAOverview")))
                     FScreenshotRequest::RequestScreenshot(TEXT("PFTQA-RouteOverview"), true, true, false);
                 return true;

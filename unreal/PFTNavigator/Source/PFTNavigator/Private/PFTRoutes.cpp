@@ -27,24 +27,40 @@ namespace
     constexpr double TrailLength = 1600.0;
     constexpr double SecondsPerQuarterTurn = 0.25;
 
+    const TPair<FString, FVector2D>* FindNearbyLandmark(const FVector2D& Point, const TMap<FString, FVector2D>& Landmarks)
+    {
+        const TPair<FString, FVector2D>* Nearest = nullptr;
+        double DistanceSquared = FMath::Square(220.0);
+        for (const auto& Landmark : Landmarks)
+        {
+            const double Candidate = FVector2D::DistSquared(Point, Landmark.Value);
+            if (Candidate >= DistanceSquared) continue;
+            Nearest = &Landmark;
+            DistanceSquared = Candidate;
+        }
+        return Nearest;
+    }
+
+    const TPair<FString, FVector2D>* FindRouteLandmark(TArrayView<const FVector> Points, const TMap<FString, FVector2D>& Landmarks)
+    {
+        if (Landmarks.IsEmpty()) return nullptr;
+        for (const FVector& Point : Points)
+        {
+            if (const auto* Landmark = FindNearbyLandmark(FVector2D(Point), Landmarks)) return Landmark;
+        }
+        return nullptr;
+    }
+
     FString DescribeTurn(double Turn, int32 Metres, const FVector2D& Corner,
         const TMap<FString, FVector2D>& Landmarks)
     {
         const TCHAR* Side = Turn > 0 ? TEXT("right") : TEXT("left");
         if (Metres <= 8)
         {
-            const FString* Nearest = nullptr;
-            double DistanceSquared = FMath::Square(220.0);
-            for (const auto& Landmark : Landmarks)
+            if (const auto* Landmark = FindNearbyLandmark(Corner, Landmarks))
             {
-                const double Candidate = FVector2D::DistSquared(Corner, Landmark.Value);
-                if (Candidate < DistanceSquared)
-                {
-                    Nearest = &Landmark.Key;
-                    DistanceSquared = Candidate;
-                }
+                return FString::Printf(TEXT("Turn %s near %s"), Side, *Landmark->Key);
             }
-            if (Nearest) return FString::Printf(TEXT("Turn %s near %s"), Side, **Nearest);
         }
         return Metres <= 1 ? FString::Printf(TEXT("Turn %s ahead"), Side)
             : FString::Printf(TEXT("Turn %s in %d m"), Side, Metres);
@@ -547,6 +563,11 @@ TArrayView<const FVector> UPFTRoutes::GetRemainingPath() const
     return MakeArrayView(Path).RightChop(NextIndex);
 }
 
+const TPair<FString, FVector2D>* UPFTRoutes::GetRouteLandmark(TArrayView<const FVector> Points) const
+{
+    return FindRouteLandmark(Points, Landmarks);
+}
+
 int32 UPFTRoutes::CopyWalkableCells(TArray<FIntPoint>& Cells) const
 {
     Nodes.GenerateKeyArray(Cells);
@@ -576,6 +597,17 @@ bool FPFTFastestPathTest::RunTest(const FString& Parameters)
         FString(TEXT("Turn left in 12 m")));
     TestEqual(TEXT("Graphs without landmarks keep the existing directions"), DescribeTurn(1.0, 1, FVector2D::ZeroVector, {}),
         FString(TEXT("Turn right ahead")));
+    const TMap<FString, FVector2D> MapLandmarks = {
+        {TEXT("Entrance sign"), FVector2D(50, 50)}, {TEXT("Commons sign"), FVector2D(500, 100)}};
+    const TArray<FVector> MapPath = {FVector::ZeroVector, FVector(500, 90, 0), FVector(1000, 0, 0)};
+    const auto* FirstSign = FindRouteLandmark(MapPath, MapLandmarks);
+    if (TestNotNull(TEXT("A landmark next to the route can be marked"), FirstSign))
+        TestEqual(TEXT("The map marks the first landmark along the path"), FirstSign->Key, FString(TEXT("Entrance sign")));
+    const auto* NextSign = FindRouteLandmark(MakeArrayView(MapPath).RightChop(1), MapLandmarks);
+    if (TestNotNull(TEXT("A second landmark can follow the first"), NextSign))
+        TestEqual(TEXT("The map moves on from a passed landmark"), NextSign->Key, FString(TEXT("Commons sign")));
+    TestNull(TEXT("Landmarks away from the remaining route are skipped"), FindRouteLandmark(MakeArrayView(MapPath).RightChop(2), MapLandmarks));
+    TestNull(TEXT("The map works without any landmarks"), FindRouteLandmark(MapPath, {}));
     TestEqual(TEXT("Short walks use a relative time"), WalkingTimeLabel(3.0), FString(TEXT("Under 5 sec")));
     TestEqual(TEXT("Walking time is rounded to five seconds"), WalkingTimeLabel(23.0), FString(TEXT("About 25 sec")));
     TestEqual(TEXT("Whole minutes omit seconds"), WalkingTimeLabel(60.0), FString(TEXT("About 1 min")));
