@@ -61,6 +61,7 @@ private:
     UFUNCTION() void StopRoute();
     UFUNCTION() void ToggleRoutePreview();
     UFUNCTION() void ToggleRouteOverview();
+    UFUNCTION() void ToggleRouteMapScale();
     UFUNCTION() void FindAnotherRoom();
     UFUNCTION() void ToggleSettings();
     UFUNCTION() void MotionChanged(bool bChecked);
@@ -97,6 +98,7 @@ private:
     UPROPERTY() TObjectPtr<UTextBlock> RoutePreviewMessage;
     UPROPERTY() TObjectPtr<UVerticalBox> RoutePreviewMapBox;
     UPROPERTY() TObjectPtr<UPFTRouteMap> PreviewMap;
+    UPROPERTY() TObjectPtr<UTextBlock> PreviewMapScaleLabel;
     UPROPERTY() TObjectPtr<UTextBlock> RouteUnavailable;
     UPROPERTY() TObjectPtr<UTextBlock> RouteHint;
     UPROPERTY() TObjectPtr<UScrollBox> Browser;
@@ -107,6 +109,7 @@ private:
     UPROPERTY() TObjectPtr<UTextBlock> RouteOverviewLabel;
     UPROPERTY() TObjectPtr<UVerticalBox> RouteOverview;
     UPROPERTY() TObjectPtr<UPFTRouteMap> RouteMap;
+    UPROPERTY() TObjectPtr<UTextBlock> RouteMapScaleLabel;
     UPROPERTY() TObjectPtr<UButton> RetryRouteButton;
     UPROPERTY() TObjectPtr<UButton> FindAnotherRoomButton;
     UPROPERTY() TObjectPtr<UTextBlock> CameraLabel;

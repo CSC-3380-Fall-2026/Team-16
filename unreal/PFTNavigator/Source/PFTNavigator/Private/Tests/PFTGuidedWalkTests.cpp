@@ -121,6 +121,18 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
             return true;
         }));
         ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
+        ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Tree]()
+        {
+            auto* Button = CastChecked<UButton>(Tree->FindWidget(TEXT("RoutePreviewScaleButton")));
+            const auto* Label = CastChecked<UTextBlock>(Button->GetContent());
+            TestEqual(TEXT("Preview starts focused on the route"), Label->GetText().ToString(), FString(TEXT("Full floor")));
+            TestTrue(TEXT("Full floor is clickable in the preview"), PFTViewportTest::ClickVisibleWidget(Button));
+            TestEqual(TEXT("The whole floor offers a return to the route"), Label->GetText().ToString(), FString(TEXT("Focus route")));
+            if (FParse::Param(FCommandLine::Get(), TEXT("PFTQAScreenshots")))
+                FScreenshotRequest::RequestScreenshot(TEXT("PFTQA-RoutePreviewFullFloor"), true, true, false);
+            return true;
+        }));
+        ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
         ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Navigator, Tree, Player, Character, Routes]()
         {
             if (!TestTrue(TEXT("Walk there is clickable"),
@@ -195,6 +207,25 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
                     && !Player->IsMoveInputIgnored() && !Routes->GetRemainingPath().IsEmpty());
                 if (FParse::Param(FCommandLine::Get(), TEXT("PFTQAOverview")))
                     FScreenshotRequest::RequestScreenshot(TEXT("PFTQA-RouteOverview"), true, true, false);
+                return true;
+            }));
+            ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.2f));
+            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Tree, Routes, Player]()
+            {
+                auto* Button = CastChecked<UButton>(Tree->FindWidget(TEXT("RouteOverviewScaleButton")));
+                const auto* Label = CastChecked<UTextBlock>(Button->GetContent());
+                TestTrue(TEXT("Full floor is clickable during guidance"), PFTViewportTest::ClickVisibleWidget(Button));
+                TestEqual(TEXT("The walking map can show the entire floor"), Label->GetText().ToString(), FString(TEXT("Focus route")));
+                TestTrue(TEXT("Changing map scale leaves guidance active"), Routes->IsGuiding() && !Player->IsMoveInputIgnored());
+                return true;
+            }));
+            ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.2f));
+            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Tree]()
+            {
+                auto* Button = CastChecked<UButton>(Tree->FindWidget(TEXT("RouteOverviewScaleButton")));
+                const auto* Label = CastChecked<UTextBlock>(Button->GetContent());
+                TestTrue(TEXT("Focus route is clickable during guidance"), PFTViewportTest::ClickVisibleWidget(Button));
+                TestEqual(TEXT("The walking map can return to the route"), Label->GetText().ToString(), FString(TEXT("Full floor")));
                 return true;
             }));
             ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.2f));

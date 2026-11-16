@@ -205,6 +205,18 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
         Slot->SetPadding(FMargin(0, 0, 4, 0));
         return Button;
     };
+    auto AddMapScaleButton = [&](UVerticalBox* Parent, const TCHAR* Name)
+    {
+        auto* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+        Parent->AddChildToVerticalBox(Row)->SetPadding(FMargin(0, 4, 0, 0));
+        UTextBlock* ScaleLabel;
+        auto* Button = AddButton(Row, TEXT("Full floor"), ScaleLabel);
+        Button->Rename(Name);
+        CastChecked<UHorizontalBoxSlot>(Button->Slot)->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
+        Button->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ToggleRouteMapScale);
+        return ScaleLabel;
+    };
+    PreviewMapScaleLabel = AddMapScaleButton(RoutePreviewMapBox, TEXT("RoutePreviewScaleButton"));
     UTextBlock* Label;
     auto* ResetFiltersRow = WidgetTree->ConstructWidget<UHorizontalBox>();
     ClassFilters->AddChild(ResetFiltersRow);
@@ -331,6 +343,7 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     RouteOverview->SetVisibility(ESlateVisibility::Collapsed);
     Directions->AddChildToVerticalBox(RouteOverview)->SetPadding(FMargin(0, 8, 0, 0));
     RouteMap = AddRouteMap(RouteOverview);
+    RouteMapScaleLabel = AddMapScaleButton(RouteOverview, TEXT("RouteOverviewScaleButton"));
     GetWorld()->GetSubsystem<UPFTRoutes>()->SetReducedMotion(Motion->IsChecked());
     RouteHint->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), LargerText->IsChecked() ? 24 : 18));
     if (const auto* ScreenPercentage = IConsoleManager::Get().FindConsoleVariable(TEXT("r.ScreenPercentage")))
@@ -650,8 +663,12 @@ void UPFTNavigatorWidget::ToggleRoutePreview()
     FString Estimate;
     const bool bHasRoute = Routes->Preview(*Character, SelectedRoomId, Points, Estimate);
     const bool bShowMap = bHasRoute && PreviewMap->Load(*Routes, *Player);
-    if (bShowMap) PreviewMap->SetPreview(RoutePreviewOrigin, MoveTemp(Points));
-    RoutePreviewMapBox->SetVisibility(bShowMap ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+    if (bShowMap)
+    {
+        PreviewMap->SetPreview(RoutePreviewOrigin, MoveTemp(Points));
+        PreviewMapScaleLabel->SetText(FText::FromString(TEXT("Full floor")));
+    }
+    RoutePreviewMapBox->SetVisibility(bShowMap ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
     RoutePreviewMessage->SetText(FText::FromString(bHasRoute ? Estimate
         : FString(TEXT("Walk to a first-floor hallway to preview this route."))));
     SetRoutePreviewVisible(true);
@@ -660,7 +677,7 @@ void UPFTNavigatorWidget::ToggleRoutePreview()
 void UPFTNavigatorWidget::SetRoutePreviewVisible(bool bVisible)
 {
     if (bVisible == RoutePreview->IsVisible()) return;
-    RoutePreview->SetVisibility(bVisible ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+    RoutePreview->SetVisibility(bVisible ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
     RoutePreviewLabel->SetText(FText::FromString(bVisible ? TEXT("Hide route") : TEXT("Preview route")));
 }
 
@@ -679,13 +696,25 @@ void UPFTNavigatorWidget::ToggleRouteOverview()
     auto* Player = GetOwningPlayer();
     if (!Routes->IsGuiding() || !Player) return;
     if (RouteOverview->IsVisible()) SetRouteOverviewVisible(false);
-    else if (RouteMap->Load(*Routes, *Player)) SetRouteOverviewVisible(true);
+    else if (RouteMap->Load(*Routes, *Player))
+    {
+        RouteMapScaleLabel->SetText(FText::FromString(TEXT("Full floor")));
+        SetRouteOverviewVisible(true);
+    }
+}
+
+void UPFTNavigatorWidget::ToggleRouteMapScale()
+{
+    const bool bPreview = RoutePreview->IsVisible();
+    auto* Map = bPreview ? PreviewMap.Get() : RouteMap.Get();
+    auto* Label = bPreview ? PreviewMapScaleLabel.Get() : RouteMapScaleLabel.Get();
+    Label->SetText(FText::FromString(Map->ToggleFullFloor() ? TEXT("Focus route") : TEXT("Full floor")));
 }
 
 void UPFTNavigatorWidget::SetRouteOverviewVisible(bool bVisible)
 {
     if (bVisible == RouteOverview->IsVisible()) return;
-    RouteOverview->SetVisibility(bVisible ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+    RouteOverview->SetVisibility(bVisible ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
     RouteOverviewLabel->SetText(FText::FromString(bVisible ? TEXT("Hide map") : TEXT("Show map")));
     if (bCompactDirections) SetDesiredSizeInViewport(FVector2D(400, bVisible ? 370 : 160));
 }

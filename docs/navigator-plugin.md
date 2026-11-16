@@ -32,7 +32,10 @@ lectures in PFT. Students can confirm their own section in LSU Course Offerings.
 
 In Walk mode on the first-floor demo map, select a room with a walking route. Choose
 **Preview route** to see the path from your position, estimated walking time,
-and distance. Choose **Walk there** and follow the gold arrows with WASD.
+and distance. The map fits the route on screen. Choose **Full floor** to see
+the entire floor or **Focus route** to return to the closer view. These controls
+are also available under **Show map** during guidance.
+Choose **Walk there** and follow the gold arrows with WASD.
 The Navigator shows which way to turn and confirms arrival. Choose **Stop route**
 or **Clear** to end guidance. Room previews and free camera are available from
 the same panel.

@@ -15,6 +15,7 @@ class UPFTRouteMap : public UUserWidget
 public:
     bool Load(UPFTRoutes& Routes, APlayerController& Player);
     void SetPreview(const FVector& Origin, TArray<FVector> Points);
+    bool ToggleFullFloor();
 
 protected:
     int32 NativePaint(const FPaintArgs& Args, const FGeometry& Geometry, const FSlateRect& Clip,
@@ -23,8 +24,10 @@ protected:
 private:
     UPROPERTY() FSlateBrush FloorBrush;
     FBox2D FloorBounds;
+    FBox2D FocusBounds;
     FVector PreviewOrigin = FVector::ZeroVector;
     TArray<FVector> PreviewPoints;
     TWeakObjectPtr<UPFTRoutes> Routes;
     TWeakObjectPtr<APlayerController> Player;
+    bool bFullFloor = false;
 };

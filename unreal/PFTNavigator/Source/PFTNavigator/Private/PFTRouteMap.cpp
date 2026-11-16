@@ -1,6 +1,7 @@
 #include "PFTRouteMap.h"
 #include "PFTPalette.h"
 #include "PFTRoutes.h"
+#include "Algo/AllOf.h"
 #include "Engine/Texture2D.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
@@ -8,6 +9,15 @@
 
 namespace
 {
+    FBox2D FitRouteBounds(const FVector2D& Origin, TArrayView<const FVector> Path)
+    {
+        if (Path.IsEmpty()) return FBox2D(ForceInit);
+        FBox2D Bounds(Origin, Origin);
+        for (const FVector& Point : Path) Bounds += FVector2D(Point);
+        const FVector2D Extra = (FVector2D(2000.0) - Bounds.GetSize()).ComponentMax(FVector2D::ZeroVector) * 0.5;
+        return Bounds.ExpandBy(Extra + FVector2D(400.0));
+    }
+
     struct FMapProjection
     {
         FMapProjection(const FBox2D& Bounds, const FVector2D& Area)
@@ -36,6 +46,9 @@ bool UPFTRouteMap::Load(UPFTRoutes& InRoutes, APlayerController& InPlayer)
 {
     Routes = &InRoutes;
     Player = &InPlayer;
+    bFullFloor = false;
+    const auto* Pawn = InPlayer.GetPawn();
+    FocusBounds = Pawn ? FitRouteBounds(FVector2D(Pawn->GetActorLocation()), InRoutes.GetRemainingPath()) : FBox2D(ForceInit);
     if (FloorBrush.GetResourceObject()) return true;
 
     TArray<FIntPoint> Cells;
@@ -77,22 +90,35 @@ void UPFTRouteMap::SetPreview(const FVector& Origin, TArray<FVector> Points)
 {
     PreviewOrigin = Origin;
     PreviewPoints = MoveTemp(Points);
+    FocusBounds = FitRouteBounds(FVector2D(Origin), PreviewPoints);
+}
+
+bool UPFTRouteMap::ToggleFullFloor()
+{
+    bFullFloor = !bFullFloor;
+    return bFullFloor;
 }
 
 int32 UPFTRouteMap::NativePaint(const FPaintArgs& Args, const FGeometry& Geometry, const FSlateRect& Clip,
     FSlateWindowElementList& Draw, int32 Layer, const FWidgetStyle& Style, bool bEnabled) const
 {
     if (!FloorBounds.bIsValid || !Routes.IsValid() || !Player.IsValid()) return Layer;
-    const FMapProjection Projection(FloorBounds, Geometry.GetLocalSize());
-    const auto Map = Geometry.ToPaintGeometry(FVector2f(Projection.Size), FSlateLayoutTransform(FVector2f(Projection.Offset)));
-    FSlateDrawElement::MakeBox(Draw, Layer, Map, &FloorBrush);
-
     const APawn* Pawn = Player->GetPawn();
     if (!Pawn) return Layer;
-    const auto Paint = Geometry.ToPaintGeometry();
     const bool bPreview = !PreviewPoints.IsEmpty();
     const TArrayView<const FVector> Path = bPreview ? MakeArrayView(PreviewPoints) : Routes->GetRemainingPath();
     const FVector2D Position(bPreview ? PreviewOrigin : Pawn->GetActorLocation());
+    // Keep the view steady during walking. The full floor still fits when a reroute leaves this view.
+    const bool bFits = !bFullFloor && FocusBounds.bIsValid && FocusBounds.IsInsideOrOn(Position)
+        && Algo::AllOf(Path, [this](const FVector& Point) { return FocusBounds.IsInsideOrOn(FVector2D(Point)); });
+    const FMapProjection FloorProjection(FloorBounds, Geometry.GetLocalSize());
+    const FMapProjection FocusProjection(bFits ? FocusBounds : FloorBounds, Geometry.GetLocalSize());
+    const auto& Projection = FocusProjection.Scale > FloorProjection.Scale ? FocusProjection : FloorProjection;
+    const FVector2f FloorTopLeft = Projection.Point(FVector2D(FloorBounds.Min.X, FloorBounds.Max.Y));
+    const auto Map = Geometry.ToPaintGeometry(FVector2f(FloorBounds.GetSize() * Projection.Scale), FSlateLayoutTransform(FloorTopLeft));
+    FSlateDrawElement::MakeBox(Draw, Layer, Map, &FloorBrush);
+
+    const auto Paint = Geometry.ToPaintGeometry();
     const FVector2f Here = Projection.Point(Position);
     const FLinearColor Purple(PFTPalette::Purple);
     if (!Path.IsEmpty())
@@ -136,6 +162,13 @@ bool FPFTRouteMapProjectionTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("The higher Y edge is at the top"), Projection.Point(FVector2D(-100, 0)), FVector2f(0, 40));
     TestEqual(TEXT("The lower Y edge is at the bottom"), Projection.Point(FVector2D(100, -100)), FVector2f(240, 160));
     TestEqual(TEXT("A world point stays aligned with the floor"), Projection.Point(FVector2D(0, -50)), FVector2f(120, 100));
+    const FVector2D Start(0, 0);
+    const TArray<FVector> Path = {FVector(3000, 0, 0), FVector(3000, -1000, 0)};
+    const FBox2D Bounds = FitRouteBounds(Start, Path);
+    TestTrue(TEXT("The route frame includes the start and destination with padding"),
+        Bounds.IsInside(Start) && Bounds.IsInside(FVector2D(Path.Last())));
+    TestEqual(TEXT("A narrow route leaves room for the surrounding halls"), Bounds.GetSize(), FVector2D(3800, 2800));
+    TestFalse(TEXT("An empty route uses the full floor"), FitRouteBounds(Start, {}).bIsValid);
     return true;
 }
 #endif
