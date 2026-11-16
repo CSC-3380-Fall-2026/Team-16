@@ -7,12 +7,20 @@ param(
     [string]$ArchiveDirectory,
     [ValidatePattern('^[A-Za-z0-9_]+$')] [string]$MapName = 'PFTFirstFloorComplete',
     [switch]$VerifyExtended,
-    [string]$WalkingGraph
+    [string]$WalkingGraph,
+    [switch]$VerifyOffline
 )
 
 $ErrorActionPreference = 'Stop'
 if (!$EngineRoot) { $EngineRoot = 'C:\Program Files\Epic Games\UE_5.8' }
 if ($FullCook -and $ReuseCook) { throw 'Choose either -FullCook or -ReuseCook.' }
+$verifyMode = if ($VerifyOffline) {
+    'verifyoffline'
+} elseif ($VerifyExtended) {
+    'verifyextended'
+} elseif ($Verify) {
+    'verify'
+}
 
 $projectFile = Get-Item -LiteralPath $Project
 if ($projectFile.PSIsContainer -or $projectFile.Extension -ne '.uproject') {
@@ -156,6 +164,25 @@ function Confirm-DemoArchive($directory) {
     }
 }
 
+function Remove-FailedDemoArchive {
+    $directory = Get-Item -LiteralPath $candidate -Force -ErrorAction SilentlyContinue
+    if (!$directory) { return }
+    if (!$directory.PSIsContainer -or $directory.FullName -ine $candidate -or
+        $directory.Parent.FullName -ine $packageParent -or
+        ($directory.Attributes -band [IO.FileAttributes]::ReparsePoint) -or
+        (Get-ChildItem -LiteralPath $candidate -Recurse -Force |
+            Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint } | Select-Object -First 1)) {
+        throw "Unexpected contents in the failed archive at $candidate."
+    }
+    $saved = Join-Path $candidate 'PFTDigitalTwin\Saved'
+    if ([IO.Directory]::Exists($saved)) {
+        $diagnostics = Join-Path $packageParent "$packageName.failed-$buildId"
+        [IO.Directory]::Move($saved, $diagnostics)
+        Write-Host "Saved failed demo logs and reports in $diagnostics."
+    }
+    Remove-Item -LiteralPath $candidate -Recurse -Force
+}
+
 function Publish-DemoArchive {
     Confirm-DemoArchive $package
     $hasPrevious = [IO.Directory]::Exists($package)
@@ -177,6 +204,8 @@ function Publish-DemoArchive {
 function Get-ToolsRevision {
     $git = Get-Command git -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if (!$git) { return $null }
+    # Git can report that the tools are outside a checkout on Windows PowerShell.
+    $ErrorActionPreference = 'Continue'
     $files = @(
         'package_first_floor_demo.ps1', 'Play PFT Demo.cmd', 'measure_demo_frames.ps1',
         'check_demo_assets.ps1', 'Read Me - PFT Demo.txt', 'install_navigator.py', 'validate_data.py'
@@ -211,7 +240,7 @@ function Confirm-NavigatorInstall {
 }
 
 function Confirm-WalkingMap {
-    if (!$WalkingGraph -and !$Verify -and !$VerifyExtended) { return }
+    if (!$WalkingGraph -and !$verifyMode) { return }
     if (!(Test-Path -LiteralPath $installedGraph -PathType Leaf)) {
         throw "Verified packaging requires a walking graph for $map. Bake and install first_floor_routes.json before packaging."
     }
@@ -241,6 +270,7 @@ function Write-BuildRecord($mapHash, $cookMode, $verification, $toolsRevision, $
         CookMode = $cookMode
         VisualCppInstaller = $prerequisite.Replace('\', '/')
         Verification = $verification
+        VerificationMode = $verifyMode
         TestReports = $tests
     } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $candidate 'PFTDemoBuild.json') -Encoding UTF8
 }
@@ -286,6 +316,7 @@ if ($map -ne $defaultMap) {
 $null = New-Item -ItemType Directory -Path $mapBuild -Force
 # Standard and candidate builds use the same staging directory.
 $archiveLock = $null
+$removeCandidateOnFailure = $false
 $installedGraph = Join-Path $projectRoot 'Plugins/PFTNavigator/Content/Data/first_floor_routes.json'
 try {
     $lock = [IO.File]::Open((Join-Path $builds 'WindowsPackage.lock'), 'OpenOrCreate', 'ReadWrite', 'None')
@@ -302,6 +333,7 @@ try {
     $archiveLock = [IO.File]::Open((Join-Path $packageParent "$packageName.package.lock"), 'OpenOrCreate', 'ReadWrite', 'None')
     Confirm-DemoArchive $package
     [IO.Directory]::CreateDirectory($candidate) > $null
+    $removeCandidateOnFailure = $true
     Write-Host "Building the replacement demo in $candidate."
     $mapHash = (Get-FileHash -LiteralPath $mapFile).Hash
     $toolsRevision = Get-ToolsRevision
@@ -374,18 +406,17 @@ try {
     Copy-Item -LiteralPath $demoGuide -Destination $candidate
     $verification = 'Not requested'
     $tests = [ordered]@{}
-    if ($Verify -or $VerifyExtended) {
-        $mode = if ($VerifyExtended) { 'verifyextended' } else { 'verify' }
-        & $packageLauncher $mode
+    if ($verifyMode) {
+        & $packageLauncher $verifyMode
         if ($LASTEXITCODE -ne 0) {
-            throw "Windows demo verification failed. Read the logs under $candidate\PFTDigitalTwin\Saved\Logs."
+            throw 'Windows demo verification failed. See the walkthrough results.'
         }
         $suites = [ordered]@{
             CommonsWalk = 'PFTFirstFloor.WalkToCommons'
             Navigator = 'PFTNavigator.Panel.AfterOnboarding'
             GuidedWalk = 'PFTFirstFloor.GuidedWalk'
         }
-        if ($VerifyExtended) { $suites['C1007Walk'] = 'PFTFirstFloor.WalkToC1007' }
+        if ($verifyMode -ne 'verify') { $suites['C1007Walk'] = 'PFTFirstFloor.WalkToC1007' }
         foreach ($suite in $suites.Keys) {
             $report = "PFTDigitalTwin/Saved/Automation/$suite/index.json"
             Confirm-WalkthroughReport (Join-Path $candidate $report) $suites[$suite]
@@ -402,8 +433,15 @@ try {
         throw 'The installed walking graph changed during packaging. Run again with the final graph.'
     }
     Write-BuildRecord $mapHash $cookMode $verification $toolsRevision $tests
+    $removeCandidateOnFailure = $false
     Publish-DemoArchive
     Write-Output (Join-Path $package 'Play PFT Demo.cmd')
+} catch {
+    if ($removeCandidateOnFailure) {
+        try { Remove-FailedDemoArchive }
+        catch { Write-Warning "Could not clean the failed archive at $candidate. $($_.Exception.Message)" }
+    }
+    throw
 } finally {
     if ($archiveLock) { $archiveLock.Dispose() }
     $lock.Dispose()

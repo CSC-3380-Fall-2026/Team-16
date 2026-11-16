@@ -123,6 +123,17 @@ in Unreal to review it before updating `EditorStartupMap`, `GameDefaultMap`,
 and `MapsToCook`. Use `p4 add` for the selected new map and `p4 edit` before
 changing any versioned map, script, or configuration.
 
+For a finished map copied from a Perforce shelf or another workspace, use
+`-VerifyExisting` in place of `-Resume`. It verifies the saved map without
+regenerating it or requiring the original build report. Install the matching
+graph first if you also pass `-PackageDemo`. Use a short archive path to avoid
+Windows path length limits when Unreal loads the packaged game.
+
+```powershell
+& ./tools/rebuild_first_floor.ps1 -Project $Project -MapName PFTFirstFloorRebuildReview `
+  -VerifyExisting -PackageDemo -WalkingGraph $Graph -ArchiveDirectory "$env:USERPROFILE\PFTReview"
+```
+
 Select `/Game/Level/PatrickFTaylorHall` manually to work on the complete building.
 To package the complete twin again, change the startup maps and packaging map
 list back to that map. Changing only `MapsToCook` leaves the game startup map
@@ -203,18 +214,18 @@ before running the launcher.
 The project settings on Perforce shelf `42426` use the Unreal 5.8 include order
 and keep local `UserEngine.ini` overrides out of the Windows package.
 
-Pass `-Verify` to run the Commons walkthrough and the Navigator click test
-before replacing the playable archive. Verification also checks both runtime
+Pass `-Verify` to run the Commons walkthrough, Navigator click test, and guided
+walk before replacing the playable archive. Verification also checks runtime
 logs for missing packages, missing imports, and default-material fallbacks.
 Use `-VerifyExtended` to also walk through the Commons to C1007 before
-publishing a review build. Its result is recorded in `PFTDemoBuild.json`.
+publishing a review build. Use `-VerifyOffline` to run the extended checks
+with Unreal HTTP requests disabled. `PFTDemoBuild.json` records the mode and
+result.
 Before publishing, packaging confirms that each report names the expected test
 and records a completed success.
-If a check fails, the command exits
-with an error and leaves the new build and its logs in the printed `pending`
-folder. Successful builds move into the launcher location. The previous archive
-is kept in a `previous` folder beside it. Delete old `previous` and `pending`
-folders once you no longer need them.
+If a check fails, the command exits with an error and keeps available logs and
+reports in the printed `failed` folder. Successful builds move into the launcher
+location. The previous archive is kept in a `previous` folder beside it.
 
 For C++ implementation edits, pass `-ReuseCook` to rebuild the executable and
 package the saved Windows cook. The script checks the selected map, project and

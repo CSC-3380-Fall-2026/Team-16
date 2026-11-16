@@ -24,12 +24,18 @@ def stage_fixture(archive, case):
     """Stand in for UAT staging and the game's automation report export."""
     package, = Path(archive).glob("Windows.pending-*")
     (package / "PFTDigitalTwin.exe").write_text(case)
+    if case == "cook failure":
+        sys.exit(7)
     (package / "Manifest_UFSFiles_Win64.txt").touch()
     redist = package / "Engine" / "Extras" / "Redist" / "en-us"
     redist.mkdir(parents=True)
     (redist / "vc_redist.x64.exe").touch()
+    saved = package / "PFTDigitalTwin" / "Saved"
+    logs = saved / "Logs"
+    logs.mkdir(parents=True)
+    (logs / "Navigator.log").write_text(case)
     for suite, test_path in REPORTS.items():
-        report = package / "PFTDigitalTwin" / "Saved" / "Automation" / suite / "index.json"
+        report = saved / "Automation" / suite / "index.json"
         report.parent.mkdir(parents=True)
         failed = case == "bad report" and suite == "Navigator"
         report.write_text(json.dumps({
@@ -59,7 +65,7 @@ class TestWindowsDemoPackage(unittest.TestCase):
             '@echo off\n"%PFT_TEST_PYTHON%" "%PFT_TEST_SCRIPT%" "%PFT_TEST_ARCHIVE%" "%PFT_TEST_CASE%"\nexit /b %errorlevel%\n'
         )
         (self.tools / "Play PFT Demo.cmd").write_text(
-            '@echo off\nrem /Game/Level/PFTFirstFloorComplete\nif not "%~1"=="verifyextended" exit /b 1\nexit /b 0\n'
+            '@echo off\nrem /Game/Level/PFTFirstFloorComplete\nif not "%~1"=="%PFT_TEST_MODE%" exit /b 1\nexit /b 0\n'
         )
         for name in ("package_first_floor_demo.ps1", "install_navigator.py", "validate_data.py",
                      "measure_demo_frames.ps1", "check_demo_assets.ps1", "Read Me - PFT Demo.txt"):
@@ -78,14 +84,15 @@ class TestWindowsDemoPackage(unittest.TestCase):
             "Nodes": [[0, 0, 0.0, 1], [1, 0, 0.0, 4]],
         }))
 
-    def run_package(self, case, *options):
+    def run_package(self, case, *options, mode="verifyextended"):
+        verify_flag = "-VerifyOffline" if mode == "verifyoffline" else "-VerifyExtended"
         return subprocess.run(
             [shutil.which("pwsh") or "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
              "-File", str(self.tools / "package_first_floor_demo.ps1"), "-Project", str(self.project),
              "-EngineRoot", str(self.engine), "-ArchiveDirectory", str(self.archive),
-             "-MapName", self.map_name, "-VerifyExtended", *options],
+             "-MapName", self.map_name, verify_flag, *options],
             env={**os.environ, "PFT_TEST_PYTHON": sys.executable, "PFT_TEST_SCRIPT": str(Path(__file__).resolve()),
-                 "PFT_TEST_ARCHIVE": str(self.archive), "PFT_TEST_CASE": case},
+                 "PFT_TEST_ARCHIVE": str(self.archive), "PFT_TEST_CASE": case, "PFT_TEST_MODE": mode},
             capture_output=True, text=True, timeout=60, check=False,
         )
 
@@ -110,6 +117,7 @@ class TestWindowsDemoPackage(unittest.TestCase):
         record = json.loads(original.decode("utf-8-sig"))
         self.assertEqual(record["Map"], f"/Game/Level/{self.map_name}")
         self.assertEqual(record["Verification"], "Passed")
+        self.assertEqual(record["VerificationMode"], "verifyextended")
         self.assertEqual(set(record["TestReports"]), set(REPORTS))
         self.assertEqual(record["WalkingGraphSha256"], hashlib.sha256(self.graph.read_bytes()).hexdigest().upper())
 
@@ -118,6 +126,43 @@ class TestWindowsDemoPackage(unittest.TestCase):
         self.assertIn("did not confirm a successful PFTNavigator.Panel.AfterOnboarding", failed.stderr)
         self.assertEqual(manifest.read_bytes(), original)
         self.assertEqual((package / "PFTDigitalTwin.exe").read_text(), "passed")
+        self.assertEqual(list(self.archive.glob("Windows.pending-*")), [])
+        diagnostics, = self.archive.glob("Windows.failed-*")
+        failed_report = diagnostics / "Automation" / "Navigator" / "index.json"
+        self.assertEqual(json.loads(failed_report.read_text())["failed"], 1)
+        self.assertEqual((diagnostics / "Logs" / "Navigator.log").read_text(), "bad report")
+        self.assertIn(diagnostics.name, failed.stdout)
+        self.assertFalse((diagnostics / "PFTDigitalTwin.exe").exists())
+
+        cook_failure = self.run_package("cook failure", *graph_options)
+        self.assertNotEqual(cook_failure.returncode, 0)
+        self.assertIn("Unreal packaging failed with exit code 7", cook_failure.stderr)
+        self.assertEqual(list(self.archive.glob("Windows.pending-*")), [])
+        self.assertEqual(list(self.archive.glob("Windows.failed-*")), [diagnostics])
+        self.assertEqual(manifest.read_bytes(), original)
+
+        retry = self.run_package("retried", *graph_options)
+        self.assertEqual(retry.returncode, 0, retry.stdout + retry.stderr)
+        self.assertEqual((package / "PFTDigitalTwin.exe").read_text(), "retried")
+        self.assertEqual(list(self.archive.glob("Windows.pending-*")), [])
+        previous, = self.archive.glob("Windows.previous-*")
+        self.assertEqual((previous / "PFTDemoBuild.json").read_bytes(), original)
+
+    def test_offline_verification_runs_and_records_extended_checks(self):
+        self.install()
+        wrong_map = self.run_package("wrong map", mode="verifyoffline")
+        self.assertNotEqual(wrong_map.returncode, 0)
+        self.assertIn("The walking graph is for", wrong_map.stderr)
+        self.assertFalse(self.archive.exists())
+
+        self.install("--walking-graph", str(self.graph))
+        result = self.run_package("offline", "-WalkingGraph", str(self.graph), mode="verifyoffline")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        manifest = self.archive / "Windows" / "PFTDemoBuild.json"
+        record = json.loads(manifest.read_text(encoding="utf-8-sig"))
+        self.assertEqual(record["Verification"], "Passed")
+        self.assertEqual(record["VerificationMode"], "verifyoffline")
+        self.assertEqual(set(record["TestReports"]), set(REPORTS))
 
 
 if __name__ == "__main__":
