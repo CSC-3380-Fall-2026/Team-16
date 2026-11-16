@@ -368,6 +368,14 @@ try {
         if (!$FullCook) { $arguments += '-AdditionalCookerOptions=-CookIncremental' }
     }
 
+    # Refresh both source lists so Unreal detects added and removed files.
+    $buildCache = Join-Path $projectRoot 'Intermediate/Build/Win64/x64'
+    foreach ($target in @($projectFile.BaseName, "$($projectFile.BaseName)Editor")) {
+        $makefile = Join-Path $buildCache "$target/Development/Makefile.bin"
+        if (Test-Path -LiteralPath $makefile -PathType Leaf) {
+            Remove-Item -LiteralPath $makefile -Force
+        }
+    }
     & $automationTool @arguments
     if ($LASTEXITCODE -ne 0) { throw "Unreal packaging failed with exit code $LASTEXITCODE." }
 

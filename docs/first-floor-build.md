@@ -228,12 +228,13 @@ reports in the printed `failed` folder. Successful builds move into the launcher
 location. The previous archive is kept in a `previous` folder beside it.
 
 For C++ implementation edits, pass `-ReuseCook` to rebuild the executable and
-package the saved Windows cook. The script checks the selected map, project and
-plugin files, headers, and cook metadata. Rewriting an identical header or
-settings file keeps the cook reusable. If the script needs to cook, it reports
-which inputs changed or whether the cook receipt or metadata is missing. Older
-receipts are refreshed on the next cook. Use a regular cook after changing
-asset defaults or serialization in C++.
+package the saved Windows cook. Packaging refreshes Unreal's source file list
+before compiling to pick up added and removed C++ files. The script checks the
+selected map, project and plugin files, headers, and cook metadata. Rewriting an
+identical header or settings file keeps the cook reusable. If the script needs
+to cook, it reports which inputs changed or whether the cook receipt or metadata
+is missing. Older receipts are refreshed on the next cook. Use a regular cook
+after changing asset defaults or serialization in C++.
 
 ```powershell
 & .\Tools\package_first_floor_demo.ps1 -Project .\PFTDigitalTwin.uproject `

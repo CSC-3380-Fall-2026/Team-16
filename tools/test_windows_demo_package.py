@@ -20,8 +20,17 @@ REPORTS = {
 }
 
 
-def stage_fixture(archive, case):
+def build_makefiles(project):
+    targets = project.parent / "Intermediate" / "Build" / "Win64" / "x64"
+    return [targets / target / "Development" / "Makefile.bin"
+            for target in (project.stem, f"{project.stem}Editor")]
+
+
+def stage_fixture(archive, case, *arguments):
     """Stand in for UAT staging and the game's automation report export."""
+    project, = (Path(arg.split("=", 1)[1]) for arg in arguments if arg.startswith("-project="))
+    if any(path.exists() for path in build_makefiles(project)):
+        sys.exit("Both Unreal source lists must be cleared before building.")
     package, = Path(archive).glob("Windows.pending-*")
     (package / "PFTDigitalTwin.exe").write_text(case)
     if case == "cook failure":
@@ -58,11 +67,18 @@ class TestWindowsDemoPackage(unittest.TestCase):
         self.archive = self.root / "Review Builds"
         self.project = self.root / "PFTDigitalTwin.uproject"
         self.project.write_text('{"EngineAssociation":"5.8"}')
+        for path in build_makefiles(self.project):
+            path.parent.mkdir(parents=True)
+            path.touch()
+        self.compiled_object = build_makefiles(self.project)[0].with_name("PFTDigitalTwin.obj")
+        self.compiled_object.touch()
         self.engine = self.root / "Unreal Engine"
         batch = self.engine / "Engine" / "Build" / "BatchFiles"
         batch.mkdir(parents=True)
         (batch / "RunUAT.bat").write_text(
-            '@echo off\n"%PFT_TEST_PYTHON%" "%PFT_TEST_SCRIPT%" "%PFT_TEST_ARCHIVE%" "%PFT_TEST_CASE%"\nexit /b %errorlevel%\n'
+            '@echo off\n'
+            '"%PFT_TEST_PYTHON%" "%PFT_TEST_SCRIPT%" "%PFT_TEST_ARCHIVE%" "%PFT_TEST_CASE%" %*\n'
+            'exit /b %errorlevel%\n'
         )
         (self.tools / "Play PFT Demo.cmd").write_text(
             '@echo off\nrem /Game/Level/PFTFirstFloorComplete\nif not "%~1"=="%PFT_TEST_MODE%" exit /b 1\nexit /b 0\n'
@@ -111,6 +127,7 @@ class TestWindowsDemoPackage(unittest.TestCase):
         self.install("--walking-graph", str(self.graph))
         good = self.run_package("passed", *graph_options)
         self.assertEqual(good.returncode, 0, good.stdout + good.stderr)
+        self.assertTrue(self.compiled_object.is_file())
         package = self.archive / "Windows"
         manifest = package / "PFTDemoBuild.json"
         original = manifest.read_bytes()
