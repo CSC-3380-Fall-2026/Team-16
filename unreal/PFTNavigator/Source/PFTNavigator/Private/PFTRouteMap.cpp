@@ -1,7 +1,6 @@
 #include "PFTRouteMap.h"
 #include "PFTPalette.h"
 #include "PFTRoutes.h"
-#include "Algo/AllOf.h"
 #include "Algo/AnyOf.h"
 #include "Engine/Texture2D.h"
 #include "Fonts/FontMeasure.h"
@@ -110,8 +109,7 @@ bool UPFTRouteMap::Load(UPFTRoutes& InRoutes, APlayerController& InPlayer)
     Routes = &InRoutes;
     Player = &InPlayer;
     bFullFloor = false;
-    const APawn* Pawn = InPlayer.GetPawn();
-    FocusBounds = Pawn ? FitRouteBounds(FVector2D(Pawn->GetActorLocation()), InRoutes.GetRemainingPath()) : FBox2D(ForceInit);
+    FocusBounds = FBox2D(ForceInit);
     if (FloorBrush.GetResourceObject()) return true;
 
     TArray<FIntPoint> Cells;
@@ -159,6 +157,7 @@ void UPFTRouteMap::SetPreview(const FVector& Origin, TArray<FVector> Points)
 bool UPFTRouteMap::ToggleFullFloor()
 {
     bFullFloor = !bFullFloor;
+    if (!bFullFloor && PreviewPoints.IsEmpty()) FocusBounds = FBox2D(ForceInit);
     return bFullFloor;
 }
 
@@ -171,9 +170,14 @@ int32 UPFTRouteMap::NativePaint(const FPaintArgs& Args, const FGeometry& Geometr
     const bool bPreview = !PreviewPoints.IsEmpty();
     const TArrayView<const FVector> Path = bPreview ? MakeArrayView(PreviewPoints) : Routes->GetRemainingPath();
     const FVector2D Position(bPreview ? PreviewOrigin : Pawn->GetActorLocation());
-    // Keep the view steady during walking. The full floor still fits when a reroute leaves this view.
-    const bool bFits = !bFullFloor && FocusBounds.bIsValid && FocusBounds.IsInsideOrOn(Position)
-        && Algo::AllOf(Path, [this](const FVector& Point) { return FocusBounds.IsInsideOrOn(FVector2D(Point)); });
+    // Keep the view steady between plans, then frame a reroute from its new starting point.
+    const uint32 PlanRevision = Routes->GetPlanRevision();
+    if (!bFullFloor && !bPreview && !Path.IsEmpty() && (!FocusBounds.bIsValid || FocusRevision != PlanRevision))
+    {
+        FocusBounds = FitRouteBounds(Position, Path);
+        FocusRevision = PlanRevision;
+    }
+    const bool bFits = !bFullFloor && FocusBounds.bIsValid && FocusBounds.IsInsideOrOn(Position);
     const FMapProjection FloorProjection(FloorBounds, Geometry.GetLocalSize());
     const FMapProjection FocusProjection(bFits ? FocusBounds : FloorBounds, Geometry.GetLocalSize());
     const auto& Projection = FocusProjection.Scale > FloorProjection.Scale ? FocusProjection : FloorProjection;

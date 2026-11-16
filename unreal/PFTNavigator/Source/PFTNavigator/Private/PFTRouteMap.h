@@ -16,6 +16,9 @@ public:
     bool Load(UPFTRoutes& Routes, APlayerController& Player);
     void SetPreview(const FVector& Origin, TArray<FVector> Points);
     bool ToggleFullFloor();
+#if WITH_DEV_AUTOMATION_TESTS
+    const FBox2D& GetFocusBoundsForTests() const { return FocusBounds; }
+#endif
 
 protected:
     int32 NativePaint(const FPaintArgs& Args, const FGeometry& Geometry, const FSlateRect& Clip,
@@ -24,7 +27,8 @@ protected:
 private:
     UPROPERTY() FSlateBrush FloorBrush;
     FBox2D FloorBounds;
-    FBox2D FocusBounds;
+    mutable FBox2D FocusBounds;
+    mutable uint32 FocusRevision = 0;
     FVector PreviewOrigin = FVector::ZeroVector;
     TArray<FVector> PreviewPoints;
     TWeakObjectPtr<UPFTRoutes> Routes;

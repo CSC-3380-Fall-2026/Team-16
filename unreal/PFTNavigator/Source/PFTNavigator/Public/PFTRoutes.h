@@ -32,6 +32,7 @@ public:
     void SetReducedMotion(bool bEnabled) { bReducedMotion = bEnabled; }
     FVector NextPoint() const { return Path.IsValidIndex(NextIndex) ? Path[NextIndex] : FVector::ZeroVector; }
     const FText& GetMessage() const { return Message; }
+    uint32 GetPlanRevision() const { return PlanRevision; }
     TArrayView<const FVector> GetRemainingPath() const;
     const TPair<FString, FVector2D>* GetRouteLandmark(TArrayView<const FVector> Points) const;
     int32 CopyWalkableCells(TArray<FIntPoint>& Cells) const;
@@ -65,6 +66,7 @@ private:
     FText Message;
     int32 Step = 0;
     int32 NextIndex = 0;
+    uint32 PlanRevision = 0;
     float UpdateTime = 0;
     bool bArrived = false;
     bool bCanRetry = false;

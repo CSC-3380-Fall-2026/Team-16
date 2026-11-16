@@ -344,6 +344,7 @@ bool UPFTRoutes::Plan(const ACharacter& Character, const FIntPoint& Target)
 {
     if (!BuildPath(Character, Target, Path, TurnSeconds)) return false;
     NextIndex = 0;
+    ++PlanRevision;
     return true;
 }
 

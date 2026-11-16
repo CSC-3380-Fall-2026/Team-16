@@ -343,6 +343,7 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     RouteOverview->SetVisibility(ESlateVisibility::Collapsed);
     Directions->AddChildToVerticalBox(RouteOverview)->SetPadding(FMargin(0, 8, 0, 0));
     RouteMap = AddRouteMap(RouteOverview);
+    RouteMap->Rename(TEXT("WalkingRouteMap"));
     RouteMapScaleLabel = AddMapScaleButton(RouteOverview, TEXT("RouteOverviewScaleButton"));
     GetWorld()->GetSubsystem<UPFTRoutes>()->SetReducedMotion(Motion->IsChecked());
     RouteHint->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), LargerText->IsChecked() ? 24 : 18));
