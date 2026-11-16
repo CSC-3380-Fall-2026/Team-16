@@ -47,7 +47,7 @@ bool UPFTRouteMap::Load(UPFTRoutes& InRoutes, APlayerController& InPlayer)
     Routes = &InRoutes;
     Player = &InPlayer;
     bFullFloor = false;
-    const auto* Pawn = InPlayer.GetPawn();
+    const APawn* Pawn = InPlayer.GetPawn();
     FocusBounds = Pawn ? FitRouteBounds(FVector2D(Pawn->GetActorLocation()), InRoutes.GetRemainingPath()) : FBox2D(ForceInit);
     if (FloorBrush.GetResourceObject()) return true;
 

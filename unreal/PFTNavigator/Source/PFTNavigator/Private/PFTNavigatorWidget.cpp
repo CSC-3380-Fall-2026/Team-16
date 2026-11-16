@@ -716,7 +716,7 @@ void UPFTNavigatorWidget::SetRouteOverviewVisible(bool bVisible)
     if (bVisible == RouteOverview->IsVisible()) return;
     RouteOverview->SetVisibility(bVisible ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
     RouteOverviewLabel->SetText(FText::FromString(bVisible ? TEXT("Hide map") : TEXT("Show map")));
-    if (bCompactDirections) SetDesiredSizeInViewport(FVector2D(400, bVisible ? 370 : 160));
+    if (bCompactDirections) SetDesiredSizeInViewport(FVector2D(400, bVisible ? 400 : 160));
 }
 
 void UPFTNavigatorWidget::UpdateRouteControls()
