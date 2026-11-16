@@ -4,6 +4,7 @@
 #include "PFTExploration.h"
 #include "PFTExplorePawn.h"
 #include "PFTPalette.h"
+#include "PFTRouteMap.h"
 #include "PFTRoutes.h"
 #include "Blueprint/WidgetTree.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
@@ -282,12 +283,29 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     StopRouteButton = AddButton(GuidanceActions, TEXT("Stop route"), Label);
     StopRouteButton->Rename(TEXT("StopRouteButton"));
     StopRouteButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::StopRoute);
+    RouteOverviewButton = AddButton(GuidanceActions, TEXT("Show map"), Label);
+    RouteOverviewLabel = Label;
+    RouteOverviewButton->Rename(TEXT("RouteOverviewButton"));
+    RouteOverviewButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ToggleRouteOverview);
     RetryRouteButton = AddButton(GuidanceActions, TEXT("Retry route"), Label);
     RetryRouteButton->Rename(TEXT("RetryRouteButton"));
     RetryRouteButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::StartRoute);
     FindAnotherRoomButton = AddButton(GuidanceActions, TEXT("Find another room"), Label);
     FindAnotherRoomButton->Rename(TEXT("FindAnotherRoomButton"));
     FindAnotherRoomButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::FindAnotherRoom);
+    RouteOverview = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("RouteOverview"));
+    RouteOverview->SetVisibility(ESlateVisibility::Collapsed);
+    Directions->AddChildToVerticalBox(RouteOverview)->SetPadding(FMargin(0, 8, 0, 0));
+    auto* MapArea = WidgetTree->ConstructWidget<USizeBox>();
+    MapArea->SetHeightOverride(184);
+    RouteMap = WidgetTree->ConstructWidget<UPFTRouteMap>();
+    RouteMap->ForceVolatile(true);
+    RouteMap->SetClipping(EWidgetClipping::ClipToBounds);
+    MapArea->SetContent(RouteMap);
+    RouteOverview->AddChild(MapArea);
+    auto* Legend = MakeText(TEXT("Floor 1  ·  ▲ You   ◆ Destination"));
+    Legend->SetJustification(ETextJustify::Center);
+    RouteOverview->AddChild(Legend);
     GetWorld()->GetSubsystem<UPFTRoutes>()->SetReducedMotion(Motion->IsChecked());
     RouteHint->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), LargerText->IsChecked() ? 24 : 18));
     if (const auto* ScreenPercentage = IConsoleManager::Get().FindConsoleVariable(TEXT("r.ScreenPercentage")))
@@ -587,6 +605,23 @@ void UPFTNavigatorWidget::SetCompactDirections(bool bCompact)
     SetDesiredSizeInViewport(FVector2D(400, bCompact ? 160 : 575));
 }
 
+void UPFTNavigatorWidget::ToggleRouteOverview()
+{
+    auto* Routes = GetWorld()->GetSubsystem<UPFTRoutes>();
+    auto* Player = GetOwningPlayer();
+    if (!Routes->IsGuiding() || !Player) return;
+    if (RouteOverview->IsVisible()) SetRouteOverviewVisible(false);
+    else if (RouteMap->Load(*Routes, *Player)) SetRouteOverviewVisible(true);
+}
+
+void UPFTNavigatorWidget::SetRouteOverviewVisible(bool bVisible)
+{
+    if (bVisible == RouteOverview->IsVisible()) return;
+    RouteOverview->SetVisibility(bVisible ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+    RouteOverviewLabel->SetText(FText::FromString(bVisible ? TEXT("Hide map") : TEXT("Show map")));
+    if (bCompactDirections) SetDesiredSizeInViewport(FVector2D(400, bVisible ? 370 : 160));
+}
+
 void UPFTNavigatorWidget::UpdateRouteControls()
 {
     if (!RouteButton) return;
@@ -606,6 +641,8 @@ void UPFTNavigatorWidget::UpdateRouteControls()
     }
     SetCompactDirections(Routes->IsGuiding() || Routes->CanRetry() || Routes->HasArrived());
     StopRouteButton->SetVisibility(Routes->IsGuiding() || Routes->CanRetry() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    RouteOverviewButton->SetVisibility(Routes->IsGuiding() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    if (!Routes->IsGuiding()) SetRouteOverviewVisible(false);
     RetryRouteButton->SetVisibility(Routes->CanRetry() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
     FindAnotherRoomButton->SetVisibility(Routes->HasArrived() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
     const FText& Message = Routes->GetMessage();

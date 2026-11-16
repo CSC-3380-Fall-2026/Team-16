@@ -11,6 +11,7 @@ class UScrollBox;
 class UEditableTextBox;
 class UCheckBox;
 class UVerticalBox;
+class UPFTRouteMap;
 
 UCLASS()
 class UPFTSearchButton : public UButton
@@ -58,6 +59,7 @@ private:
     UFUNCTION() void ToggleRoomPreview();
     UFUNCTION() void StartRoute();
     UFUNCTION() void StopRoute();
+    UFUNCTION() void ToggleRouteOverview();
     UFUNCTION() void FindAnotherRoom();
     UFUNCTION() void ToggleSettings();
     UFUNCTION() void MotionChanged(bool bChecked);
@@ -69,6 +71,7 @@ private:
     void UpdateSaveClassButton();
     FDateTime GetNow() const;
     void SetCompactDirections(bool bCompact);
+    void SetRouteOverviewVisible(bool bVisible);
     UPROPERTY() TObjectPtr<UTextBlock> Status;
     UPROPERTY() TObjectPtr<UTextBlock> Details;
     UPROPERTY() TObjectPtr<UTextBlock> SelectedRoomLabel;
@@ -91,6 +94,10 @@ private:
     UPROPERTY() TObjectPtr<UVerticalBox> Directions;
     UPROPERTY() TObjectPtr<UVerticalBox> Settings;
     UPROPERTY() TObjectPtr<UButton> StopRouteButton;
+    UPROPERTY() TObjectPtr<UButton> RouteOverviewButton;
+    UPROPERTY() TObjectPtr<UTextBlock> RouteOverviewLabel;
+    UPROPERTY() TObjectPtr<UVerticalBox> RouteOverview;
+    UPROPERTY() TObjectPtr<UPFTRouteMap> RouteMap;
     UPROPERTY() TObjectPtr<UButton> RetryRouteButton;
     UPROPERTY() TObjectPtr<UButton> FindAnotherRoomButton;
     UPROPERTY() TObjectPtr<UTextBlock> CameraLabel;
