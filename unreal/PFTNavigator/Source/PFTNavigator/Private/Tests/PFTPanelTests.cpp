@@ -14,7 +14,10 @@
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "Misc/AutomationTest.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 #include "Tests/AutomationCommon.h"
+#include "UnrealClient.h"
 #include "PFTViewportTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -113,6 +116,29 @@ bool FPFTSelectedTagTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("Clear removes the tag"), GetTaggedRooms(Panel).Num(), 0);
     SetSearch(Panel, TEXT(""));
     TestEqual(TEXT("Tag stays off after the list is rebuilt"), GetTaggedRooms(Panel).Num(), 0);
+
+    auto* ClassSearch = CastChecked<UCheckBox>(Panel->WidgetTree->FindWidget(TEXT("ClassSearchFilter")));
+    ClassSearch->SetIsChecked(true);
+    ClassSearch->OnCheckStateChanged.Broadcast(true);
+    Panel->ChooseRoom(TEXT("PFT_1206"), TEXT("CSC_4330"));
+    const auto* ClassLabel = CastChecked<UTextBlock>(Panel->WidgetTree->FindWidget(TEXT("SelectedCourseLabel")));
+    TestTrue(TEXT("The selected class is shown by the room actions"), ClassLabel->GetVisibility() == ESlateVisibility::Visible);
+    TestTrue(TEXT("The class summary identifies the selected class and its instructor"),
+        ClassLabel->GetText().ToString().Contains(TEXT("CSC 4330")) && ClassLabel->GetText().ToString().Contains(TEXT("David C. Shepherd")));
+    TestEqual(TEXT("Only the selected class gets tagged in a shared classroom"), GetTaggedRooms(Panel).Num(), 1);
+    for (auto* Button : GetResults(Panel))
+    {
+        if (Button->RoomId != TEXT("PFT_1206")) continue;
+        TestEqual(TEXT("The tag matches the exact course"), Button->Label->GetText().ToString().StartsWith(TEXT("Selected | ")),
+            Button->CourseId == TEXT("CSC_4330"));
+    }
+    Panel->ChooseRoom(TEXT("PFT_1206"), TEXT("CSC_1350"));
+    TestTrue(TEXT("A course from another room leaves the summary collapsed"), ClassLabel->GetVisibility() == ESlateVisibility::Collapsed);
+    TestEqual(TEXT("Choosing a room does not tag its classes"), GetTaggedRooms(Panel).Num(), 0);
+    Panel->ChooseRoom(TEXT("PFT_1200"), TEXT("CSC_1253"));
+    TestEqual(TEXT("A course without a schedule still shows its code"), ClassLabel->GetText().ToString(), FString(TEXT("CSC 1253")));
+    TestTrue(TEXT("A class without a time has no save action"),
+        Panel->WidgetTree->FindWidget(TEXT("SaveClassButton"))->GetVisibility() == ESlateVisibility::Collapsed);
     Cleanup();
     return true;
 }
@@ -128,6 +154,14 @@ namespace
         const bool bHandled = Slate.ProcessKeyDownEvent(Event);
         Slate.ProcessKeyUpEvent(Event);
         return bHandled;
+    }
+
+    void CaptureQAView(const TCHAR* Name)
+    {
+        if (FParse::Param(FCommandLine::Get(), TEXT("PFTQAScreenshots")))
+        {
+            FScreenshotRequest::RequestScreenshot(Name, true, true, false);
+        }
     }
 
     UPFTNavigatorWidget* FindNavigator(UWorld* World)
@@ -212,6 +246,9 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
             break;
         }
         TestTrue(TEXT("The course selects PFT 1200"), GetTaggedRooms(Panel).Contains(TEXT("PFT_1200")));
+        const auto* ClassLabel = CastChecked<UTextBlock>(Panel->WidgetTree->FindWidget(TEXT("SelectedCourseLabel")));
+        TestTrue(TEXT("Regular search shows the selected course"), ClassLabel->IsVisible()
+            && ClassLabel->GetText().ToString().Contains(TEXT("CSC 1350")));
         return true;
     }));
     ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
@@ -224,20 +261,23 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
         {
             const auto& DetailsGeometry = Details->GetCachedGeometry();
             const auto& PanelGeometry = Panel->WidgetTree->RootWidget->GetCachedGeometry();
-            const float DetailsBottom = DetailsGeometry.LocalToAbsolute(FVector2D(0, DetailsGeometry.GetLocalSize().Y)).Y;
+            const float DetailsTop = DetailsGeometry.LocalToAbsolute(FVector2D::ZeroVector).Y;
             const float PanelBottom = PanelGeometry.LocalToAbsolute(FVector2D(0, PanelGeometry.GetLocalSize().Y)).Y;
-            TestTrue(TEXT("A single search result leaves the selected details in view"), DetailsBottom <= PanelBottom);
+            TestTrue(TEXT("A single search result shows the start of its details"), DetailsTop < PanelBottom);
         }
         TestTrue(TEXT("View room is clickable"), ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("ViewRoomButton"))));
         TestNotNull(TEXT("The preview possesses the exploration pawn"), Cast<APFTExplorePawn>(Player->GetPawn()));
         TestTrue(TEXT("The preview keeps the cursor available"), Player->bShowMouseCursor);
         TestTrue(TEXT("Preview explains how to leave its fixed view"), GetCameraHelp(Panel).StartsWith(TEXT("Room preview")));
+        CaptureQAView(TEXT("PFTQA-RoomPreview"));
         auto* Marker = World->GetSubsystem<UPFTDestinations>()->ActiveMarker.Get();
         if (TestNotNull(TEXT("The preview keeps the room selected"), Marker))
         {
             TestTrue(TEXT("The preview keeps the room marker out of view"), Marker->IsHidden());
         }
         SetSearch(Panel, TEXT("Commons"));
+        const auto* SelectedRoom = CastChecked<UTextBlock>(Panel->WidgetTree->FindWidget(TEXT("SelectedRoomLabel")));
+        TestEqual(TEXT("Typing a new query keeps the named action target"), SelectedRoom->GetText().ToString(), FString(TEXT("PFT 1200")));
         return true;
     }));
     ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
@@ -265,6 +305,8 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
             TestTrue(TEXT("The Commons marker stays hidden"), Marker->IsHidden());
         }
         TestTrue(TEXT("The Commons result has the selected tag"), GetTaggedRooms(Panel).Contains(TEXT("PFT_COMMONS")));
+        const auto* SelectedRoom = CastChecked<UTextBlock>(Panel->WidgetTree->FindWidget(TEXT("SelectedRoomLabel")));
+        TestEqual(TEXT("Switching rooms updates the action target"), SelectedRoom->GetText().ToString(), FString(TEXT("PFT Commons")));
         TestTrue(TEXT("The search box can be focused during a preview"), ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("RoomSearch"))));
         SetSearch(Panel, TEXT("CSC 1350"));
         TestTrue(TEXT("Enter switches back to the course room preview"), PressKey(EKeys::Enter));
@@ -279,11 +321,16 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
     {
         auto* Panel = FindNavigator(World);
         if (!Panel) return true;
-        TestTrue(TEXT("Return is clickable"),
-            ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("CameraModeButton"))));
+        auto* Preview = CastChecked<UButton>(Panel->WidgetTree->FindWidget(TEXT("ViewRoomButton")));
+        const auto* Label = CastChecked<UTextBlock>(Preview->GetContent());
+        TestEqual(TEXT("The preview button offers an exit"), Label->GetText().ToString(), FString(TEXT("Exit preview")));
+        TestTrue(TEXT("Exit preview is clickable"), ClickVisibleWidget(Preview));
         TestEqual(TEXT("The original pawn is restored"), Player->GetPawn(), OriginalPawn);
+        TestTrue(TEXT("Returning from preview restores focus to Preview room"),
+            Panel->WidgetTree->FindWidget(TEXT("ViewRoomButton"))->HasKeyboardFocus());
         TestTrue(TEXT("Clear is clickable"), ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("ClearRoomButton"))));
         TestEqual(TEXT("Clear removes the room tag"), GetTaggedRooms(Panel).Num(), 0);
+        TestFalse(TEXT("Clear hides the action target"), Panel->WidgetTree->FindWidget(TEXT("SelectedRoomLabel"))->IsVisible());
         SetSearch(Panel, TEXT("CSC"));
         TestTrue(TEXT("The search box is clickable"), ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("RoomSearch"))));
         TestTrue(TEXT("A broad search has multiple results"), GetResults(Panel).Num() > 1);
@@ -304,6 +351,8 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
         TestTrue(TEXT("Clear is clickable during a preview"), ClickVisibleWidget(Panel->WidgetTree->FindWidget(TEXT("ClearRoomButton"))));
         TestEqual(TEXT("Clear restores the original pawn"), Player->GetPawn(), OriginalPawn);
         TestNull(TEXT("Clear removes the active destination"), World->GetSubsystem<UPFTDestinations>()->ActiveMarker.Get());
+        TestTrue(TEXT("Clearing a preview restores focus to search"),
+            Panel->WidgetTree->FindWidget(TEXT("RoomSearch"))->HasFocusedDescendants());
         SetSearch(Panel, TEXT("3307"));
         return true;
     }));
@@ -318,6 +367,10 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
         TestTrue(TEXT("The details-only result is clickable"), ClickVisibleWidget(Results[0]));
         TestTrue(TEXT("The upper-floor result can be selected"), GetTaggedRooms(Panel).Contains(TEXT("PFT_3307")));
         TestEqual(TEXT("The details-only selection keeps the walking pawn"), Player->GetPawn(), OriginalPawn);
+        TestFalse(TEXT("A details-only room hides Walk there"), Panel->WidgetTree->FindWidget(TEXT("RouteButton"))->IsVisible());
+        const auto* Unavailable = CastChecked<UTextBlock>(Panel->WidgetTree->FindWidget(TEXT("RouteUnavailable")));
+        TestTrue(TEXT("A details-only room explains what is available"),
+            Unavailable->IsVisible() && Unavailable->GetText().ToString().Contains(TEXT("Room details are below")));
         const auto* ViewButton = Panel->WidgetTree->FindWidget(TEXT("ViewRoomButton"));
         if (TestNotNull(TEXT("The preview button exists"), ViewButton))
         {
@@ -422,7 +475,17 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
             && Results[0]->ResultText.Contains(TEXT("10:30 AM")));
         TestTrue(TEXT("The classroom result is clickable"), ClickVisibleWidget(Results[0]));
         TestTrue(TEXT("The classroom is selected"), GetTaggedRooms(Panel).Contains(TEXT("PFT_1200")));
-        TestTrue(TEXT("The result can start a walk"), Panel->WidgetTree->FindWidget(TEXT("RouteButton"))->IsVisible());
+        auto* Tree = Panel->WidgetTree.Get();
+        TestTrue(TEXT("The result can start a walk"), Tree->FindWidget(TEXT("RouteButton"))->IsVisible());
+        const auto* ClassLabel = CastChecked<UTextBlock>(Tree->FindWidget(TEXT("SelectedCourseLabel")));
+        const FString Summary = ClassLabel->GetText().ToString();
+        TestTrue(TEXT("The selected course and instructor are next to Walk there"),
+            ClassLabel->IsVisible() && Summary.Contains(TEXT("CSC 1350")) && Summary.Contains(TEXT("William Duncan"))
+            && Summary.Contains(TEXT("10:30 AM")));
+        const FString Details = CastChecked<UTextBlock>(Tree->FindWidget(TEXT("RoomDetails")))->GetText().ToString();
+        TestTrue(TEXT("The selected class has its own details"), Details.Contains(TEXT("CSC 1350")));
+        TestFalse(TEXT("The details omit unrelated classes in the same room"), Details.Contains(TEXT("CSC 1253")));
+        CaptureQAView(TEXT("PFTQA-ClassSearch"));
         return true;
     }));
     ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
@@ -440,7 +503,13 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
         TestEqual(TEXT("The combined filters can leave no results"), GetResults(Panel).Num(), 0);
         if (!TestTrue(TEXT("Reset is clickable with no results"), ClickVisibleWidget(Tree->FindWidget(TEXT("ResetClassSearchButton")))))
             return true;
-        TestEqual(TEXT("Reset shows both bundled meetings"), GetResults(Panel).Num(), 2);
+        // Count the meetings from the data so this doesn't break every time we add class times
+        int32 Meetings = 0;
+        for (const auto& Course : World->GetGameInstance()->GetSubsystem<UPFTDirectory>()->Courses)
+        {
+            if (!Course.StartTime.IsEmpty()) ++Meetings;
+        }
+        TestEqual(TEXT("Reset shows every bundled meeting"), GetResults(Panel).Num(), Meetings);
         TestEqual(TEXT("Reset restores all floors"), Floor->GetSelectedOption(), FString(TEXT("All floors")));
         TestFalse(TEXT("Reset clears preview-only browsing"), Preview->IsChecked());
         TestTrue(TEXT("Reset keeps class search active"), CastChecked<UCheckBox>(Tree->FindWidget(TEXT("ClassSearchFilter")))->IsChecked());
@@ -448,6 +517,37 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
         TestFalse(TEXT("Reset deactivates walking to the previous result"), Tree->FindWidget(TEXT("RouteButton"))->IsVisible());
         Panel->ChooseRoom(TEXT("PFT_1218"));
         TestTrue(TEXT("Room 1218 offers directions to its door"), Tree->FindWidget(TEXT("RouteButton"))->IsVisible());
+        Panel->ChooseRoom(TEXT("PFT_1200"));
+        return true;
+    }));
+    ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
+    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World]()
+    {
+        auto* Panel = FindNavigator(World);
+        if (!Panel) return true;
+        auto* Tree = Panel->WidgetTree.Get();
+        auto* Search = Tree->FindWidget(TEXT("RoomSearch"));
+        auto* Walk = Tree->FindWidget(TEXT("RouteButton"));
+        Search->SetKeyboardFocus();
+        PressKey(EKeys::Tab);
+        if (!TestTrue(TEXT("Tab from search reaches Walk there first"), Walk->HasKeyboardFocus())) return true;
+        PressKey(EKeys::Enter);
+        TestTrue(TEXT("Enter starts the selected walk"), Tree->FindWidget(TEXT("DirectionsHud"))->IsVisible());
+        CaptureQAView(TEXT("PFTQA-ActiveRoute"));
+        return true;
+    }));
+    ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
+    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World]()
+    {
+        auto* Panel = FindNavigator(World);
+        if (!Panel) return true;
+        auto* Tree = Panel->WidgetTree.Get();
+        auto* Stop = Tree->FindWidget(TEXT("StopRouteButton"));
+        if (!TestTrue(TEXT("The active walk can be stopped"), Stop->IsVisible())) return true;
+        Stop->SetKeyboardFocus();
+        PressKey(EKeys::Enter);
+        TestTrue(TEXT("Stopping the walk reopens the browser"), Tree->FindWidget(TEXT("RoomBrowser"))->IsVisible());
+        TestTrue(TEXT("Stopping the walk restores focus to Walk there"), Tree->FindWidget(TEXT("RouteButton"))->HasKeyboardFocus());
         return true;
     }));
     return true;

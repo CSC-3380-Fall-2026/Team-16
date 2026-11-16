@@ -33,7 +33,14 @@ namespace
 
     bool ReadCourseSchedule(const FJsonObject& Object, FPFTCourse& Course)
     {
-        if (!Object.HasField(TEXT("Instructor")) && !Object.HasField(TEXT("MeetingDays")) && !Object.HasField(TEXT("StartTime"))) return true;
+        if (!Object.HasField(TEXT("Instructor")) && !Object.HasField(TEXT("MeetingDays")) && !Object.HasField(TEXT("StartTime"))
+            && !Object.HasField(TEXT("EndTime"))) return true;
+        // EndTime is optional, but if it's there it has to be a real time after the class starts
+        if (Object.HasField(TEXT("EndTime")))
+        {
+            if (!Object.HasTypedField<EJson::String>(TEXT("EndTime")) || !Object.TryGetStringField(TEXT("EndTime"), Course.EndTime)
+                || !IsStartTimeValid(Course.EndTime)) return false;
+        }
         return Object.HasTypedField<EJson::String>(TEXT("Instructor"))
             && Object.HasTypedField<EJson::String>(TEXT("MeetingDays"))
             && Object.HasTypedField<EJson::String>(TEXT("StartTime"))
@@ -41,7 +48,8 @@ namespace
             && Object.TryGetStringField(TEXT("MeetingDays"), Course.MeetingDays)
             && Object.TryGetStringField(TEXT("StartTime"), Course.StartTime)
             && !Course.Instructor.IsEmpty() && Course.Instructor == Course.Instructor.TrimStartAndEnd()
-            && IsMeetingPatternValid(Course.MeetingDays) && IsStartTimeValid(Course.StartTime);
+            && IsMeetingPatternValid(Course.MeetingDays) && IsStartTimeValid(Course.StartTime)
+            && (Course.EndTime.IsEmpty() || Course.EndTime > Course.StartTime);
     }
 
     bool MatchesCourse(const FPFTCourse& Course, const FString& Text)
@@ -126,6 +134,17 @@ FString FPFTCourse::GetStartTimeLabel() const
     return StartTime.IsEmpty() ? FString() : FormatTime(StartTime);
 }
 
+FString FPFTCourse::GetEndTimeLabel() const
+{
+    return EndTime.IsEmpty() ? FString() : FormatTime(EndTime);
+}
+
+FString FPFTCourse::GetTimeRangeLabel() const
+{
+    if (StartTime.IsEmpty()) return FString();
+    return EndTime.IsEmpty() ? GetStartTimeLabel() : GetStartTimeLabel() + TEXT(" - ") + FormatTime(EndTime);
+}
+
 FString FPFTCourse::GetScheduleLabel() const
 {
     if (StartTime.IsEmpty()) return FString();
@@ -137,7 +156,7 @@ FString FPFTCourse::GetScheduleLabel() const
         int32 Index;
         if (Week.FindChar(Day, Index)) Days.Add(DayNames[Index]);
     }
-    return Instructor + TEXT(" · ") + FString::Join(Days, TEXT("/")) + TEXT(" ") + GetStartTimeLabel();
+    return Instructor + TEXT(" · ") + FString::Join(Days, TEXT("/")) + TEXT(" ") + GetTimeRangeLabel();
 }
 
 void UPFTDirectory::Initialize(FSubsystemCollectionBase& Collection)
@@ -219,6 +238,11 @@ const FPFTRoom* UPFTDirectory::FindRoom(const FString& RoomId) const
 //         Empty if the room isn't in rooms.json
 FString UPFTDirectory::GetRoomDetails(const FString& RoomId) const
 {
+    return GetRoomDetailsForSelection(RoomId, FString());
+}
+
+FString UPFTDirectory::GetRoomDetailsForSelection(const FString& RoomId, const FString& CourseId) const
+{
     const FPFTRoom* Room = FindRoom(RoomId);
     if (!Room) return FString();
     FString Details = Room->DisplayName + TEXT("\n") + Room->RoomType + TEXT(" | Floor ") + FString::FromInt(Room->Floor);
@@ -232,9 +256,9 @@ FString UPFTDirectory::GetRoomDetails(const FString& RoomId) const
     }
     for (const auto& Course : Courses)
     {
-        if (Course.RoomId != RoomId) continue;
+        if (Course.RoomId != RoomId || (!CourseId.IsEmpty() && Course.Name != CourseId)) continue;
         Details += TEXT("\nClass here: ") + Course.CourseCode + TEXT(" - ") + Course.CourseTitle;
-        if (!Course.StartTime.IsEmpty()) Details += TEXT("\n") + Course.GetScheduleLabel();
+        if (CourseId.IsEmpty() && !Course.StartTime.IsEmpty()) Details += TEXT("\n") + Course.GetScheduleLabel();
     }
     return Details;
 }
@@ -253,7 +277,7 @@ TArray<FPFTSearchResult> UPFTDirectory::Search(const FString& Query) const
     {
         if (MatchesCourse(Course, Text))
         {
-            Results.Add({ Course.RoomId, Course.CourseCode + TEXT(" - ") + Course.CourseTitle });
+            Results.Add({ Course.RoomId, Course.CourseCode + TEXT(" - ") + Course.CourseTitle, Course.Name });
         }
     }
     // Departments match on their full name or their short code. The first result is the department office,
@@ -319,7 +343,46 @@ TArray<FPFTSearchResult> UPFTDirectory::FindClasses(const FString& Query, const 
         const auto* Room = FindRoom(Course.RoomId);
         if (!Room || (Floor > 0 && Room->Floor != Floor)) continue;
         const FString Label = Course.CourseCode + TEXT(" · ") + Room->DisplayName + TEXT("\n") + Course.GetScheduleLabel();
-        Results.Add({ Course.RoomId, Label });
+        Results.Add({ Course.RoomId, Label, Course.Name });
     }
     return Results;
+}
+
+const FPFTCourse* UPFTDirectory::FindCourse(const FString& CourseId) const
+{
+    return Courses.FindByPredicate([&](const FPFTCourse& Course) { return Course.Name == CourseId; });
+}
+
+TArray<const FPFTCourse*> UPFTDirectory::GetClassesForDay(const TArray<FString>& CourseIds, TCHAR Day) const
+{
+    TArray<const FPFTCourse*> DayClasses;
+    for (const FString& CourseId : CourseIds)
+    {
+        // A saved ID can point at a course we took out of the data later, so those just get skipped.
+        // Classes with no time can't be put in order, so they're skipped too
+        const auto* Course = FindCourse(CourseId);
+        if (!Course || Course->StartTime.IsEmpty() || !Course->MeetingDays.Contains(FString::Chr(Day), ESearchCase::CaseSensitive)) continue;
+        DayClasses.AddUnique(Course);
+    }
+    // "HH:MM" strings sort the same way the times do
+    DayClasses.StableSort([](const FPFTCourse& A, const FPFTCourse& B) { return A.StartTime < B.StartTime; });
+    return DayClasses;
+}
+
+int32 UPFTDirectory::FindCurrentOrNextClass(const TArray<const FPFTCourse*>& DayClasses, const FString& Now)
+{
+    for (int32 Index = 0; Index < DayClasses.Num(); ++Index)
+    {
+        const auto* Course = DayClasses[Index];
+        // Without an end time we can only say a class is coming up, not that it's still going
+        const bool bStillGoing = !Course->EndTime.IsEmpty() && Now < Course->EndTime;
+        if (Now <= Course->StartTime || bStillGoing) return Index;
+    }
+    return INDEX_NONE;
+}
+
+TCHAR UPFTDirectory::GetDayCode(const FDateTime& Time)
+{
+    // EDayOfWeek goes Monday to Sunday, which is the same order as MTWRFSU
+    return TEXT("MTWRFSU")[static_cast<int32>(Time.GetDayOfWeek())];
 }

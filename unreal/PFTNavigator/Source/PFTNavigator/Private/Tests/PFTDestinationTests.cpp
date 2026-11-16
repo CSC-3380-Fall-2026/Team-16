@@ -19,7 +19,7 @@ bool FPFTDestinationTest::RunTest(const FString& Parameters)
     auto* Second = World->SpawnActor<APFTRoomMarker>();
     First->RoomId = TEXT("PFT_1200");
     Second->RoomId = TEXT("PFT_3325");
-    // HasLocation is what the panel uses to say "Map location not available yet", so it can't guess
+    // HasLocation is what the panel uses to say "Room preview is unavailable on this map.", so it can't guess
     TestTrue(TEXT("Placed marker has a location"), Destinations->HasLocation(First->RoomId));
     TestFalse(TEXT("Unknown room has no location"), Destinations->HasLocation(TEXT("PFT_9999")));
     TestTrue(TEXT("Select known room"), Destinations->SelectRoom(First->RoomId));

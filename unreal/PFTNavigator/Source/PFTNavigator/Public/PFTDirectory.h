@@ -27,8 +27,14 @@ struct PFTNAVIGATOR_API FPFTCourse
     UPROPERTY(BlueprintReadOnly) FString Instructor;
     UPROPERTY(BlueprintReadOnly) FString MeetingDays;
     UPROPERTY(BlueprintReadOnly) FString StartTime;
+    // Optional, "HH:MM" like StartTime. Empty when we don't know when the class ends
+    UPROPERTY(BlueprintReadOnly) FString EndTime;
 
     FString GetStartTimeLabel() const;
+    // "11:20 AM", or empty when we don't know the end time
+    FString GetEndTimeLabel() const;
+    // "10:30 AM - 11:20 AM", or just the start time when there's no end time
+    FString GetTimeRangeLabel() const;
     FString GetScheduleLabel() const;
 };
 
@@ -59,6 +65,8 @@ struct PFTNAVIGATOR_API FPFTSearchResult
     GENERATED_BODY()
     UPROPERTY(BlueprintReadOnly) FString RoomId;
     UPROPERTY(BlueprintReadOnly) FString Label;
+    // Filled in when the result represents a class.
+    UPROPERTY(BlueprintReadOnly) FString CourseId;
 };
 
 UCLASS()
@@ -72,7 +80,18 @@ public:
     UFUNCTION(BlueprintCallable) TArray<FPFTSearchResult> BrowseRooms(const FString& Query, int32 Floor = 0) const;
     TArray<FPFTSearchResult> FindClasses(const FString& Query, const FString& Instructor, TCHAR Day, const FString& StartTime, int32 Floor) const;
     const FPFTRoom* FindRoom(const FString& RoomId) const;
+    // Finds a course by its Name, like "CSC_1350". Result: the course, or nullptr if it isn't in the data
+    const FPFTCourse* FindCourse(const FString& CourseId) const;
+    // Gets the saved classes that meet on Day (one of MTWRFSU), earliest first.
+    // Params: CourseIds are the saved course Names, Day is the day letter. Result: that day's classes in order
+    TArray<const FPFTCourse*> GetClassesForDay(const TArray<FString>& CourseIds, TCHAR Day) const;
+    // Picks the class that's going on right now or is coming up next.
+    // Params: DayClasses from GetClassesForDay, Now as "HH:MM". Result: its index, or INDEX_NONE when the day is done
+    static int32 FindCurrentOrNextClass(const TArray<const FPFTCourse*>& DayClasses, const FString& Now);
+    // Turns a date into the day letter the course data uses. Result: one of M T W R F S U
+    static TCHAR GetDayCode(const FDateTime& Time);
     UFUNCTION(BlueprintCallable) FString GetRoomDetails(const FString& RoomId) const;
+    FString GetRoomDetailsForSelection(const FString& RoomId, const FString& CourseId) const;
     UPROPERTY(BlueprintReadOnly) TArray<FPFTRoom> Rooms;
     UPROPERTY(BlueprintReadOnly) TArray<FPFTCourse> Courses;
     UPROPERTY(BlueprintReadOnly) TArray<FPFTDepartment> Departments;

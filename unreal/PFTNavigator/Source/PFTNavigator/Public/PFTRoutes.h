@@ -31,6 +31,8 @@ public:
     void SetReducedMotion(bool bEnabled) { bReducedMotion = bEnabled; }
     FVector NextPoint() const { return Path.IsValidIndex(NextIndex) ? Path[NextIndex] : FVector::ZeroVector; }
     const FText& GetMessage() const { return Message; }
+    TArrayView<const FVector> GetRemainingPath() const;
+    int32 CopyWalkableCells(TArray<FIntPoint>& Cells) const;
 
 private:
     struct FNode
@@ -44,12 +46,14 @@ private:
     bool CanCross(ACharacter& Character, const FVector& Start, const FVector& End) const;
     void DrawPath();
     void ShowArrival(const FVector& Position);
-    void UpdateDirections(const FVector& Position, const FRotator& View);
+    void UpdateDirections(const FVector& Position, const FRotator& View, double WalkSpeed);
     void EndGuidance(const FText& NewMessage);
 
     TMap<FIntPoint, FNode> Nodes;
     TMap<FString, FIntPoint> Destinations;
+    TMap<FString, FVector2D> Landmarks;
     TArray<FVector> Path;
+    TArray<double> TurnSeconds;
     UPROPERTY() TObjectPtr<ULineBatchComponent> Trail;
     UPROPERTY() TObjectPtr<UTextRenderComponent> ArrivalLabel;
     TWeakObjectPtr<ACharacter> Walker;

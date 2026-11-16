@@ -3,13 +3,17 @@ param(
     [Parameter(Mandatory)] [ValidatePattern('^[A-Za-z0-9_]+$')] [string]$MapName,
     [string]$EngineRoot = $env:UE_ROOT,
     [switch]$Resume,
+    [switch]$VerifyExisting,
     [switch]$PackageDemo,
-    [string]$WalkingGraph
+    [string]$WalkingGraph,
+    [string]$ArchiveDirectory
 )
 
 $ErrorActionPreference = 'Stop'
 if (!$EngineRoot) { $EngineRoot = 'C:\Program Files\Epic Games\UE_5.8' }
 if ($WalkingGraph -and !$PackageDemo) { throw '-WalkingGraph requires -PackageDemo.' }
+if ($ArchiveDirectory -and !$PackageDemo) { throw '-ArchiveDirectory requires -PackageDemo.' }
+if ($Resume -and $VerifyExisting) { throw 'Choose either -Resume or -VerifyExisting.' }
 
 $projectFile = Get-Item -LiteralPath $Project
 if ($projectFile.PSIsContainer -or $projectFile.Extension -ne '.uproject') {
@@ -59,7 +63,9 @@ try {
     $finish = '/Engine/Maps/Entry -ExecutePythonScript="{0} --output {1} --finish"' -f $generator, $map
     $verify = '-run=PythonScript -script="{0} --output {1}"' -f $verifier, $map
 
-    if ($Resume) {
+    if ($VerifyExisting) {
+        if (!(Test-Path -LiteralPath $mapFile -PathType Leaf)) { throw "Could not find $mapFile." }
+    } elseif ($Resume) {
         if (!(Test-Path -LiteralPath $mapFile -PathType Leaf) -or
             !(Test-Path -LiteralPath $buildReport -PathType Leaf)) {
             throw 'Resume requires saved geometry and its build report.'
@@ -69,12 +75,14 @@ try {
         Invoke-MapStep 'Geometry' $generate "FIRST_FLOOR_GEOMETRY_COMPLETE: $map;"
     }
 
-    $build = Get-Content -LiteralPath $buildReport -Raw | ConvertFrom-Json
-    if ($build.Output -ne $map -or $build.DryRun -ne $false -or $build.CopiedActors -le 0) {
-        throw "The build report at $buildReport does not describe saved geometry for $map."
-    }
-    if (!$build.Complete) {
-        Invoke-MapStep 'Finish' $finish "FIRST_FLOOR_BUILD_COMPLETE: $map,"
+    if (!$VerifyExisting) {
+        $build = Get-Content -LiteralPath $buildReport -Raw | ConvertFrom-Json
+        if ($build.Output -ne $map -or $build.DryRun -ne $false -or $build.CopiedActors -le 0) {
+            throw "The build report at $buildReport does not describe saved geometry for $map."
+        }
+        if (!$build.Complete) {
+            Invoke-MapStep 'Finish' $finish "FIRST_FLOOR_BUILD_COMPLETE: $map,"
+        }
     }
     Invoke-MapStep 'Verify' $verify 'FIRST_FLOOR_VERIFIED:'
     $verified = Get-Content -LiteralPath $verificationReport -Raw | ConvertFrom-Json
@@ -92,6 +100,7 @@ try {
             VerifyExtended = $true
         }
         if ($WalkingGraph) { $packageOptions.WalkingGraph = $WalkingGraph }
+        if ($ArchiveDirectory) { $packageOptions.ArchiveDirectory = $ArchiveDirectory }
         & (Join-Path $PSScriptRoot 'package_first_floor_demo.ps1') @packageOptions
     }
 } finally {

@@ -11,6 +11,7 @@ class UScrollBox;
 class UEditableTextBox;
 class UCheckBox;
 class UVerticalBox;
+class UPFTRouteMap;
 
 UCLASS()
 class UPFTSearchButton : public UButton
@@ -18,6 +19,8 @@ class UPFTSearchButton : public UButton
     GENERATED_BODY()
 public:
     UPROPERTY() FString RoomId;
+    // Which course this result is for. Empty unless it came from class search or My classes
+    UPROPERTY() FString CourseId;
     UPROPERTY() TObjectPtr<class UPFTNavigatorWidget> Panel;
     // The result's normal text and label, kept so the Selected tag can be added and removed
     UPROPERTY() FString ResultText;
@@ -30,9 +33,13 @@ class PFTNAVIGATOR_API UPFTNavigatorWidget : public UUserWidget
 {
     GENERATED_BODY()
 public:
-    void ChooseRoom(const FString& RoomId);
+    void ChooseRoom(const FString& RoomId, const FString& CourseId = FString());
     void UpdateCameraControls(bool bFreeCamera, bool bCursorShown, bool bRoomPreview);
     void UpdateRouteControls();
+    // Called every frame from the exploration tick, but only redoes My classes when the minute changes
+    void UpdateMyClassesClock();
+    // Lets a test pick the day and time instead of using the real clock. Param: the time to pretend it is
+    void SetClockForTests(const FDateTime& Time);
 protected:
     virtual TSharedRef<SWidget> RebuildWidget() override;
     virtual FReply NativeOnPreviewKeyDown(const FGeometry& Geometry, const FKeyEvent& Event) override;
@@ -48,17 +55,27 @@ private:
     void AddResultPage();
     void UpdateSelectedTags();
     UFUNCTION() void ToggleFreeCamera();
-    UFUNCTION() void ViewRoom();
+    void ViewRoom();
+    UFUNCTION() void ToggleRoomPreview();
     UFUNCTION() void StartRoute();
     UFUNCTION() void StopRoute();
+    UFUNCTION() void ToggleRouteOverview();
     UFUNCTION() void FindAnotherRoom();
     UFUNCTION() void ToggleSettings();
     UFUNCTION() void MotionChanged(bool bChecked);
     UFUNCTION() void DirectionsSizeChanged(bool bChecked);
     UFUNCTION() void PerformanceChanged(bool bChecked);
+    UFUNCTION() void MyClassesChanged(bool bChecked);
+    UFUNCTION() void ToggleSavedClass();
+    void RefreshMyClasses();
+    void UpdateSaveClassButton();
+    FDateTime GetNow() const;
     void SetCompactDirections(bool bCompact);
+    void SetRouteOverviewVisible(bool bVisible);
     UPROPERTY() TObjectPtr<UTextBlock> Status;
     UPROPERTY() TObjectPtr<UTextBlock> Details;
+    UPROPERTY() TObjectPtr<UTextBlock> SelectedRoomLabel;
+    UPROPERTY() TObjectPtr<UTextBlock> SelectedCourseLabel;
     UPROPERTY() TObjectPtr<UEditableTextBox> Search;
     UPROPERTY() TObjectPtr<UComboBoxString> Floors;
     UPROPERTY() TObjectPtr<UCheckBox> PreviewOnly;
@@ -69,6 +86,7 @@ private:
     UPROPERTY() TObjectPtr<UComboBoxString> ClassStart;
     TArray<FString> ClassStartTimes;
     UPROPERTY() TObjectPtr<UButton> ViewButton;
+    UPROPERTY() TObjectPtr<UTextBlock> PreviewLabel;
     UPROPERTY() TObjectPtr<UButton> ClearButton;
     UPROPERTY() TObjectPtr<UButton> RouteButton;
     UPROPERTY() TObjectPtr<UTextBlock> RouteUnavailable;
@@ -77,12 +95,29 @@ private:
     UPROPERTY() TObjectPtr<UVerticalBox> Directions;
     UPROPERTY() TObjectPtr<UVerticalBox> Settings;
     UPROPERTY() TObjectPtr<UButton> StopRouteButton;
+    UPROPERTY() TObjectPtr<UButton> RouteOverviewButton;
+    UPROPERTY() TObjectPtr<UTextBlock> RouteOverviewLabel;
+    UPROPERTY() TObjectPtr<UVerticalBox> RouteOverview;
+    UPROPERTY() TObjectPtr<UPFTRouteMap> RouteMap;
     UPROPERTY() TObjectPtr<UButton> RetryRouteButton;
     UPROPERTY() TObjectPtr<UButton> FindAnotherRoomButton;
     UPROPERTY() TObjectPtr<UTextBlock> CameraLabel;
     UPROPERTY() TObjectPtr<UTextBlock> CameraHelp;
     UPROPERTY() TObjectPtr<UScrollBox> Results;
     UPROPERTY() TObjectPtr<UButton> MoreRoomsButton;
+    UPROPERTY() TObjectPtr<UCheckBox> MyClassesToggle;
+    UPROPERTY() TObjectPtr<UVerticalBox> MyClassesBox;
+    UPROPERTY() TObjectPtr<UTextBlock> MyClassesStatus;
+    UPROPERTY() TObjectPtr<UVerticalBox> MyClassesList;
+    UPROPERTY() TObjectPtr<UButton> SaveClassButton;
+    UPROPERTY() TObjectPtr<UTextBlock> SaveClassLabel;
+    // Course Names the student saved, like "CSC_1350"
+    TArray<FString> MyClasses;
+    // Course that's currently picked, empty when the pick didn't come from a class result
+    FString SelectedCourseId;
+    // Zero means use the real clock
+    FDateTime TestClock;
+    int32 LastClockMinute = -1;
     // Room that's currently picked, empty when nothing is selected
     FString SelectedRoomId;
     bool bCompactDirections = false;

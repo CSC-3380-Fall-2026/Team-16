@@ -77,19 +77,31 @@ def check_field_types(file_name, rows):
     return errors
 
 
+TIME_PATTERN = r"(?:[01][0-9]|2[0-3]):[0-5][0-9]"
+
+
 def check_course_schedules(rows):
-    """Validate optional instructor, meeting days, and start time as a group."""
+    """Validate optional instructor, meeting days, and start time as a group.
+    EndTime is optional too, but it only makes sense with the rest of the schedule
+    and it has to be after StartTime, or the app can't tell if a class is going on right now.
+    """
     errors = []
     for row in rows:
-        if not {"Instructor", "MeetingDays", "StartTime"} & row.keys():
+        if not {"Instructor", "MeetingDays", "StartTime", "EndTime"} & row.keys():
             continue
         instructor, days, start = (row.get(key) for key in ("Instructor", "MeetingDays", "StartTime"))
         if not isinstance(instructor, str) or not instructor or instructor != instructor.strip():
             errors.append(f"courses.json: {row.get('Name')} has invalid Instructor")
         if not isinstance(days, str) or not days or not re.fullmatch(r"M?T?W?R?F?S?U?", days):
             errors.append(f"courses.json: {row.get('Name')} has invalid MeetingDays")
-        if not isinstance(start, str) or not re.fullmatch(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]", start):
+        start_ok = isinstance(start, str) and re.fullmatch(TIME_PATTERN, start)
+        if not start_ok:
             errors.append(f"courses.json: {row.get('Name')} has invalid StartTime")
+        if "EndTime" in row:
+            end = row["EndTime"]
+            # HH:MM strings sort the same way the times do, so a plain compare works here
+            if not isinstance(end, str) or not re.fullmatch(TIME_PATTERN, end) or (start_ok and end <= start):
+                errors.append(f"courses.json: {row.get('Name')} has invalid EndTime")
     return errors
 
 
@@ -220,6 +232,16 @@ def check_walking_graph(graph, room_ids):
         return [f"{prefix} Nodes must be a nonempty array"]
     if not isinstance(destinations, dict) or len(destinations) < 2 or "PFT_COMMONS" not in destinations:
         return [f"{prefix} expected the Commons and at least one other destination"]
+
+    landmarks = graph.get("Landmarks", {})
+    if not isinstance(landmarks, dict):
+        return [f"{prefix} Landmarks must be an object"]
+    for label, point in landmarks.items():
+        if (not isinstance(label, str) or not label.strip() or label != label.strip()
+                or any(char in label for char in "\r\n")
+                or not isinstance(point, list) or len(point) != 2
+                or any(type(value) is not int or abs(value) > 1_000_000 for value in point)):
+            return [f"{prefix} invalid landmark {label!r}"]
 
     nodes = {}
     for index, row in enumerate(rows, start=1):

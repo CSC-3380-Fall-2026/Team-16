@@ -38,6 +38,28 @@
     "RoomId": "PFT_1200"
   },
   {
+    "Name": "CSC_2700",
+    "CourseCode": "CSC 2700",
+    "CourseTitle": "SPEC TOP COMPTR SCI",
+    "DepartmentId": "DEPT_CSE",
+    "RoomId": "PFT_1216",
+    "Instructor": "Isaac W Traxler",
+    "MeetingDays": "T",
+    "StartTime": "18:00",
+    "EndTime": "19:50"
+  },
+  {
+    "Name": "CSC_2730",
+    "CourseCode": "CSC 2730",
+    "CourseTitle": "DATA SCI & ANALYTICS",
+    "DepartmentId": "DEPT_CSE",
+    "RoomId": "PFT_1206",
+    "Instructor": "Dr. Keith George Mills",
+    "MeetingDays": "TR",
+    "StartTime": "13:30",
+    "EndTime": "14:50"
+  },
+  {
     "Name": "CSC_3102",
     "CourseCode": "CSC 3102",
     "CourseTitle": "ADV DATA STRUCTURES",
@@ -53,5 +75,60 @@
     "CourseTitle": "ETHICS IN COMPUTING",
     "DepartmentId": "DEPT_CSE",
     "RoomId": "PFT_1100"
+  },
+  {
+    "Name": "CSC_3501",
+    "CourseCode": "CSC 3501",
+    "CourseTitle": "COMP ORGANIZATN/DSN",
+    "DepartmentId": "DEPT_CSE",
+    "RoomId": "PFT_1221",
+    "Instructor": "Felipe Fronchetti",
+    "MeetingDays": "TR",
+    "StartTime": "13:30",
+    "EndTime": "14:50"
+  },
+  {
+    "Name": "CSC_4330",
+    "CourseCode": "CSC 4330",
+    "CourseTitle": "SOFTWARE SYST DEVEL",
+    "DepartmentId": "DEPT_CSE",
+    "RoomId": "PFT_1206",
+    "Instructor": "David C. Shepherd",
+    "MeetingDays": "TR",
+    "StartTime": "15:00",
+    "EndTime": "16:20"
+  },
+  {
+    "Name": "CSC_4402",
+    "CourseCode": "CSC 4402",
+    "CourseTitle": "INTR DATABSE MGT SYS",
+    "DepartmentId": "DEPT_CSE",
+    "RoomId": "PFT_1202",
+    "Instructor": "Mahmood Jasim",
+    "MeetingDays": "TR",
+    "StartTime": "12:00",
+    "EndTime": "13:20"
+  },
+  {
+    "Name": "CSC_4444",
+    "CourseCode": "CSC 4444",
+    "CourseTitle": "ARTIFICIAL INTELLIG",
+    "DepartmentId": "DEPT_CSE",
+    "RoomId": "PFT_1206",
+    "Instructor": "Dong Lao",
+    "MeetingDays": "TR",
+    "StartTime": "16:30",
+    "EndTime": "17:50"
+  },
+  {
+    "Name": "CSC_4700",
+    "CourseCode": "CSC 4700",
+    "CourseTitle": "Special Topics in Computer Science",
+    "DepartmentId": "DEPT_CSE",
+    "RoomId": "PFT_1216",
+    "Instructor": "James Michael Ghawaly Jr.",
+    "MeetingDays": "M",
+    "StartTime": "17:00",
+    "EndTime": "19:50"
   }
 ]

@@ -70,6 +70,9 @@ class TestValidateData(unittest.TestCase):
         self.data["first_floor_routes.json"] = graph
         self.write_files()
         self.assertEqual(validate_data.validate(self.folder), [])
+        self.data["first_floor_routes.json"] = {**graph, "Landmarks": {"Zone 1200 sign": [25, -60]}}
+        self.write_files()
+        self.assertEqual(validate_data.validate(self.folder), [])
         cases = [
             ({"Nodes": [[0, 0, 0, 1], [1, 0, 0, 0]]}, "no return edge"),
             ({"Nodes": [[0, 0, 0, 0], [1, 0, 0, 0]]}, "disconnected"),
@@ -78,6 +81,9 @@ class TestValidateData(unittest.TestCase):
             ({"Destinations": {"PFT_COMMONS": [0, 0], "PFT_3325": [1, 0]}}, "not a first-floor"),
             ({"Destinations": {"PFT_COMMONS": [0, 0], "PFT_1200": [2, 0]}}, "does not point"),
             ({"Step": True}, "Step must be an integer"),
+            ({"Landmarks": []}, "Landmarks must be an object"),
+            ({"Landmarks": {"": [0, 0]}}, "invalid landmark"),
+            ({"Landmarks": {"Zone 1200 sign": [True, 0]}}, "invalid landmark"),
         ]
         for overrides, message in cases:
             with self.subTest(message=message):
@@ -101,6 +107,23 @@ class TestValidateData(unittest.TestCase):
         del course["Instructor"]
         self.write_files()
         self.assertTrue(any("invalid Instructor" in error for error in validate_data.validate(self.folder)))
+
+    def test_end_time_is_optional_but_must_be_after_start(self):
+        course = self.data["courses.json"][0]
+        course.update(Instructor="Test Person", MeetingDays="MWF", StartTime="10:30", EndTime="11:20")
+        self.write_files()
+        self.assertEqual(validate_data.validate(self.folder), [])
+        for value in ["10:30", "09:00", "25:00", "1120", 1120]:
+            with self.subTest(value=value):
+                course["EndTime"] = value
+                self.write_files()
+                self.assertTrue(any("invalid EndTime" in error for error in validate_data.validate(self.folder)))
+        # An end time on its own isn't enough, the rest of the schedule has to be there too
+        for field in ("Instructor", "MeetingDays", "StartTime"):
+            del course[field]
+        course["EndTime"] = "11:20"
+        self.write_files()
+        self.assertTrue(any("invalid StartTime" in error for error in validate_data.validate(self.folder)))
 
     def test_floor_limit_matches_unreal(self):
         self.data["rooms.json"][0]["Floor"] = 2147483647
