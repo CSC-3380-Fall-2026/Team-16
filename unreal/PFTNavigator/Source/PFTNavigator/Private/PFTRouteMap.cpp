@@ -2,6 +2,7 @@
 #include "PFTPalette.h"
 #include "PFTRoutes.h"
 #include "Algo/AllOf.h"
+#include "Algo/AnyOf.h"
 #include "Engine/Texture2D.h"
 #include "Fonts/FontMeasure.h"
 #include "Framework/Application/SlateApplication.h"
@@ -45,24 +46,43 @@ namespace
         double Scale;
     };
 
+    bool PlaceLandmarkLabel(const FVector2f& Pin, const FVector2f& Size, const FVector2f& Area,
+        TArrayView<const FVector2f> Route, FVector2f& Corner)
+    {
+        constexpr float Inset = 4.0f;
+        if (Size.X + Inset * 2.0f > Area.X || Size.Y + Inset * 2.0f > Area.Y) return false;
+        for (const float Gap : {12.0f, 24.0f})
+        {
+            const FVector2f Offsets[] = {
+                {-Size.X * 0.5f, -Size.Y - Gap}, {-Size.X * 0.5f, Gap},
+                {Gap, -Size.Y * 0.5f}, {-Size.X - Gap, -Size.Y * 0.5f}};
+            for (const FVector2f& Offset : Offsets)
+            {
+                const FVector2f Candidate = Pin + Offset;
+                const FVector2f Start(FMath::Clamp(Candidate.X, Inset, Area.X - Size.X - Inset),
+                    FMath::Clamp(Candidate.Y, Inset, Area.Y - Size.Y - Inset));
+                const FBox2f Margin(Start - FVector2f(8, 8), Start + Size + FVector2f(8, 8));
+                if (Margin.IsInsideOrOn(Pin)
+                    || Algo::AnyOf(Route, [&Margin](const FVector2f& Point) { return Margin.IsInsideOrOn(Point); })) continue;
+                Corner = Start;
+                return true;
+            }
+        }
+        return false;
+    }
+
     void DrawLandmark(const FGeometry& Geometry, FSlateWindowElementList& Draw, int32 Layer,
-        const FVector2f& Pin, const FString& Name)
+        const FVector2f& Pin, const FString& Name, TArrayView<const FVector2f> Route)
     {
         constexpr float Inset = 4.0f;
         const FVector2f Area(Geometry.GetLocalSize());
         if (Pin.X < Inset || Pin.X > Area.X - Inset || Pin.Y < Inset || Pin.Y > Area.Y - Inset) return;
-
         const FSlateFontInfo Font = FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), 12);
         const auto FontMeasure = FSlateApplication::Get().GetRenderer()->GetFontMeasureService();
         const FVector2f TextSize(FontMeasure->Measure(Name, Font));
         const FVector2f Padding(6, 3);
         const FVector2f LabelSize = TextSize + Padding * 2.0f;
-        if (LabelSize.X + Inset * 2.0f > Area.X || LabelSize.Y + Inset * 2.0f > Area.Y) return;
 
-        const float AbovePin = Pin.Y - LabelSize.Y - 7.0f;
-        const FVector2f LabelCorner(
-            FMath::Clamp(Pin.X - LabelSize.X * 0.5f, Inset, Area.X - LabelSize.X - Inset),
-            FMath::Clamp(AbovePin >= Inset ? AbovePin : Pin.Y + 7.0f, Inset, Area.Y - LabelSize.Y - Inset));
         const auto* Brush = FCoreStyle::Get().GetBrush(TEXT("WhiteBrush"));
         const auto Place = [&](const FVector2f& Size, const FVector2f& Corner)
         {
@@ -72,6 +92,13 @@ namespace
         FSlateDrawElement::MakeBox(Draw, Layer, Place(FVector2f(8, 8), Pin - FVector2f(4, 4)), Brush);
         FSlateDrawElement::MakeBox(Draw, Layer + 1, Place(FVector2f(4, 4), Pin - FVector2f(2, 2)), Brush,
             ESlateDrawEffect::None, Ink);
+        FVector2f LabelCorner;
+        if (!PlaceLandmarkLabel(Pin, LabelSize, Area, Route, LabelCorner)) return;
+
+        const FVector2f LabelEdge(FMath::Clamp(Pin.X, LabelCorner.X, LabelCorner.X + LabelSize.X),
+            FMath::Clamp(Pin.Y, LabelCorner.Y, LabelCorner.Y + LabelSize.Y));
+        FSlateDrawElement::MakeLines(Draw, Layer - 1, Geometry.ToPaintGeometry(), TArray<FVector2f>{Pin, LabelEdge},
+            ESlateDrawEffect::None, Ink, true, 1.0f);
         FSlateDrawElement::MakeBox(Draw, Layer, Place(LabelSize, LabelCorner), Brush);
         FSlateDrawElement::MakeText(Draw, Layer + 1, Place(TextSize, LabelCorner + Padding), Name, Font,
             ESlateDrawEffect::None, Ink);
@@ -164,17 +191,16 @@ int32 UPFTRouteMap::NativePaint(const FPaintArgs& Args, const FGeometry& Geometr
         Line.Add(Here);
         for (const FVector& Point : Path) Line.Add(Projection.Point(FVector2D(Point)));
         const FVector2f Goal = Line.Last();
+        if (const auto* Landmark = Routes->GetRouteLandmark(Path))
+        {
+            DrawLandmark(Geometry, Draw, Layer + 4, Projection.Point(Landmark->Value), Landmark->Key, Line);
+        }
         FSlateDrawElement::MakeLines(Draw, Layer + 1, Paint, MoveTemp(Line), ESlateDrawEffect::None, Purple, true, 3.0f);
         const FVector2f Top = Goal + FVector2f(0, -5);
         TArray<FVector2f> Diamond = {Top, Goal + FVector2f(5, 0), Goal + FVector2f(0, 5), Goal - FVector2f(5, 0), Top};
         FSlateDrawElement::MakeLines(Draw, Layer + 2, Paint, Diamond, ESlateDrawEffect::None, Purple, true, 4.0f);
         FSlateDrawElement::MakeLines(Draw, Layer + 3, Paint, MoveTemp(Diamond), ESlateDrawEffect::None,
             FLinearColor(PFTPalette::Gold), true, 2.0f);
-
-        if (const auto* Landmark = Routes->GetRouteLandmark(Path))
-        {
-            DrawLandmark(Geometry, Draw, Layer + 4, Projection.Point(Landmark->Value), Landmark->Key);
-        }
     }
     if (FloorBounds.IsInside(Position))
     {
@@ -210,6 +236,16 @@ bool FPFTRouteMapProjectionTest::RunTest(const FString& Parameters)
         Bounds.IsInside(Start) && Bounds.IsInside(FVector2D(Path.Last())));
     TestEqual(TEXT("A narrow route leaves room for the surrounding halls"), Bounds.GetSize(), FVector2D(3800, 2800));
     TestFalse(TEXT("An empty route uses the full floor"), FitRouteBounds(Start, {}).bIsValid);
+    const TArray<FVector2f> ScreenRoute = {{25, 88}, {70, 98}, {195, 98}};
+    const FVector2f LabelSize(96, 21);
+    FVector2f LabelCorner;
+    if (TestTrue(TEXT("A landmark label can fit around the route"),
+        PlaceLandmarkLabel({70, 98}, LabelSize, {300, 150}, ScreenRoute, LabelCorner)))
+    {
+        const FBox2f Label(LabelCorner, LabelCorner + LabelSize);
+        TestFalse(TEXT("The label leaves the player marker visible"), Label.IsInsideOrOn(ScreenRoute[0]));
+        TestFalse(TEXT("The label leaves the destination marker visible"), Label.IsInsideOrOn(ScreenRoute.Last()));
+    }
     return true;
 }
 #endif
