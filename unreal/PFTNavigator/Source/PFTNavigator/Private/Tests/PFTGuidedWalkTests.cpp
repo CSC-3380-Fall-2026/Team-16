@@ -89,6 +89,38 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
             return true;
         }));
         ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
+        ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Tree, Player, Character, Routes]()
+        {
+            TestFalse(TEXT("The route preview starts closed"), Tree->FindWidget(TEXT("RoutePreview"))->IsVisible());
+            if (!TestTrue(TEXT("Preview route is clickable"),
+                PFTViewportTest::ClickVisibleWidget(Tree->FindWidget(TEXT("RoutePreviewButton"))))) return true;
+            TestTrue(TEXT("The route preview opens"), Tree->FindWidget(TEXT("RoutePreview"))->IsVisible());
+            TestTrue(TEXT("The preview has a map"), Tree->FindWidget(TEXT("RoutePreviewMap"))->IsVisible());
+            const auto* Estimate = CastChecked<UTextBlock>(Tree->FindWidget(TEXT("RoutePreviewMessage")));
+            const FString Summary = Estimate->GetText().ToString();
+            TestTrue(TEXT("The preview estimates walking time and distance"), Summary.Contains(TEXT("walk")) && Summary.EndsWith(TEXT(" m")));
+            TestTrue(TEXT("The preview keeps the walking pawn and movement"), Player->GetPawn() == Character && !Player->IsMoveInputIgnored());
+            TestFalse(TEXT("Previewing leaves guidance off"), Routes->IsGuiding());
+            TestTrue(TEXT("Previewing leaves the active route empty"), Routes->GetRemainingPath().IsEmpty());
+            return true;
+        }));
+        ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
+        ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Tree]()
+        {
+            auto* Map = Tree->FindWidget(TEXT("RoutePreviewMap"));
+            TestTrue(TEXT("The preview map has space to render"), Map->GetCachedGeometry().GetLocalSize().Y >= 184);
+            for (const FName Name : {FName(TEXT("RouteButton")), FName(TEXT("RoutePreviewButton")),
+                FName(TEXT("ViewRoomButton")), FName(TEXT("ClearRoomButton"))})
+            {
+                const auto* Button = CastChecked<UButton>(Tree->FindWidget(Name));
+                TestTrue(FString::Printf(TEXT("%s fits its label"), *Name.ToString()),
+                    Button->GetCachedGeometry().GetLocalSize().X >= Button->GetContent()->GetDesiredSize().X);
+            }
+            if (FParse::Param(FCommandLine::Get(), TEXT("PFTQAScreenshots")))
+                FScreenshotRequest::RequestScreenshot(TEXT("PFTQA-RoutePreview"), true, true, false);
+            return true;
+        }));
+        ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
         ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Navigator, Tree, Player, Character, Routes]()
         {
             if (!TestTrue(TEXT("Walk there is clickable"),
@@ -102,6 +134,7 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
             TestFalse(TEXT("The player can walk"), Player->IsMoveInputIgnored());
             TestFalse(TEXT("The player can look"), Player->IsLookInputIgnored());
             TestTrue(TEXT("The browser collapses while walking"), Tree->FindWidget(TEXT("RoomBrowser"))->GetVisibility() == ESlateVisibility::Collapsed);
+            TestFalse(TEXT("Starting a walk closes the route preview"), Tree->FindWidget(TEXT("RoutePreview"))->IsVisible());
             TestTrue(TEXT("The compact directions remain visible"), Tree->FindWidget(TEXT("DirectionsHud"))->IsVisible());
             TestTrue(TEXT("Stop route remains available"), Tree->FindWidget(TEXT("StopRouteButton"))->IsVisible());
 
@@ -215,6 +248,8 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
                         TestTrue(TEXT("Find another room restores the browser"), Tree->FindWidget(TEXT("RoomBrowser"))->IsVisible());
                         TestTrue(TEXT("The previous arrival marker clears"), ArrivalLabel && !ArrivalLabel->IsVisible());
                         Navigator->ChooseRoom(TEXT("PFT_3307"));
+                        TestFalse(TEXT("An unsupported room cannot preview a route"),
+                            Tree->FindWidget(TEXT("RoutePreviewButton"))->GetParent()->IsVisible());
                         TestTrue(TEXT("An unsupported room explains walking directions are unavailable"),
                             Tree->FindWidget(TEXT("RouteUnavailable"))->IsVisible());
                         TestFalse(TEXT("An unsupported room cannot start a route"), Tree->FindWidget(TEXT("RouteButton"))->IsVisible());

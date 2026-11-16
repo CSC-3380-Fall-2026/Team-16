@@ -81,6 +81,20 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
         Column->AddChild(Label);
         return Label;
     };
+    auto AddRouteMap = [&](UVerticalBox* Parent)
+    {
+        auto* MapArea = WidgetTree->ConstructWidget<USizeBox>();
+        MapArea->SetHeightOverride(184);
+        auto* Map = WidgetTree->ConstructWidget<UPFTRouteMap>();
+        Map->ForceVolatile(true);
+        Map->SetClipping(EWidgetClipping::ClipToBounds);
+        MapArea->SetContent(Map);
+        Parent->AddChild(MapArea);
+        auto* Legend = MakeText(TEXT("Floor 1  ·  ▲ You   ◆ Destination"));
+        Legend->SetJustification(ETextJustify::Center);
+        Parent->AddChild(Legend);
+        return Map;
+    };
     // The heading is purple like the rest of the controls in Claire's design
     auto* Title = AddText(TEXT("PFT Navigator"));
     Title->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), 20));
@@ -104,6 +118,18 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     auto* RoomActions = WidgetTree->ConstructWidget<UHorizontalBox>();
     Column->AddChild(RoomActions);
     RoomActions->SetVisibility(ESlateVisibility::Collapsed);
+    auto* RoutePreviewActions = WidgetTree->ConstructWidget<UHorizontalBox>();
+    Column->AddChild(RoutePreviewActions);
+    RoutePreviewActions->SetVisibility(ESlateVisibility::Collapsed);
+    RoutePreview = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("RoutePreview"));
+    RoutePreview->SetVisibility(ESlateVisibility::Collapsed);
+    Column->AddChild(RoutePreview);
+    RoutePreviewMessage = MakeText(FString());
+    RoutePreviewMessage->Rename(TEXT("RoutePreviewMessage"));
+    RoutePreview->AddChildToVerticalBox(RoutePreviewMessage)->SetPadding(FMargin(0, 0, 0, 4));
+    RoutePreviewMapBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("RoutePreviewMap"));
+    RoutePreview->AddChild(RoutePreviewMapBox);
+    PreviewMap = AddRouteMap(RoutePreviewMapBox);
     AddText(TEXT("Floor"));
     Floors = WidgetTree->ConstructWidget<UComboBoxString>(UComboBoxString::StaticClass(), TEXT("FloorFilter"));
     Floors->AddOption(TEXT("All floors"));
@@ -201,6 +227,11 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     RouteButton->Rename(TEXT("RouteButton"));
     RouteButton->SetVisibility(ESlateVisibility::Collapsed);
     RouteButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::StartRoute);
+    RoutePreviewButton = AddButton(RoutePreviewActions, TEXT("Preview route"), Label);
+    CastChecked<UHorizontalBoxSlot>(RoutePreviewButton->Slot)->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
+    RoutePreviewLabel = Label;
+    RoutePreviewButton->Rename(TEXT("RoutePreviewButton"));
+    RoutePreviewButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ToggleRoutePreview);
     ViewButton = AddButton(RoomActions, TEXT("Preview room"), Label);
     ViewButton->Rename(TEXT("ViewRoomButton"));
     ViewButton->SetIsEnabled(false);
@@ -299,16 +330,7 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     RouteOverview = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("RouteOverview"));
     RouteOverview->SetVisibility(ESlateVisibility::Collapsed);
     Directions->AddChildToVerticalBox(RouteOverview)->SetPadding(FMargin(0, 8, 0, 0));
-    auto* MapArea = WidgetTree->ConstructWidget<USizeBox>();
-    MapArea->SetHeightOverride(184);
-    RouteMap = WidgetTree->ConstructWidget<UPFTRouteMap>();
-    RouteMap->ForceVolatile(true);
-    RouteMap->SetClipping(EWidgetClipping::ClipToBounds);
-    MapArea->SetContent(RouteMap);
-    RouteOverview->AddChild(MapArea);
-    auto* Legend = MakeText(TEXT("Floor 1  ·  ▲ You   ◆ Destination"));
-    Legend->SetJustification(ETextJustify::Center);
-    RouteOverview->AddChild(Legend);
+    RouteMap = AddRouteMap(RouteOverview);
     GetWorld()->GetSubsystem<UPFTRoutes>()->SetReducedMotion(Motion->IsChecked());
     RouteHint->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), LargerText->IsChecked() ? 24 : 18));
     if (const auto* ScreenPercentage = IConsoleManager::Get().FindConsoleVariable(TEXT("r.ScreenPercentage")))
@@ -508,6 +530,7 @@ void UPFTNavigatorWidget::ClearRoom()
     }
     Destinations->ClearSelection();
     GetWorld()->GetSubsystem<UPFTRoutes>()->Stop();
+    SetRoutePreviewVisible(false);
     SelectedRoomId.Empty();
     SelectedCourseId.Empty();
     SelectedCourseLabel->SetText(FText::GetEmpty());
@@ -610,6 +633,37 @@ void UPFTNavigatorWidget::FindAnotherRoom()
     Search->SetKeyboardFocus();
 }
 
+void UPFTNavigatorWidget::ToggleRoutePreview()
+{
+    if (RoutePreview->IsVisible())
+    {
+        SetRoutePreviewVisible(false);
+        return;
+    }
+    auto* Player = GetOwningPlayer();
+    const auto* Character = Player ? Player->GetCharacter() : nullptr;
+    auto* Routes = GetWorld()->GetSubsystem<UPFTRoutes>();
+    if (!Character || !Routes->HasDestination(SelectedRoomId)) return;
+
+    RoutePreviewOrigin = Character->GetActorLocation();
+    TArray<FVector> Points;
+    FString Estimate;
+    const bool bHasRoute = Routes->Preview(*Character, SelectedRoomId, Points, Estimate);
+    const bool bShowMap = bHasRoute && PreviewMap->Load(*Routes, *Player);
+    if (bShowMap) PreviewMap->SetPreview(RoutePreviewOrigin, MoveTemp(Points));
+    RoutePreviewMapBox->SetVisibility(bShowMap ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+    RoutePreviewMessage->SetText(FText::FromString(bHasRoute ? Estimate
+        : FString(TEXT("Walk to a first-floor hallway to preview this route."))));
+    SetRoutePreviewVisible(true);
+}
+
+void UPFTNavigatorWidget::SetRoutePreviewVisible(bool bVisible)
+{
+    if (bVisible == RoutePreview->IsVisible()) return;
+    RoutePreview->SetVisibility(bVisible ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+    RoutePreviewLabel->SetText(FText::FromString(bVisible ? TEXT("Hide route") : TEXT("Preview route")));
+}
+
 void UPFTNavigatorWidget::SetCompactDirections(bool bCompact)
 {
     if (bCompactDirections == bCompact) return;
@@ -645,6 +699,9 @@ void UPFTNavigatorWidget::UpdateRouteControls()
     SelectedRoomLabel->SetVisibility(bSelected ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
     RouteButton->GetParent()->SetVisibility(bSelected ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
     RouteButton->SetVisibility(bAvailable ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    const auto* Player = GetOwningPlayer();
+    const auto* Character = Player ? Player->GetCharacter() : nullptr;
+    RoutePreviewButton->GetParent()->SetVisibility(bAvailable && Character ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
     const bool bCanPreview = ViewButton->GetIsEnabled();
     ViewButton->SetVisibility(bCanPreview ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
     RouteUnavailable->SetVisibility(!bAvailable && bSelected ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
@@ -653,7 +710,13 @@ void UPFTNavigatorWidget::UpdateRouteControls()
         RouteUnavailable->SetText(FText::FromString(bCanPreview ? TEXT("Walking directions unavailable. You can preview this room.")
             : TEXT("Walking directions and preview unavailable. Room details are below.")));
     }
-    SetCompactDirections(Routes->IsGuiding() || Routes->CanRetry() || Routes->HasArrived());
+    const bool bShowDirections = Routes->IsGuiding() || Routes->CanRetry() || Routes->HasArrived();
+    if (RoutePreview->IsVisible() && (bShowDirections || !bAvailable || !Character
+        || FVector::DistSquared(RoutePreviewOrigin, Character->GetActorLocation()) > FMath::Square(100.0)))
+    {
+        SetRoutePreviewVisible(false);
+    }
+    SetCompactDirections(bShowDirections);
     StopRouteButton->SetVisibility(Routes->IsGuiding() || Routes->CanRetry() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
     RouteOverviewButton->SetVisibility(Routes->IsGuiding() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
     if (!Routes->IsGuiding()) SetRouteOverviewVisible(false);

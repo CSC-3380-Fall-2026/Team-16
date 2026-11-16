@@ -73,6 +73,12 @@ bool UPFTRouteMap::Load(UPFTRoutes& InRoutes, APlayerController& InPlayer)
     return true;
 }
 
+void UPFTRouteMap::SetPreview(const FVector& Origin, TArray<FVector> Points)
+{
+    PreviewOrigin = Origin;
+    PreviewPoints = MoveTemp(Points);
+}
+
 int32 UPFTRouteMap::NativePaint(const FPaintArgs& Args, const FGeometry& Geometry, const FSlateRect& Clip,
     FSlateWindowElementList& Draw, int32 Layer, const FWidgetStyle& Style, bool bEnabled) const
 {
@@ -84,8 +90,9 @@ int32 UPFTRouteMap::NativePaint(const FPaintArgs& Args, const FGeometry& Geometr
     const APawn* Pawn = Player->GetPawn();
     if (!Pawn) return Layer;
     const auto Paint = Geometry.ToPaintGeometry();
-    const auto Path = Routes->GetRemainingPath();
-    const FVector2D Position(Pawn->GetActorLocation());
+    const bool bPreview = !PreviewPoints.IsEmpty();
+    const TArrayView<const FVector> Path = bPreview ? MakeArrayView(PreviewPoints) : Routes->GetRemainingPath();
+    const FVector2D Position(bPreview ? PreviewOrigin : Pawn->GetActorLocation());
     const FVector2f Here = Projection.Point(Position);
     const FLinearColor Purple(PFTPalette::Purple);
     if (!Path.IsEmpty())

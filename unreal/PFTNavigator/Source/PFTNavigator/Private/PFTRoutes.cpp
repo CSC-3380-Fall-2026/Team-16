@@ -52,11 +52,11 @@ namespace
 
     FString WalkingTimeLabel(double Seconds)
     {
-        if (Seconds < 5.0) return TEXT("Under 5 sec left");
+        if (Seconds < 5.0) return TEXT("Under 5 sec");
         const int32 Rounded = FMath::RoundToInt(Seconds / 5.0) * 5;
-        if (Rounded < 60) return FString::Printf(TEXT("About %d sec left"), Rounded);
-        if (Rounded % 60 == 0) return FString::Printf(TEXT("About %d min left"), Rounded / 60);
-        return FString::Printf(TEXT("About %d min %d sec left"), Rounded / 60, Rounded % 60);
+        if (Rounded < 60) return FString::Printf(TEXT("About %d sec"), Rounded);
+        if (Rounded % 60 == 0) return FString::Printf(TEXT("About %d min"), Rounded / 60);
+        return FString::Printf(TEXT("About %d min %d sec"), Rounded / 60, Rounded % 60);
     }
 
     struct FRouteVisit
@@ -243,7 +243,7 @@ void UPFTRoutes::LoadGraph(const FString& Map)
     }
 }
 
-bool UPFTRoutes::CanCross(ACharacter& Character, const FVector& Start, const FVector& End) const
+bool UPFTRoutes::CanCross(const ACharacter& Character, const FVector& Start, const FVector& End) const
 {
     const auto* Capsule = Character.GetCapsuleComponent();
     const auto Shape = FCollisionShape::MakeCapsule(Capsule->GetScaledCapsuleRadius(), Capsule->GetScaledCapsuleHalfHeight());
@@ -251,7 +251,7 @@ bool UPFTRoutes::CanCross(ACharacter& Character, const FVector& Start, const FVe
     return !GetWorld()->SweepTestByProfile(Start, End, FQuat::Identity, Capsule->GetCollisionProfileName(), Shape, Query);
 }
 
-bool UPFTRoutes::Plan(ACharacter& Character, const FIntPoint& Target)
+bool UPFTRoutes::BuildPath(const ACharacter& Character, const FIntPoint& Target, TArray<FVector>& Points, TArray<double>& Turns) const
 {
     const FVector Position = Character.GetActorLocation();
     const FVector RaisedPosition = Position + FVector(0, 0, 4);
@@ -310,18 +310,40 @@ bool UPFTRoutes::Plan(ACharacter& Character, const FIntPoint& Target)
         return Links;
     });
     if (Reversed.IsEmpty()) return false;
-    Path.Reset(Reversed.Num());
-    for (int32 Index = Reversed.Num() - 1; Index >= 0; --Index) Path.Add(Nodes.FindChecked(Reversed[Index]).Floor);
-    TurnSeconds.Init(0.0, Path.Num());
-    for (int32 Index = Path.Num() - 3; Index >= 0; --Index)
+    Points.Reset(Reversed.Num());
+    for (int32 Index = Reversed.Num() - 1; Index >= 0; --Index) Points.Add(Nodes.FindChecked(Reversed[Index]).Floor);
+    Turns.Init(0.0, Points.Num());
+    for (int32 Index = Points.Num() - 3; Index >= 0; --Index)
     {
         const int32 From = Reversed.Num() - 1 - Index;
         const FIntPoint First = Reversed[From - 1] - Reversed[From];
         const FIntPoint Second = Reversed[From - 2] - Reversed[From - 1];
-        const int32 Turns = 1 - First.X * Second.X - First.Y * Second.Y;
-        TurnSeconds[Index] = TurnSeconds[Index + 1] + Turns * SecondsPerQuarterTurn;
+        const int32 QuarterTurns = 1 - First.X * Second.X - First.Y * Second.Y;
+        Turns[Index] = Turns[Index + 1] + QuarterTurns * SecondsPerQuarterTurn;
     }
+    return true;
+}
+
+bool UPFTRoutes::Plan(const ACharacter& Character, const FIntPoint& Target)
+{
+    if (!BuildPath(Character, Target, Path, TurnSeconds)) return false;
     NextIndex = 0;
+    return true;
+}
+
+bool UPFTRoutes::Preview(const ACharacter& Character, const FString& RoomId, TArray<FVector>& Points, FString& Estimate) const
+{
+    Points.Reset();
+    Estimate.Reset();
+    const FIntPoint* Target = Destinations.Find(RoomId);
+    TArray<double> Turns;
+    if (!Target || !Character.GetCharacterMovement()->IsMovingOnGround()
+        || !BuildPath(Character, *Target, Points, Turns)) return false;
+
+    const double Speed = FMath::Max(1.0, static_cast<double>(Character.GetCharacterMovement()->MaxWalkSpeed));
+    const double Distance = FVector::Dist2D(Character.GetActorLocation(), Points[0]) + (Points.Num() - 1) * Step;
+    const int32 Metres = FMath::RoundToInt(Distance / 100.0);
+    Estimate = FString::Printf(TEXT("%s walk · %d m"), *WalkingTimeLabel(Distance / Speed + Turns[0]), Metres);
     return true;
 }
 
@@ -441,7 +463,7 @@ void UPFTRoutes::UpdateDirections(const FVector& Position, const FRotator& View,
         }
     }
     const double SecondsLeft = DistanceLeft / FMath::Max(1.0, WalkSpeed) + TurnSeconds[NextIndex];
-    Message = FText::FromString(Destination + TEXT("\n") + Instruction + TEXT("\n") + WalkingTimeLabel(SecondsLeft));
+    Message = FText::FromString(Destination + TEXT("\n") + Instruction + TEXT("\n") + WalkingTimeLabel(SecondsLeft) + TEXT(" left"));
 }
 
 void UPFTRoutes::DrawPath()
@@ -554,9 +576,10 @@ bool FPFTFastestPathTest::RunTest(const FString& Parameters)
         FString(TEXT("Turn left in 12 m")));
     TestEqual(TEXT("Graphs without landmarks keep the existing directions"), DescribeTurn(1.0, 1, FVector2D::ZeroVector, {}),
         FString(TEXT("Turn right ahead")));
-    TestEqual(TEXT("Short walks use a relative time"), WalkingTimeLabel(3.0), FString(TEXT("Under 5 sec left")));
-    TestEqual(TEXT("Walking time is rounded to five seconds"), WalkingTimeLabel(23.0), FString(TEXT("About 25 sec left")));
-    TestEqual(TEXT("Long walks show minutes and seconds"), WalkingTimeLabel(72.0), FString(TEXT("About 1 min 10 sec left")));
+    TestEqual(TEXT("Short walks use a relative time"), WalkingTimeLabel(3.0), FString(TEXT("Under 5 sec")));
+    TestEqual(TEXT("Walking time is rounded to five seconds"), WalkingTimeLabel(23.0), FString(TEXT("About 25 sec")));
+    TestEqual(TEXT("Whole minutes omit seconds"), WalkingTimeLabel(60.0), FString(TEXT("About 1 min")));
+    TestEqual(TEXT("Long walks show minutes and seconds"), WalkingTimeLabel(72.0), FString(TEXT("About 1 min 10 sec")));
     TMap<FIntPoint, uint8> Graph;
     const auto LinkPath = [&](const TArray<FIntPoint>& Points)
     {

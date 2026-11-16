@@ -59,6 +59,7 @@ private:
     UFUNCTION() void ToggleRoomPreview();
     UFUNCTION() void StartRoute();
     UFUNCTION() void StopRoute();
+    UFUNCTION() void ToggleRoutePreview();
     UFUNCTION() void ToggleRouteOverview();
     UFUNCTION() void FindAnotherRoom();
     UFUNCTION() void ToggleSettings();
@@ -72,6 +73,7 @@ private:
     FDateTime GetNow() const;
     void SetCompactDirections(bool bCompact);
     void SetRouteOverviewVisible(bool bVisible);
+    void SetRoutePreviewVisible(bool bVisible);
     UPROPERTY() TObjectPtr<UTextBlock> Status;
     UPROPERTY() TObjectPtr<UTextBlock> Details;
     UPROPERTY() TObjectPtr<UTextBlock> SelectedRoomLabel;
@@ -89,6 +91,12 @@ private:
     UPROPERTY() TObjectPtr<UTextBlock> PreviewLabel;
     UPROPERTY() TObjectPtr<UButton> ClearButton;
     UPROPERTY() TObjectPtr<UButton> RouteButton;
+    UPROPERTY() TObjectPtr<UButton> RoutePreviewButton;
+    UPROPERTY() TObjectPtr<UTextBlock> RoutePreviewLabel;
+    UPROPERTY() TObjectPtr<UVerticalBox> RoutePreview;
+    UPROPERTY() TObjectPtr<UTextBlock> RoutePreviewMessage;
+    UPROPERTY() TObjectPtr<UVerticalBox> RoutePreviewMapBox;
+    UPROPERTY() TObjectPtr<UPFTRouteMap> PreviewMap;
     UPROPERTY() TObjectPtr<UTextBlock> RouteUnavailable;
     UPROPERTY() TObjectPtr<UTextBlock> RouteHint;
     UPROPERTY() TObjectPtr<UScrollBox> Browser;
@@ -120,6 +128,7 @@ private:
     int32 LastClockMinute = -1;
     // Room that's currently picked, empty when nothing is selected
     FString SelectedRoomId;
+    FVector RoutePreviewOrigin = FVector::ZeroVector;
     bool bCompactDirections = false;
     bool bResettingClassSearch = false;
     float StandardRenderScale = 100.0f;

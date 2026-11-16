@@ -21,6 +21,7 @@ public:
     void Deinitialize() override;
 
     bool HasDestination(const FString& RoomId) const { return Destinations.Contains(RoomId); }
+    bool Preview(const ACharacter& Character, const FString& RoomId, TArray<FVector>& Points, FString& Estimate) const;
     bool Start(ACharacter& Character, const FString& RoomId, const FString& RoomName);
     void Stop();
 
@@ -42,8 +43,9 @@ private:
     };
 
     void LoadGraph(const FString& Map);
-    bool Plan(ACharacter& Character, const FIntPoint& Goal);
-    bool CanCross(ACharacter& Character, const FVector& Start, const FVector& End) const;
+    bool Plan(const ACharacter& Character, const FIntPoint& Target);
+    bool BuildPath(const ACharacter& Character, const FIntPoint& Target, TArray<FVector>& Points, TArray<double>& Turns) const;
+    bool CanCross(const ACharacter& Character, const FVector& Start, const FVector& End) const;
     void DrawPath();
     void ShowArrival(const FVector& Position);
     void UpdateDirections(const FVector& Position, const FRotator& View, double WalkSpeed);
