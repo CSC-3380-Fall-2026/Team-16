@@ -26,6 +26,8 @@ bool FPFTDirectoryTest::RunTest(const FString& Parameters)
     UPFTDirectory* Directory = NewObject<UPFTDirectory>(GameInstance);
     TestTrue(TEXT("Load valid data"), Directory->LoadDirectory(Folder));
     TestEqual(TEXT("Course search ignores case and outer spaces"), Directory->Search(TEXT(" csc 3380 ")).Num(), 1);
+    TestEqual(TEXT("Course search works without the space"), Directory->Search(TEXT("csc3380")).Num(), 1);
+    TestEqual(TEXT("Room search works with a space in the ID"), Directory->Search(TEXT("pft 1200")).Num(), 1);
     const auto Results = Directory->Search(TEXT("Design"));
     TestEqual(TEXT("Title search"), Results.Num(), 1);
     if (!Results.IsEmpty())
