@@ -181,11 +181,18 @@ int32 UPFTRouteMap::NativePaint(const FPaintArgs& Args, const FGeometry& Geometr
     const FMapProjection FloorProjection(FloorBounds, Geometry.GetLocalSize());
     const FMapProjection FocusProjection(bFits ? FocusBounds : FloorBounds, Geometry.GetLocalSize());
     const auto& Projection = FocusProjection.Scale > FloorProjection.Scale ? FocusProjection : FloorProjection;
+    const auto Paint = Geometry.ToPaintGeometry();
+    // Fill and outline the whole frame so the map reads as one box even where the floor ends
+    const FVector2f Frame(Geometry.GetLocalSize());
+    FSlateDrawElement::MakeBox(Draw, Layer, Paint, FCoreStyle::Get().GetBrush(TEXT("WhiteBrush")),
+        ESlateDrawEffect::None, FLinearColor(FColor(245, 243, 249)));
+    ++Layer;
     const FVector2f FloorTopLeft = Projection.Point(FVector2D(FloorBounds.Min.X, FloorBounds.Max.Y));
     const auto Map = Geometry.ToPaintGeometry(FVector2f(FloorBounds.GetSize() * Projection.Scale), FSlateLayoutTransform(FloorTopLeft));
     FSlateDrawElement::MakeBox(Draw, Layer, Map, &FloorBrush);
+    FSlateDrawElement::MakeLines(Draw, Layer + 8, Paint, TArray<FVector2f>{{1, 1}, {Frame.X - 1, 1}, Frame - FVector2f(1, 1),
+        {1, Frame.Y - 1}, {1, 1}}, ESlateDrawEffect::None, FLinearColor(FColor(150, 135, 180)), true, 1.5f);
 
-    const auto Paint = Geometry.ToPaintGeometry();
     const FVector2f Here = Projection.Point(Position);
     const FLinearColor Purple(PFTPalette::Purple);
     if (!Path.IsEmpty())
@@ -199,25 +206,33 @@ int32 UPFTRouteMap::NativePaint(const FPaintArgs& Args, const FGeometry& Geometr
         {
             DrawLandmark(Geometry, Draw, Layer + 4, Projection.Point(Landmark->Value), Landmark->Key, Line);
         }
-        FSlateDrawElement::MakeLines(Draw, Layer + 1, Paint, MoveTemp(Line), ESlateDrawEffect::None, Purple, true, 3.0f);
-        const FVector2f Top = Goal + FVector2f(0, -5);
-        TArray<FVector2f> Diamond = {Top, Goal + FVector2f(5, 0), Goal + FVector2f(0, 5), Goal - FVector2f(5, 0), Top};
-        FSlateDrawElement::MakeLines(Draw, Layer + 2, Paint, Diamond, ESlateDrawEffect::None, Purple, true, 4.0f);
-        FSlateDrawElement::MakeLines(Draw, Layer + 3, Paint, MoveTemp(Diamond), ESlateDrawEffect::None,
-            FLinearColor(PFTPalette::Gold), true, 2.0f);
+        FSlateDrawElement::MakeLines(Draw, Layer + 1, Paint, MoveTemp(Line), ESlateDrawEffect::None, Purple, true, 5.0f);
+        // A gold diamond with a purple edge, large enough to find without hunting for it
+        const auto* Solid = FCoreStyle::Get().GetBrush(TEXT("WhiteBrush"));
+        const auto Diamond = [&](int32 DiamondLayer, float Width, const FLinearColor& Color)
+        {
+            const auto Square = Geometry.ToPaintGeometry(FVector2f(Width, Width), FSlateLayoutTransform(Goal - FVector2f(Width, Width) * 0.5f));
+            FSlateDrawElement::MakeRotatedBox(Draw, DiamondLayer, Square, Solid, ESlateDrawEffect::None, UE_PI / 4.0f,
+                TOptional<FVector2f>(), FSlateDrawElement::RelativeToElement, Color);
+        };
+        Diamond(Layer + 2, 20.0f, Purple);
+        Diamond(Layer + 3, 12.0f, FLinearColor(PFTPalette::Gold));
     }
     if (FloorBounds.IsInside(Position))
     {
         const FVector Facing = FRotator(0, Player->GetControlRotation().Yaw, 0).Vector();
         const FVector2f Ahead(Facing.X, -Facing.Y);
         const FVector2f Side(-Ahead.Y, Ahead.X);
-        const FVector2f Nose = Here + Ahead * 7.0f;
-        TArray<FVector2f> Arrow = {Nose, Here - Ahead * 4.0f + Side * 5.0f, Here - Ahead * 4.0f - Side * 5.0f, Nose};
-        FSlateDrawElement::MakeLines(Draw, Layer + 6, Paint, Arrow, ESlateDrawEffect::None, FLinearColor::White, true, 5.0f);
-        FSlateDrawElement::MakeLines(Draw, Layer + 7, Paint, MoveTemp(Arrow), ESlateDrawEffect::None,
-            FLinearColor(FColor(30, 77, 142)), true, 2.8f);
+        // A solid arrowhead with a notched tail, so the way you're facing is clear at a glance
+        const FVector2f Nose = Here + Ahead * 17.0f;
+        const FVector2f Tail = Here - Ahead * 4.0f;
+        TArray<FVector2f> Arrow = {Nose, Here - Ahead * 11.0f + Side * 11.0f, Tail, Here - Ahead * 11.0f - Side * 11.0f, Nose};
+        const FLinearColor Blue(PFTPalette::You);
+        FSlateDrawElement::MakeLines(Draw, Layer + 6, Paint, Arrow, ESlateDrawEffect::None, FLinearColor::White, true, 9.0f);
+        FSlateDrawElement::MakeLines(Draw, Layer + 7, Paint, MoveTemp(Arrow), ESlateDrawEffect::None, Blue, true, 5.0f);
+        FSlateDrawElement::MakeLines(Draw, Layer + 7, Paint, TArray<FVector2f>{Nose - Ahead * 4.0f, Tail}, ESlateDrawEffect::None, Blue, true, 9.0f);
     }
-    return Layer + 7;
+    return Layer + 8;
 }
 
 #if WITH_DEV_AUTOMATION_TESTS

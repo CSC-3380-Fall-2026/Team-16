@@ -52,9 +52,23 @@ namespace
             && (Course.EndTime.IsEmpty() || Course.EndTime > Course.StartTime);
     }
 
+    // Checks a room or course ID against what was typed, ignoring spaces, dashes and underscores.
+    // Students type codes in different ways, so "csc1350", "CSC-1350" and "pft 1200" should all work
+    // Params: Id - the ID to check (like CSC_1350 or PFT_1200), Text - the trimmed search text
+    // Returns: true if the ID contains the typed text once the separators are removed
+    bool MatchesId(const FString& Id, const FString& Text)
+    {
+        const auto Squash = [](const FString& Value)
+        {
+            return Value.Replace(TEXT(" "), TEXT("")).Replace(TEXT("-"), TEXT("")).Replace(TEXT("_"), TEXT(""));
+        };
+        const FString Typed = Squash(Text);
+        return !Typed.IsEmpty() && Squash(Id).Contains(Typed);
+    }
+
     bool MatchesCourse(const FPFTCourse& Course, const FString& Text)
     {
-        return Text.IsEmpty() || Course.CourseCode.Contains(Text) || Course.CourseTitle.Contains(Text) || Course.Name.Contains(Text);
+        return Text.IsEmpty() || Course.CourseCode.Contains(Text) || Course.CourseTitle.Contains(Text) || MatchesId(Course.Name, Text);
     }
 
     FString FormatTime(const FString& Time)
@@ -270,7 +284,7 @@ TArray<FPFTSearchResult> UPFTDirectory::Search(const FString& Query) const
     if (Text.IsEmpty()) return Results;
     for (const auto& Room : Rooms)
     {
-        if (Room.Name.Contains(Text) || Room.RoomNumber.Contains(Text) || Room.DisplayName.Contains(Text))
+        if (MatchesId(Room.Name, Text) || Room.RoomNumber.Contains(Text) || Room.DisplayName.Contains(Text))
             Results.Add({ Room.Name, Room.DisplayName });
     }
     for (const auto& Course : Courses)

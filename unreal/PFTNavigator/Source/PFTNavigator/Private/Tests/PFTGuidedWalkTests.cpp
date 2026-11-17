@@ -222,9 +222,9 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
             }));
             ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Tree]()
             {
-                const auto* Hint = CastChecked<UTextBlock>(Tree->FindWidget(TEXT("RouteHint")));
-                TestTrue(TEXT("The walking panel shows estimated time left"), Hint->GetText().ToString().Contains(TEXT(" sec left"))
-                    || Hint->GetText().ToString().Contains(TEXT(" min left")));
+                const auto* TimeLeft = CastChecked<UTextBlock>(Tree->FindWidget(TEXT("RouteTime")));
+                TestTrue(TEXT("The walking panel shows estimated time left"), TimeLeft->GetText().ToString().Contains(TEXT(" sec left"))
+                    || TimeLeft->GetText().ToString().Contains(TEXT(" min left")));
                 return true;
             }));
             ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.2f));
