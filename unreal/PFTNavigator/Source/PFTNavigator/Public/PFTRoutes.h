@@ -50,7 +50,7 @@ private:
     void LoadGraph(const FString& Map);
     void MeasureClearance();
     bool Plan(const ACharacter& Character, const FIntPoint& Target);
-    bool BuildPath(const ACharacter& Character, const FIntPoint& Target, TArray<FVector>& Points, TArray<double>& Turns) const;
+    bool BuildPath(const ACharacter& Character, const FIntPoint& Target, TArray<FVector>& Points) const;
     bool CanCross(const ACharacter& Character, const FVector& Start, const FVector& End) const;
     void AdvanceWaypoints(const ACharacter& Character, const FVector& Position);
     void DrawPath(const FVector& Position);
@@ -62,13 +62,12 @@ private:
     TMap<FString, FIntPoint> Destinations;
     TMap<FString, FVector2D> Landmarks;
     TArray<FVector> Path;
-    TArray<double> TurnSeconds;
+    TArray<double> PathDistances;
     TArray<int32> TurnPoints;
     UPROPERTY() TObjectPtr<ULineBatchComponent> Trail;
     UPROPERTY() TObjectPtr<UTextRenderComponent> ArrivalLabel;
     TWeakObjectPtr<ACharacter> Walker;
     FString Destination;
-    FVector RouteOrigin = FVector::ZeroVector;
     FIntPoint Goal;
     FText Message;
     int32 Step = 0;

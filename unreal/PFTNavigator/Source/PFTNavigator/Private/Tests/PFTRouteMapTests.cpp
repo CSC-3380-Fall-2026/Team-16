@@ -6,6 +6,7 @@
 #include "PFTRouteMap.h"
 #include "PFTRoutes.h"
 #include "PFTViewportTest.h"
+#include "Components/LineBatchComponent.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -44,7 +45,7 @@ bool FPFTRefocusAfterRerouteTest::RunTest(const FString& Parameters)
         auto* Overview = Tree->FindWidget(TEXT("RouteOverview"));
         const FVector Destination = Routes->GetRemainingPath().Last();
         ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
-        ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Player, Character, Routes, Map, Overview, Destination]()
+        ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Player, Character, Routes, Map, Overview, Destination, Tree]()
         {
             const FVector Start = Character->GetActorLocation();
             const FVector Hallway(12960, 960, Start.Z);
@@ -56,7 +57,7 @@ bool FPFTRefocusAfterRerouteTest::RunTest(const FString& Parameters)
             Character->SetActorLocation(Hallway, false, nullptr, ETeleportType::TeleportPhysics);
             Character->GetCharacterMovement()->StopMovementImmediately();
             Character->GetCharacterMovement()->SetMovementMode(MOVE_Walking);
-            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Player, Routes, Map, Overview, Hallway, Destination,
+            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Player, Routes, Map, Overview, Hallway, Destination, Tree,
                 OriginalPlan, OriginalSteps, SawUpdate = MakeShared<bool>(false), Deadline = FPlatformTime::Seconds() + 5.0]()
             {
                 if (Routes->IsReplanning())
@@ -79,6 +80,13 @@ bool FPFTRefocusAfterRerouteTest::RunTest(const FString& Parameters)
                     FScreenshotRequest::RequestScreenshot(TEXT("PFTQA-MapAfterReroute"), true, true, false);
                     ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
                 }
+                ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Routes, Tree]()
+                {
+                    CastChecked<UButton>(Tree->FindWidget(TEXT("StopRouteButton")))->OnClicked.Broadcast();
+                    const auto* Trail = FindObject<ULineBatchComponent>(Routes, TEXT("PFTWalkingTrail"));
+                    TestTrue(TEXT("Stopping the route clears the arrows"), !Routes->IsGuiding() && Trail && Trail->BatchedLines.IsEmpty());
+                    return true;
+                }));
                 return true;
             }));
             return true;

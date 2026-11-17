@@ -31,6 +31,61 @@ namespace
     constexpr double TrailLength = 1600.0;
     constexpr double SecondsPerQuarterTurn = 0.25;
 
+    double SegmentProgress(const FVector& Position, const FVector& Start, const FVector& End)
+    {
+        const FVector2D Edge(End - Start);
+        const double SquaredLength = Edge.SizeSquared();
+        return SquaredLength > UE_SMALL_NUMBER ? FVector2D::DotProduct(FVector2D(Position - Start), Edge) / SquaredLength : 0.0;
+    }
+
+    TArray<FVector> StraightenPath(TArrayView<const FVector> Points, double MaxOffset,
+        TFunctionRef<bool(const FVector&, const FVector&)> CanWalk)
+    {
+        if (Points.Num() < 2) return TArray<FVector>(Points);
+        TArray<FVector> Result = {Points[0]};
+        TArray<FIntPoint> Sections = {{0, Points.Num() - 1}};
+        while (!Sections.IsEmpty())
+        {
+            const FIntPoint Section = Sections.Pop(EAllowShrinking::No);
+            const FVector& Start = Points[Section.X];
+            const FVector& End = Points[Section.Y];
+            int32 Split = (Section.X + Section.Y) / 2;
+            double MaxDeviation = 0.0;
+            for (int32 Index = Section.X + 1; Index < Section.Y; ++Index)
+            {
+                const FVector& Point = Points[Index];
+                const double Progress = FMath::Clamp(SegmentProgress(Point, Start, End), 0.0, 1.0);
+                const FVector OnLine = FMath::Lerp(Start, End, Progress);
+                const double Deviation = FMath::Max(FVector::Dist2D(Point, OnLine) / MaxOffset,
+                    FMath::Abs(Point.Z - OnLine.Z) / 6.0);
+                if (Deviation <= MaxDeviation) continue;
+                Split = Index;
+                MaxDeviation = Deviation;
+            }
+            if (Section.Y == Section.X + 1 || (MaxDeviation <= 1.0 && CanWalk(Start, End)))
+            {
+                Result.Add(End);
+                continue;
+            }
+            Sections.Emplace(Split, Section.Y);
+            Sections.Emplace(Section.X, Split);
+        }
+        return Result;
+    }
+
+    TArray<double> MeasurePath(TArrayView<const FVector> Points)
+    {
+        TArray<double> Distances;
+        Distances.Reserve(Points.Num());
+        double Distance = 0.0;
+        for (int32 Index = 0; Index < Points.Num(); ++Index)
+        {
+            if (Index > 0) Distance += FVector::Dist2D(Points[Index - 1], Points[Index]);
+            Distances.Add(Distance);
+        }
+        return Distances;
+    }
+
     const TPair<FString, FVector2D>* FindNearbyLandmark(const FVector2D& Point, const TMap<FString, FVector2D>& Landmarks)
     {
         const TPair<FString, FVector2D>* Nearest = nullptr;
@@ -48,9 +103,16 @@ namespace
     const TPair<FString, FVector2D>* FindRouteLandmark(TArrayView<const FVector> Points, const TMap<FString, FVector2D>& Landmarks)
     {
         if (Landmarks.IsEmpty()) return nullptr;
-        for (const FVector& Point : Points)
+        for (int32 Index = 0; Index < Points.Num(); ++Index)
         {
-            if (const auto* Landmark = FindNearbyLandmark(FVector2D(Point), Landmarks)) return Landmark;
+            if (const auto* Landmark = FindNearbyLandmark(FVector2D(Points[Index]), Landmarks)) return Landmark;
+            if (Index + 1 == Points.Num()) break;
+            const int32 Samples = FMath::CeilToInt(FVector::Dist2D(Points[Index], Points[Index + 1]) / 60.0);
+            for (int32 Sample = 1; Sample < Samples; ++Sample)
+            {
+                const FVector Point = FMath::Lerp(Points[Index], Points[Index + 1], double(Sample) / Samples);
+                if (const auto* Landmark = FindNearbyLandmark(FVector2D(Point), Landmarks)) return Landmark;
+            }
         }
         return nullptr;
     }
@@ -70,38 +132,33 @@ namespace
             : FString::Printf(TEXT("Turn %s in %d m"), Side, Metres);
     }
 
-    double RouteBend(TArrayView<const FVector> Points, int32 Index, int32 Span)
+    double RouteBend(TArrayView<const FVector> Points, int32 Index)
     {
-        const FVector Before = (Points[Index] - Points[FMath::Max(0, Index - Span)]).GetSafeNormal2D();
-        const FVector After = (Points[FMath::Min(Points.Num() - 1, Index + Span)] - Points[Index]).GetSafeNormal2D();
+        const FVector Before = (Points[Index] - Points[Index - 1]).GetSafeNormal2D();
+        const FVector After = (Points[Index + 1] - Points[Index]).GetSafeNormal2D();
         return FVector::CrossProduct(Before, After).Z;
     }
 
-    TArray<int32> FindRouteTurns(TArrayView<const FVector> Points, int32 Step)
+    TArray<int32> FindRouteTurns(TArrayView<const FVector> Points)
     {
         TArray<int32> Turns;
-        if (Step <= 0) return Turns;
-        const int32 LookAhead = FMath::Max(2, FMath::CeilToInt(180.0 / Step));
         for (int32 Index = 1; Index + 1 < Points.Num(); ++Index)
         {
-            // A real corner changes the route heading beyond the adjacent grid cells.
-            const double Bend = RouteBend(Points, Index, 1);
-            if (FMath::Abs(Bend) < 0.85 || Bend * RouteBend(Points, Index, LookAhead) < 0.9) continue;
-            Turns.Add(Index);
+            if (FMath::Abs(RouteBend(Points, Index)) >= 0.5) Turns.Add(Index);
         }
         return Turns;
     }
 
-    FText FormatRouteSteps(const FVector& Position, TArrayView<const FVector> Points, TArrayView<const int32> Turns,
-        int32 Start, int32 Step, const TMap<FString, FVector2D>& Landmarks)
+    FText FormatRouteSteps(const FVector& Position, TArrayView<const FVector> Points, TArrayView<const double> Distances,
+        TArrayView<const int32> Turns, int32 Start, const TMap<FString, FVector2D>& Landmarks)
     {
         if (!Points.IsValidIndex(Start)) return FText::GetEmpty();
         TArray<FString> Steps;
         double Approach = FVector::Dist2D(Position, Points[Start]);
         for (int32 Turn : Turns.RightChop(Algo::LowerBound(Turns, Start)))
         {
-            const int32 Metres = FMath::RoundToInt((Approach + (Turn - Start) * Step) / 100.0);
-            const TCHAR* Side = RouteBend(Points, Turn, 1) > 0 ? TEXT("right") : TEXT("left");
+            const int32 Metres = FMath::RoundToInt((Approach + Distances[Turn] - Distances[Start]) / 100.0);
+            const TCHAR* Side = RouteBend(Points, Turn) > 0 ? TEXT("right") : TEXT("left");
             const auto* Landmark = FindNearbyLandmark(FVector2D(Points[Turn]), Landmarks);
             FString Line = Metres > 0 ? FString::Printf(TEXT("Walk %d m, then turn %s"), Metres, Side)
                 : FString::Printf(TEXT("Turn %s"), Side);
@@ -110,7 +167,7 @@ namespace
             Start = Turn;
             Approach = 0.0;
         }
-        const int32 Metres = FMath::RoundToInt((Approach + (Points.Num() - 1 - Start) * Step) / 100.0);
+        const int32 Metres = FMath::RoundToInt((Approach + Distances.Last() - Distances[Start]) / 100.0);
         Steps.Add(Metres > 0 ? FString::Printf(TEXT("Walk %d m to the destination"), Metres) : TEXT("Destination ahead"));
         return FText::FromString(FString::Join(Steps, TEXT("\n\n")));
     }
@@ -368,7 +425,7 @@ bool UPFTRoutes::CanCross(const ACharacter& Character, const FVector& Start, con
     return !GetWorld()->SweepTestByProfile(Start, End, FQuat::Identity, Capsule->GetCollisionProfileName(), Shape, Query);
 }
 
-bool UPFTRoutes::BuildPath(const ACharacter& Character, const FIntPoint& Target, TArray<FVector>& Points, TArray<double>& Turns) const
+bool UPFTRoutes::BuildPath(const ACharacter& Character, const FIntPoint& Target, TArray<FVector>& Points) const
 {
     const FVector Position = Character.GetActorLocation();
     const FVector RaisedPosition = Position + FVector(0, 0, 4);
@@ -378,6 +435,23 @@ bool UPFTRoutes::BuildPath(const ACharacter& Character, const FIntPoint& Target,
     TArray<FRouteEntry> Entries;
     FCollisionQueryParams FloorQuery(SCENE_QUERY_STAT(PFTWalkingEntry), false, &Character);
     const FName Profile = Character.GetCapsuleComponent()->GetCollisionProfileName();
+    const double HalfHeight = Character.GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+    const auto CanWalk = [&](const FVector& Start, const FVector& End, double HeightTolerance)
+    {
+        if (!CanCross(Character, Start, End)) return false;
+        // A clear capsule sweep can still pass over a gap or a drop.
+        const int32 Samples = FMath::CeilToInt(FVector::Dist2D(Start, End) / (Step * 0.5));
+        for (int32 Sample = 1; Sample < Samples; ++Sample)
+        {
+            const FVector Feet = FMath::Lerp(Start, End, double(Sample) / Samples) - FVector(0, 0, HalfHeight + 4.0);
+            FHitResult FloorHit;
+            if (!GetWorld()->LineTraceSingleByProfile(FloorHit, Feet + FVector(0, 0, FloorTolerance),
+                Feet - FVector(0, 0, FloorTolerance), Profile, FloorQuery)
+                || FloorHit.ImpactNormal.Z < Character.GetCharacterMovement()->GetWalkableFloorZ()
+                || FMath::Abs(FloorHit.ImpactPoint.Z - Feet.Z) > HeightTolerance) return false;
+        }
+        return true;
+    };
     for (int32 X = -StartSearchCells; X <= StartSearchCells; ++X)
     {
         for (int32 Y = -StartSearchCells; Y <= StartSearchCells; ++Y)
@@ -388,25 +462,7 @@ bool UPFTRoutes::BuildPath(const ACharacter& Character, const FIntPoint& Target,
             const FVector Center = CapsuleCenter(Character, Node->Floor);
             const double Distance = FVector::Dist2D(Position, Center);
             if (Distance > EntryRange || FMath::Abs(Center.Z - RaisedPosition.Z) > FloorTolerance
-                || !CanCross(Character, RaisedPosition, Center)) continue;
-
-            // A clear capsule sweep can cross empty space, so also check floor support along the approach.
-            bool bSupported = true;
-            const int32 Samples = FMath::CeilToInt(Distance / (Step * 0.5));
-            for (int32 Sample = 1; Sample < Samples; ++Sample)
-            {
-                const FVector Point = FMath::Lerp(RaisedPosition, Center, static_cast<double>(Sample) / Samples);
-                const FVector Feet = Point - FVector(0, 0, Character.GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
-                FHitResult FloorHit;
-                if (!GetWorld()->LineTraceSingleByProfile(FloorHit, Feet + FVector(0, 0, FloorTolerance),
-                    Feet - FVector(0, 0, FloorTolerance), Profile, FloorQuery)
-                    || FloorHit.ImpactNormal.Z < Character.GetCharacterMovement()->GetWalkableFloorZ())
-                {
-                    bSupported = false;
-                    break;
-                }
-            }
-            if (!bSupported) continue;
+                || !CanWalk(RaisedPosition, Center, FloorTolerance)) continue;
             const FVector Approach = Center - Position;
             const int32 Heading = Distance < 1.0 ? INDEX_NONE
                 : (FMath::RoundToInt(Approach.Rotation().Yaw / 90.0) + 4) % 4;
@@ -427,26 +483,26 @@ bool UPFTRoutes::BuildPath(const ACharacter& Character, const FIntPoint& Target,
         return ClearancePenalty(Nodes.FindChecked(Cell).StepsFromBoundary, Step);
     }, TurnCost);
     if (Reversed.IsEmpty()) return false;
-    Points.Reset(Reversed.Num());
-    for (int32 Index = Reversed.Num() - 1; Index >= 0; --Index) Points.Add(Nodes.FindChecked(Reversed[Index]).Floor);
-    Turns.Init(0.0, Points.Num());
-    for (int32 Index = Points.Num() - 3; Index >= 0; --Index)
+    TArray<FVector> GridPath;
+    GridPath.Reserve(Reversed.Num() + 1);
+    if (FVector::Dist2D(Position, Nodes.FindChecked(Reversed.Last()).Floor) > 1.0)
     {
-        const int32 From = Reversed.Num() - 1 - Index;
-        const FIntPoint First = Reversed[From - 1] - Reversed[From];
-        const FIntPoint Second = Reversed[From - 2] - Reversed[From - 1];
-        const int32 QuarterTurns = 1 - First.X * Second.X - First.Y * Second.Y;
-        Turns[Index] = Turns[Index + 1] + QuarterTurns * SecondsPerQuarterTurn;
+        GridPath.Add(Position - FVector(0, 0, HalfHeight));
     }
+    for (int32 Index = Reversed.Num() - 1; Index >= 0; --Index) GridPath.Add(Nodes.FindChecked(Reversed[Index]).Floor);
+    Points = StraightenPath(GridPath, Step * 1.25, [&](const FVector& Start, const FVector& End)
+    {
+        return CanWalk(CapsuleCenter(Character, Start), CapsuleCenter(Character, End), 7.0);
+    });
     return true;
 }
 
 bool UPFTRoutes::Plan(const ACharacter& Character, const FIntPoint& Target)
 {
-    if (!BuildPath(Character, Target, Path, TurnSeconds)) return false;
-    RouteOrigin = Character.GetActorLocation();
-    NextIndex = 0;
-    TurnPoints = FindRouteTurns(Path, Step);
+    if (!BuildPath(Character, Target, Path)) return false;
+    PathDistances = MeasurePath(Path);
+    NextIndex = FMath::Min(1, Path.Num() - 1);
+    TurnPoints = FindRouteTurns(Path);
     ++PlanRevision;
     return true;
 }
@@ -456,29 +512,38 @@ bool UPFTRoutes::Preview(const ACharacter& Character, const FString& RoomId, TAr
     Points.Reset();
     Estimate.Reset();
     const FIntPoint* Target = Destinations.Find(RoomId);
-    TArray<double> Turns;
     if (!Target || !Character.GetCharacterMovement()->IsMovingOnGround()
-        || !BuildPath(Character, *Target, Points, Turns)) return false;
+        || !BuildPath(Character, *Target, Points)) return false;
 
     const double Speed = FMath::Max(1.0, static_cast<double>(Character.GetCharacterMovement()->MaxWalkSpeed));
-    const double Distance = FVector::Dist2D(Character.GetActorLocation(), Points[0]) + (Points.Num() - 1) * Step;
+    const double Distance = MeasurePath(Points).Last();
     const int32 Metres = FMath::RoundToInt(Distance / 100.0);
-    Estimate = FString::Printf(TEXT("%s walk · %d m"), *WalkingTimeLabel(Distance / Speed + Turns[0]), Metres);
+    const double TurnTime = FindRouteTurns(Points).Num() * SecondsPerQuarterTurn;
+    Estimate = FString::Printf(TEXT("%s walk · %d m"), *WalkingTimeLabel(Distance / Speed + TurnTime), Metres);
     return true;
 }
 
 bool UPFTRoutes::Start(ACharacter& Character, const FString& RoomId, const FString& RoomName)
 {
-    Stop();
     const FIntPoint* Target = Destinations.Find(RoomId);
     if (!Target) return false;
     if (!Character.GetCharacterMovement()->IsMovingOnGround() || !Plan(Character, *Target))
     {
         bCanRetry = true;
-        Message = FText::FromString(TEXT("Walk to a first-floor hallway, then choose Retry route."));
+        if (!IsGuiding())
+        {
+            bArrived = false;
+            if (ArrivalLabel) ArrivalLabel->SetVisibility(false);
+            Message = FText::FromString(TEXT("Walk to a first-floor hallway, then choose Retry route."));
+        }
         return false;
     }
 
+    bArrived = false;
+    bCanRetry = false;
+    bReplanning = false;
+    UpdateTime = 0;
+    if (ArrivalLabel) ArrivalLabel->SetVisibility(false);
     Goal = *Target;
     Destination = RoomName;
     Walker = &Character;
@@ -499,11 +564,12 @@ void UPFTRoutes::Tick(float DeltaTime)
     }
     if (Path.IsEmpty()) return;
     auto* Character = Walker.Get();
-    if (!Character || !Player || Player->GetPawn() != Character)
+    if (!Character)
     {
         Stop();
         return;
     }
+    if (!Player || Player->GetPawn() != Character) return;
     const FVector Position = Character->GetActorLocation();
     if (!bReplanning)
     {
@@ -516,17 +582,21 @@ void UPFTRoutes::Tick(float DeltaTime)
 
     if (bReplanning)
     {
-        bReplanning = false;
         if (!Character->GetCharacterMovement()->IsMovingOnGround() || !Plan(*Character, Goal))
         {
             bCanRetry = true;
-            EndGuidance(FText::FromString(TEXT("Route lost. Walk to a first-floor hallway, then choose Retry route.")));
+            UpdateTime = 1.0f;
+            Message = FText::FromString(Destination + TEXT("\nReturn to a first-floor hallway to resume directions."));
             return;
         }
+        bReplanning = false;
+        bCanRetry = false;
+        DrawPath(Position);
     }
     const FVector End = Path.Last();
     if (Character->GetCharacterMovement()->IsMovingOnGround()
         && FVector::Dist2D(Position, End) <= ArrivalRadius
+        && FMath::Abs(Position.Z - CapsuleCenter(*Character, End).Z) <= FloorTolerance
         && CanCross(*Character, Position + FVector(0, 0, 4), CapsuleCenter(*Character, End)))
     {
         bArrived = true;
@@ -535,12 +605,14 @@ void UPFTRoutes::Tick(float DeltaTime)
         return;
     }
 
-    if (FVector::Dist2D(Position, NextPoint()) > Step * 3.0
-        || FMath::Abs(Position.Z - CapsuleCenter(*Character, NextPoint()).Z) > FloorTolerance)
+    const FVector& Previous = Path[FMath::Max(0, NextIndex - 1)];
+    const FVector& Next = Path[NextIndex];
+    const FVector Nearest = FMath::Lerp(Previous, Next, FMath::Clamp(SegmentProgress(Position, Previous, Next), 0.0, 1.0));
+    if (FVector::Dist2D(Position, Nearest) > Step * 3.0
+        || FMath::Abs(Position.Z - CapsuleCenter(*Character, Nearest).Z) > FloorTolerance)
     {
         bReplanning = true;
         UpdateTime = 0.45f;
-        if (Trail) Trail->Flush();
         Message = FText::FromString(FString::Printf(TEXT("%s\nUpdating route…"), *Destination));
         return;
     }
@@ -551,12 +623,17 @@ void UPFTRoutes::AdvanceWaypoints(const ACharacter& Character, const FVector& Po
 {
     while (NextIndex + 1 < Path.Num())
     {
-        const FVector& Previous = NextIndex == 0 ? RouteOrigin : Path[NextIndex - 1];
+        const FVector& Previous = Path[NextIndex - 1];
         const FVector& Point = Path[NextIndex];
         const FVector& Next = Path[NextIndex + 1];
-        // Keep the arrows pointing into the turn until the player reaches it.
-        if (FVector::Dist2D(Position, Point) > WaypointReach(Previous, Point, Next)
-            || !CanCross(Character, Position + FVector(0, 0, 4), CapsuleCenter(Character, Next))) return;
+        const double Progress = SegmentProgress(Position, Point, Next);
+        const double CornerDistance = FVector::Dist2D(Position, Point);
+        const FVector OnNext = FMath::Lerp(Point, Next, FMath::Clamp(Progress, 0.0, 1.0));
+        const bool bPassedCorner = Progress > 0.0 && CornerDistance <= Step * 2.0 && FVector::Dist2D(Position, OnNext) <= Step;
+        if (CornerDistance > WaypointReach(Previous, Point, Next) && !bPassedCorner) return;
+        const double Length = FVector::Dist2D(Point, Next);
+        const double Ahead = Length > Step ? FMath::Clamp(FMath::Max(0.0, Progress) + Step / Length, 0.0, 1.0) : 1.0;
+        if (!CanCross(Character, Position + FVector(0, 0, 4), CapsuleCenter(Character, FMath::Lerp(Point, Next, Ahead)))) return;
         ++NextIndex;
     }
 }
@@ -572,15 +649,15 @@ void UPFTRoutes::UpdateDirections(const FVector& Position, const FRotator& View,
     else if (Side > 0.55) Instruction = TEXT("Follow the arrows to your right");
     else if (Side < -0.55) Instruction = TEXT("Follow the arrows to your left");
     const double DistanceToPath = FVector::Dist2D(Position, NextPoint());
-    const double DistanceLeft = DistanceToPath + (Path.Num() - 1 - NextIndex) * Step;
+    const double DistanceLeft = DistanceToPath + PathDistances.Last() - PathDistances[NextIndex];
+    const int32 Turn = Algo::LowerBound(TurnPoints, NextIndex);
     if (Instruction.IsEmpty())
     {
-        const int32 Turn = Algo::LowerBound(TurnPoints, NextIndex);
         if (TurnPoints.IsValidIndex(Turn))
         {
             const int32 Index = TurnPoints[Turn];
-            const int32 Metres = FMath::RoundToInt((DistanceToPath + (Index - NextIndex) * Step) / 100.0);
-            Instruction = DescribeTurn(RouteBend(Path, Index, 1), Metres, FVector2D(Path[Index]), Landmarks);
+            const int32 Metres = FMath::RoundToInt((DistanceToPath + PathDistances[Index] - PathDistances[NextIndex]) / 100.0);
+            Instruction = DescribeTurn(RouteBend(Path, Index), Metres, FVector2D(Path[Index]), Landmarks);
         }
         if (Instruction.IsEmpty())
         {
@@ -588,7 +665,7 @@ void UPFTRoutes::UpdateDirections(const FVector& Position, const FRotator& View,
             Instruction = FString::Printf(TEXT("Continue to the destination · %d m"), Metres);
         }
     }
-    const double SecondsLeft = DistanceLeft / FMath::Max(1.0, WalkSpeed) + TurnSeconds[NextIndex];
+    const double SecondsLeft = DistanceLeft / FMath::Max(1.0, WalkSpeed) + (TurnPoints.Num() - Turn) * SecondsPerQuarterTurn;
     Message = FText::FromString(Destination + TEXT("\n") + Instruction + TEXT("\n") + WalkingTimeLabel(SecondsLeft) + TEXT(" left"));
 }
 
@@ -600,41 +677,38 @@ void UPFTRoutes::DrawPath(const FVector& Position)
         Trail->bCalculateAccurateBounds = true;
         Trail->RegisterComponentWithWorld(GetWorld());
     }
-    Trail->Flush();
-
-    // Show the remaining part of the current leg so arrows lead into the upcoming turn.
     const int32 FirstIndex = FMath::Max(0, NextIndex - 1);
-    const FVector Approach = (Path[NextIndex] - Path[FirstIndex]).GetSafeNormal2D();
-    const double VisibleStart = FMath::Clamp(FVector::DotProduct(Position - Path[FirstIndex], Approach), 0.0, double(Step));
-    const double VisibleEnd = FMath::Min(VisibleStart + TrailLength, double(Path.Num() - FirstIndex - 1) * Step);
+    const double Progress = FMath::Clamp(SegmentProgress(Position, Path[FirstIndex], Path[NextIndex]), 0.0, 1.0);
+    const double VisibleStart = FMath::Lerp(PathDistances[FirstIndex], PathDistances[NextIndex], Progress);
+    const double VisibleEnd = FMath::Min(VisibleStart + TrailLength, PathDistances.Last());
 
-    // Grid edges are one Step long in XY. Keep the animation phase when advancing.
     const double AnimationDistance = bReducedMotion ? ArrowSpacing * 0.5 : GetWorld()->GetTimeSeconds() * ArrowSpeed;
-    const double Phase = AnimationDistance - FirstIndex * Step - VisibleStart;
+    const double Phase = AnimationDistance - VisibleStart;
     double ArrowDistance = VisibleStart + FMath::Fmod(FMath::Fmod(Phase, ArrowSpacing) + ArrowSpacing, ArrowSpacing);
     TArray<FBatchedLine> Lines;
     Lines.Reserve(56);
     const FVector FloorLift(0, 0, 8);
-    double EdgeStart = 0;
-    for (int32 Index = FirstIndex; EdgeStart < VisibleEnd; ++Index)
+    for (int32 Index = FirstIndex; Index + 1 < Path.Num() && ArrowDistance < VisibleEnd; ++Index)
     {
-        const double EdgeEnd = EdgeStart + Step;
+        const double EdgeStart = PathDistances[Index];
+        const double EdgeEnd = PathDistances[Index + 1];
         const FVector Direction = (Path[Index + 1] - Path[Index]).GetSafeNormal2D();
         while (ArrowDistance < EdgeEnd && ArrowDistance < VisibleEnd)
         {
             const double FadeIn = FMath::Clamp((ArrowDistance - VisibleStart) / 65.0, 0.0, 1.0);
             const double FadeOut = FMath::Clamp((VisibleEnd - ArrowDistance) / 100.0, 0.0, 1.0);
-            const FVector Center = FMath::Lerp(Path[Index], Path[Index + 1], (ArrowDistance - EdgeStart) / Step);
-            AddArrow(Lines, Center + FloorLift, Direction, static_cast<float>(FadeIn * FadeOut));
+            const FVector Center = FMath::Lerp(Path[Index], Path[Index + 1], (ArrowDistance - EdgeStart) / (EdgeEnd - EdgeStart));
+            AddArrow(Lines, Center + FloorLift, Direction, static_cast<float>(FMath::Lerp(0.45, 1.0, FadeIn * FadeOut)));
             ArrowDistance += ArrowSpacing;
         }
-        EdgeStart = EdgeEnd;
     }
-    if (Lines.IsEmpty() && Path.Num() >= 2)
+    if (Lines.IsEmpty())
     {
-        const FVector Direction = (Path.Last() - Path[Path.Num() - 2]).GetSafeNormal2D();
-        AddArrow(Lines, Path.Last() + FloorLift, Direction, 1.0f);
+        const FVector Start = Path.Num() > 1 ? Path[FirstIndex] : Position;
+        const FVector Direction = (Path[NextIndex] - Start).GetSafeNormal2D();
+        AddArrow(Lines, Path[NextIndex] + FloorLift, Direction.IsNearlyZero() ? FVector::ForwardVector : Direction, 1.0f);
     }
+    Trail->Flush();
     Trail->DrawLines(Lines);
 }
 
@@ -658,7 +732,7 @@ void UPFTRoutes::EndGuidance(const FText& NewMessage)
     if (Trail) Trail->Flush();
     Walker.Reset();
     Path.Reset();
-    TurnSeconds.Reset();
+    PathDistances.Reset();
     TurnPoints.Reset();
     UpdateTime = 0;
     bReplanning = false;
@@ -681,7 +755,7 @@ TArrayView<const FVector> UPFTRoutes::GetRemainingPath() const
 
 FText UPFTRoutes::DescribeSteps(const FVector& Position, TArrayView<const FVector> Points) const
 {
-    return FormatRouteSteps(Position, Points, FindRouteTurns(Points, Step), 0, Step, Landmarks);
+    return FormatRouteSteps(Position, Points, MeasurePath(Points), FindRouteTurns(Points), 0, Landmarks);
 }
 
 FText UPFTRoutes::GetRemainingSteps() const
@@ -689,7 +763,7 @@ FText UPFTRoutes::GetRemainingSteps() const
     const auto* Character = Walker.Get();
     if (!Character) return FText::GetEmpty();
     if (bReplanning) return FText::FromString(TEXT("Updating route…"));
-    return FormatRouteSteps(Character->GetActorLocation(), Path, TurnPoints, NextIndex, Step, Landmarks);
+    return FormatRouteSteps(Character->GetActorLocation(), Path, PathDistances, TurnPoints, NextIndex, Landmarks);
 }
 
 const TPair<FString, FVector2D>* UPFTRoutes::GetRouteLandmark(TArrayView<const FVector> Points) const
@@ -722,26 +796,37 @@ bool FPFTRouteStepsTest::RunTest(const FString& Parameters)
         {180, 60, 0}, {180, 120, 0}, {180, 180, 0}, {180, 240, 0}, {180, 300, 0}, {180, 360, 0},
         {240, 360, 0}, {300, 360, 0}, {360, 360, 0}};
     const TMap<FString, FVector2D> Signs = {{TEXT("Zone 1200 sign"), FVector2D(180, 0)}};
-    const auto Turns = FindRouteTurns(Path, 60);
+    const auto Turns = FindRouteTurns(Path);
+    const auto Distances = MeasurePath(Path);
     TestTrue(TEXT("Each real corner appears once and in order"), Turns == TArray<int32>{3, 9});
     TestEqual(TEXT("The preview includes turns, a landmark, and a final leg"),
-        FormatRouteSteps(FVector::ZeroVector, Path, Turns, 0, 60, Signs).ToString(),
+        FormatRouteSteps(FVector::ZeroVector, Path, Distances, Turns, 0, Signs).ToString(),
         FString(TEXT("Walk 2 m, then turn right near Zone 1200 sign\n\nWalk 4 m, then turn left\n\nWalk 2 m to the destination")));
     TestEqual(TEXT("The remaining steps omit a passed turn and shorten the current leg"),
-        FormatRouteSteps(Path[4], Path, Turns, 4, 60, Signs).ToString(),
+        FormatRouteSteps(Path[4], Path, Distances, Turns, 4, Signs).ToString(),
         FString(TEXT("Walk 3 m, then turn left\n\nWalk 2 m to the destination")));
-    TestEqual(TEXT("A turn at the next point stays visible"), FormatRouteSteps(Path[9], Path, Turns, 9, 60, Signs).ToString(),
+    TestEqual(TEXT("A turn at the next point stays visible"), FormatRouteSteps(Path[9], Path, Distances, Turns, 9, Signs).ToString(),
         FString(TEXT("Turn left\n\nWalk 2 m to the destination")));
 
     const TArray<FVector> Zigzag = {{0, 0, 0}, {60, 0, 0}, {60, 60, 0}, {120, 60, 0}, {120, 120, 0},
         {180, 120, 0}, {180, 180, 0}};
-    TestTrue(TEXT("Grid zigzags don't produce a list of spurious turns"), FindRouteTurns(Zigzag, 60).IsEmpty());
+    const auto Clear = [](const FVector&, const FVector&) { return true; };
+    const auto Straight = StraightenPath(Zigzag, 75.0, Clear);
+    TestTrue(TEXT("A grid staircase in a clear corridor becomes one straight leg"),
+        Straight == TArray<FVector>{Zigzag[0], Zigzag.Last()} && FindRouteTurns(Straight).IsEmpty());
+    TestEqual(TEXT("Directions use the length of the straight leg"),
+        FormatRouteSteps(Zigzag[0], Straight, MeasurePath(Straight), {}, 0, {}).ToString(),
+        FString(TEXT("Walk 3 m to the destination")));
+    const auto Corners = StraightenPath(Path, 75.0, Clear);
+    TestTrue(TEXT("A hallway keeps its actual corners"), Corners == TArray<FVector>{Path[0], Path[3], Path[9], Path.Last()});
     const TArray<FVector> ShortRoute = {{0, 0, 0}, {60, 0, 0}, {60, 60, 0}};
-    TestTrue(TEXT("A short route can still have a turn"), FindRouteTurns(ShortRoute, 60) == TArray<int32>{1});
+    const auto Blocked = [](const FVector&, const FVector&) { return false; };
+    TestTrue(TEXT("A blocked shortcut keeps the corner"), StraightenPath(ShortRoute, 75.0, Blocked) == ShortRoute);
+    TestTrue(TEXT("A short route can still have a turn"), FindRouteTurns(ShortRoute) == TArray<int32>{1});
     TestEqual(TEXT("The final waypoint alone shows the destination"),
-        FormatRouteSteps(Path.Last(), Path, Turns, Path.Num() - 1, 60, Signs).ToString(),
+        FormatRouteSteps(Path.Last(), Path, Distances, Turns, Path.Num() - 1, Signs).ToString(),
         FString(TEXT("Destination ahead")));
-    TestTrue(TEXT("An empty route has no steps"), FormatRouteSteps({}, {}, {}, 0, 60, {}).IsEmpty());
+    TestTrue(TEXT("An empty route has no steps"), FormatRouteSteps({}, {}, {}, {}, 0, {}).IsEmpty());
     return true;
 }
 
