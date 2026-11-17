@@ -209,8 +209,9 @@ checkout also record its commit and whether the packaging tools, Navigator
 source, or directory data had local changes. The test report paths are relative
 to the package folder.
 The archive includes Unreal's bundled Microsoft Visual C++ x64 installer and
-first-run instructions in `Read Me - PFT Demo.txt`. Extract the entire package
-before running the launcher.
+first-run instructions in `Read Me - PFT Demo.txt`. Extract the entire package,
+then double-click `Play PFT Demo Offline.cmd` to present without Unreal HTTP
+requests. `Play PFT Demo.cmd` opens the regular demo.
 The project settings on Perforce shelf `42426` use the Unreal 5.8 include order
 and keep local `UserEngine.ini` overrides out of the Windows package.
 
