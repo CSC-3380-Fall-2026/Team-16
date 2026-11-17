@@ -44,13 +44,16 @@ private:
     {
         FVector Floor;
         uint8 Links;
+        int32 StepsFromBoundary = 0;
     };
 
     void LoadGraph(const FString& Map);
+    void MeasureClearance();
     bool Plan(const ACharacter& Character, const FIntPoint& Target);
     bool BuildPath(const ACharacter& Character, const FIntPoint& Target, TArray<FVector>& Points, TArray<double>& Turns) const;
     bool CanCross(const ACharacter& Character, const FVector& Start, const FVector& End) const;
-    void DrawPath();
+    void AdvanceWaypoints(const ACharacter& Character, const FVector& Position);
+    void DrawPath(const FVector& Position);
     void ShowArrival(const FVector& Position);
     void UpdateDirections(const FVector& Position, const FRotator& View, double WalkSpeed);
     void EndGuidance(const FText& NewMessage);
@@ -65,6 +68,7 @@ private:
     UPROPERTY() TObjectPtr<UTextRenderComponent> ArrivalLabel;
     TWeakObjectPtr<ACharacter> Walker;
     FString Destination;
+    FVector RouteOrigin = FVector::ZeroVector;
     FIntPoint Goal;
     FText Message;
     int32 Step = 0;

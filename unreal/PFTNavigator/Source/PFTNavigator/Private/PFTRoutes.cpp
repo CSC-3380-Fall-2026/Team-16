@@ -20,6 +20,9 @@ namespace
 {
     const FIntPoint Directions[] = {{1, 0}, {0, 1}, {-1, 0}, {0, -1}};
     constexpr double WaypointRadius = 27.0;
+    constexpr double CornerRadius = 16.0;
+    constexpr double PreferredClearance = 150.0;
+    constexpr double TurnCostInGridSteps = 2.0;
     constexpr double ArrivalRadius = 65.0;
     constexpr double FloorTolerance = 45.0;
     constexpr int32 StartSearchCells = 3;
@@ -146,9 +149,24 @@ namespace
         int32 Heading = INDEX_NONE;
     };
 
+    double ClearancePenalty(int32 StepsFromBoundary, int32 GridStep)
+    {
+        const double Clearance = (StepsFromBoundary + 0.5) * GridStep;
+        return 1.6 * FMath::Square(FMath::Max(0.0, 1.0 - Clearance / PreferredClearance));
+    }
+
+    double WaypointReach(const FVector& Previous, const FVector& Point, const FVector& Next)
+    {
+        const FVector Incoming = (Point - Previous).GetSafeNormal2D();
+        const FVector Outgoing = (Next - Point).GetSafeNormal2D();
+        if (Incoming.IsNearlyZero() || Outgoing.IsNearlyZero()) return WaypointRadius;
+        return FVector::DotProduct(Incoming, Outgoing) < 0.9 ? CornerRadius : WaypointRadius;
+    }
+
     // A cell reached from different headings can have a different cost for the next turn.
     TArray<FIntPoint> FindFastestPath(const TArray<FRouteEntry>& Entries, const FIntPoint& Target, double SecondsPerStep,
-        TFunctionRef<uint8(const FIntPoint&)> GetLinks)
+        TFunctionRef<uint8(const FIntPoint&)> GetLinks, TFunctionRef<double(const FIntPoint&)> GetPenalty = [](const FIntPoint&) { return 0.0; },
+        double TurnCost = SecondsPerQuarterTurn)
     {
         const auto RemainingTime = [&](const FIntPoint& Cell)
         {
@@ -187,7 +205,7 @@ namespace
                 const FIntVector State(Next.X, Next.Y, Direction);
                 const int32 Difference = FMath::Abs(Current.State.Z - Direction);
                 const int32 Turns = Current.State.Z == INDEX_NONE ? 0 : FMath::Min(Difference, 4 - Difference);
-                const double Seconds = Current.Seconds + SecondsPerStep + Turns * SecondsPerQuarterTurn;
+                const double Seconds = Current.Seconds + SecondsPerStep * (1.0 + GetPenalty(Next)) + Turns * TurnCost;
                 const auto* Previous = Visits.Find(State);
                 if (Previous && Previous->Seconds <= Seconds) continue;
                 Visits.Add(State, {Seconds, Current.State});
@@ -288,6 +306,7 @@ void UPFTRoutes::LoadGraph(const FString& Map)
     }
     Step = GridStep;
     Nodes = MoveTemp(GraphNodes);
+    MeasureClearance();
     const TSharedPtr<FJsonObject>* GraphLandmarks;
     if (Graph->TryGetObjectField(TEXT("Landmarks"), GraphLandmarks))
     {
@@ -301,6 +320,42 @@ void UPFTRoutes::LoadGraph(const FString& Map)
             {
                 Landmarks.Add(FString(Landmark.Key), FVector2D(X, Y));
             }
+        }
+    }
+}
+
+void UPFTRoutes::MeasureClearance()
+{
+    const int32 MaxDistance = FMath::CeilToInt(PreferredClearance / Step);
+    TArray<FIntPoint> Boundary;
+    for (auto& Pair : Nodes)
+    {
+        FNode& Node = Pair.Value;
+        for (int32 Direction = 0; Direction < UE_ARRAY_COUNT(Directions); ++Direction)
+        {
+            if (!Nodes.Contains(Pair.Key + Directions[Direction])) Node.Links &= ~(1 << Direction);
+        }
+        Node.StepsFromBoundary = MaxDistance;
+        if (Node.Links == 15) continue;
+        Node.StepsFromBoundary = 0;
+        Boundary.Add(Pair.Key);
+    }
+
+    // Count grid steps from blocked edges using walkable links, including at doorways.
+    for (int32 Index = 0; Index < Boundary.Num(); ++Index)
+    {
+        const FIntPoint Cell = Boundary[Index];
+        const FNode& Node = Nodes.FindChecked(Cell);
+        const int32 Distance = Node.StepsFromBoundary + 1;
+        if (Distance >= MaxDistance) continue;
+        for (int32 Direction = 0; Direction < UE_ARRAY_COUNT(Directions); ++Direction)
+        {
+            if (!(Node.Links & (1 << Direction))) continue;
+            const FIntPoint Neighbor = Cell + Directions[Direction];
+            FNode& Next = Nodes.FindChecked(Neighbor);
+            if (Next.StepsFromBoundary <= Distance) continue;
+            Next.StepsFromBoundary = Distance;
+            Boundary.Add(Neighbor);
         }
     }
 }
@@ -355,22 +410,22 @@ bool UPFTRoutes::BuildPath(const ACharacter& Character, const FIntPoint& Target,
             const FVector Approach = Center - Position;
             const int32 Heading = Distance < 1.0 ? INDEX_NONE
                 : (FMath::RoundToInt(Approach.Rotation().Yaw / 90.0) + 4) % 4;
-            Entries.Add({Cell, Distance / Speed, Heading});
+            const double ApproachSeconds = Distance / Speed * (1.0 + ClearancePenalty(Node->StepsFromBoundary, Step));
+            Entries.Add({Cell, ApproachSeconds, Heading});
         }
     }
     if (Entries.IsEmpty()) return false;
 
-    const auto Reversed = FindFastestPath(Entries, Target, Step / Speed, [this](const FIntPoint& Cell)
+    const double SecondsPerStep = Step / Speed;
+    // Prefer staying in the walkway over zigzagging between individual high-clearance cells.
+    const double TurnCost = SecondsPerQuarterTurn + SecondsPerStep * TurnCostInGridSteps;
+    const auto Reversed = FindFastestPath(Entries, Target, SecondsPerStep, [this](const FIntPoint& Cell)
     {
-        const auto* Node = Nodes.Find(Cell);
-        if (!Node) return uint8(0);
-        uint8 Links = Node->Links;
-        for (int32 Direction = 0; Direction < UE_ARRAY_COUNT(Directions); ++Direction)
-        {
-            if (!Nodes.Contains(Cell + Directions[Direction])) Links &= ~(1 << Direction);
-        }
-        return Links;
-    });
+        return Nodes.FindChecked(Cell).Links;
+    }, [this](const FIntPoint& Cell)
+    {
+        return ClearancePenalty(Nodes.FindChecked(Cell).StepsFromBoundary, Step);
+    }, TurnCost);
     if (Reversed.IsEmpty()) return false;
     Points.Reset(Reversed.Num());
     for (int32 Index = Reversed.Num() - 1; Index >= 0; --Index) Points.Add(Nodes.FindChecked(Reversed[Index]).Floor);
@@ -389,6 +444,7 @@ bool UPFTRoutes::BuildPath(const ACharacter& Character, const FIntPoint& Target,
 bool UPFTRoutes::Plan(const ACharacter& Character, const FIntPoint& Target)
 {
     if (!BuildPath(Character, Target, Path, TurnSeconds)) return false;
+    RouteOrigin = Character.GetActorLocation();
     NextIndex = 0;
     TurnPoints = FindRouteTurns(Path, Step);
     ++PlanRevision;
@@ -448,12 +504,16 @@ void UPFTRoutes::Tick(float DeltaTime)
         Stop();
         return;
     }
-    if (!bReplanning) DrawPath();
+    const FVector Position = Character->GetActorLocation();
+    if (!bReplanning)
+    {
+        AdvanceWaypoints(*Character, Position);
+        DrawPath(Position);
+    }
     UpdateTime -= DeltaTime;
     if (UpdateTime > 0) return;
     UpdateTime = 0.15f;
 
-    const FVector Position = Character->GetActorLocation();
     if (bReplanning)
     {
         bReplanning = false;
@@ -475,14 +535,6 @@ void UPFTRoutes::Tick(float DeltaTime)
         return;
     }
 
-    // Skip nearby points only if the walking capsule can reach the next point directly.
-    while (NextIndex + 1 < Path.Num()
-        && FVector::Dist2D(Position, Path[NextIndex]) <= WaypointRadius
-        && CanCross(*Character, Position + FVector(0, 0, 4), CapsuleCenter(*Character, Path[NextIndex + 1])))
-    {
-        ++NextIndex;
-    }
-
     if (FVector::Dist2D(Position, NextPoint()) > Step * 3.0
         || FMath::Abs(Position.Z - CapsuleCenter(*Character, NextPoint()).Z) > FloorTolerance)
     {
@@ -493,6 +545,20 @@ void UPFTRoutes::Tick(float DeltaTime)
         return;
     }
     UpdateDirections(Position, Player->GetControlRotation(), Character->GetCharacterMovement()->MaxWalkSpeed);
+}
+
+void UPFTRoutes::AdvanceWaypoints(const ACharacter& Character, const FVector& Position)
+{
+    while (NextIndex + 1 < Path.Num())
+    {
+        const FVector& Previous = NextIndex == 0 ? RouteOrigin : Path[NextIndex - 1];
+        const FVector& Point = Path[NextIndex];
+        const FVector& Next = Path[NextIndex + 1];
+        // Keep the arrows pointing into the turn until the player reaches it.
+        if (FVector::Dist2D(Position, Point) > WaypointReach(Previous, Point, Next)
+            || !CanCross(Character, Position + FVector(0, 0, 4), CapsuleCenter(Character, Next))) return;
+        ++NextIndex;
+    }
 }
 
 void UPFTRoutes::UpdateDirections(const FVector& Position, const FRotator& View, double WalkSpeed)
@@ -526,7 +592,7 @@ void UPFTRoutes::UpdateDirections(const FVector& Position, const FRotator& View,
     Message = FText::FromString(Destination + TEXT("\n") + Instruction + TEXT("\n") + WalkingTimeLabel(SecondsLeft) + TEXT(" left"));
 }
 
-void UPFTRoutes::DrawPath()
+void UPFTRoutes::DrawPath(const FVector& Position)
 {
     if (!Trail)
     {
@@ -536,23 +602,28 @@ void UPFTRoutes::DrawPath()
     }
     Trail->Flush();
 
-    // Grid edges are one Step long in XY. Keep the animation phase when the first edge is skipped.
+    // Show the remaining part of the current leg so arrows lead into the upcoming turn.
+    const int32 FirstIndex = FMath::Max(0, NextIndex - 1);
+    const FVector Approach = (Path[NextIndex] - Path[FirstIndex]).GetSafeNormal2D();
+    const double VisibleStart = FMath::Clamp(FVector::DotProduct(Position - Path[FirstIndex], Approach), 0.0, double(Step));
+    const double VisibleEnd = FMath::Min(VisibleStart + TrailLength, double(Path.Num() - FirstIndex - 1) * Step);
+
+    // Grid edges are one Step long in XY. Keep the animation phase when advancing.
     const double AnimationDistance = bReducedMotion ? ArrowSpacing * 0.5 : GetWorld()->GetTimeSeconds() * ArrowSpeed;
-    const double Phase = AnimationDistance - NextIndex * Step;
-    double ArrowDistance = FMath::Fmod(FMath::Fmod(Phase, ArrowSpacing) + ArrowSpacing, ArrowSpacing);
+    const double Phase = AnimationDistance - FirstIndex * Step - VisibleStart;
+    double ArrowDistance = VisibleStart + FMath::Fmod(FMath::Fmod(Phase, ArrowSpacing) + ArrowSpacing, ArrowSpacing);
     TArray<FBatchedLine> Lines;
     Lines.Reserve(56);
     const FVector FloorLift(0, 0, 8);
-    const double VisibleLength = FMath::Min(TrailLength, static_cast<double>(Path.Num() - NextIndex - 1) * Step);
     double EdgeStart = 0;
-    for (int32 Index = NextIndex; EdgeStart < VisibleLength; ++Index)
+    for (int32 Index = FirstIndex; EdgeStart < VisibleEnd; ++Index)
     {
         const double EdgeEnd = EdgeStart + Step;
         const FVector Direction = (Path[Index + 1] - Path[Index]).GetSafeNormal2D();
-        while (ArrowDistance < EdgeEnd && ArrowDistance < VisibleLength)
+        while (ArrowDistance < EdgeEnd && ArrowDistance < VisibleEnd)
         {
-            const double FadeIn = FMath::Clamp(ArrowDistance / 65.0, 0.0, 1.0);
-            const double FadeOut = FMath::Clamp((VisibleLength - ArrowDistance) / 100.0, 0.0, 1.0);
+            const double FadeIn = FMath::Clamp((ArrowDistance - VisibleStart) / 65.0, 0.0, 1.0);
+            const double FadeOut = FMath::Clamp((VisibleEnd - ArrowDistance) / 100.0, 0.0, 1.0);
             const FVector Center = FMath::Lerp(Path[Index], Path[Index + 1], (ArrowDistance - EdgeStart) / Step);
             AddArrow(Lines, Center + FloorLift, Direction, static_cast<float>(FadeIn * FadeOut));
             ArrowDistance += ArrowSpacing;
@@ -730,6 +801,23 @@ bool FPFTFastestPathTest::RunTest(const FString& Parameters)
     TestTrue(TEXT("A farther entry can reduce total travel time"), !FartherEntry.IsEmpty() && FartherEntry.Last() == FIntPoint(2, 4));
     const auto CostlyEntry = FindFastestPath({{{0, 0}, 0.02}, {{2, 4}, 4.0, 0}}, {4, 4}, 0.1, Links);
     TestTrue(TEXT("An expensive approach does not win"), !CostlyEntry.IsEmpty() && CostlyEntry.Last() == FIntPoint(0, 0));
+
+    Graph.Reset();
+    LinkPath({{0, 0}, {1, 0}, {2, 0}, {3, 0}, {4, 0}, {5, 0}, {6, 0}, {7, 0}, {8, 0}, {9, 0}, {10, 0}});
+    LinkPath({{0, 0}, {0, 1}, {1, 1}, {2, 1}, {3, 1}, {4, 1}, {5, 1}, {6, 1}, {7, 1}, {8, 1}, {9, 1}, {10, 1}, {10, 0}});
+    const auto Penalty = [](const FIntPoint& Cell) { return ClearancePenalty(Cell.Y == 0 ? 0 : 2, 60); };
+    const auto WallRoute = FindFastestPath(Start, {10, 0}, 0.25, Links);
+    const auto WalkwayRoute = FindFastestPath(Start, {10, 0}, 0.25, Links, Penalty, 0.75);
+    TestTrue(TEXT("A slightly longer route can stay in the clear walkway"),
+        WallRoute.Contains(FIntPoint(4, 0)) && WalkwayRoute.Contains(FIntPoint(4, 1)) && WalkwayRoute[0] == FIntPoint(10, 0));
+    const auto NarrowRoute = FindFastestPath(Start, {4, 0}, 0.25, Links, Penalty);
+    TestTrue(TEXT("A required narrow approach remains available"), !NarrowRoute.IsEmpty() && NarrowRoute[0] == FIntPoint(4, 0));
+    TestTrue(TEXT("Clearance costs taper toward the middle of the walkway"),
+        ClearancePenalty(0, 60) > ClearancePenalty(1, 60) && ClearancePenalty(2, 60) == 0.0);
+    const FVector Before(0, 0, 0);
+    const FVector Corner(60, 0, 0);
+    TestEqual(TEXT("A turn requires getting closer to the waypoint"), WaypointReach(Before, Corner, {60, 60, 0}), CornerRadius);
+    TestEqual(TEXT("A straight section keeps its usual waypoint tolerance"), WaypointReach(Before, Corner, {120, 0, 0}), WaypointRadius);
     return true;
 }
 #endif
