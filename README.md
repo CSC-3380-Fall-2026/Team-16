@@ -15,7 +15,7 @@ The GitHub repo contains the Navigator plugin, JSON data, build tools, tests, an
 
 Install Unreal Engine **5.8**, Microsoft C++ Build Tools with the Windows SDK and .NET Framework 4.8 SDK, Python **3.10+**, and Perforce P4V with the `p4` CLI. Follow [Windows Unreal setup](docs/unreal-setup.md) and [Perforce setup](docs/perforce-setup.md). Use your own Perforce login and verify your workspace maps both the PFT project and the shared plugin.
 
-Use a clean Perforce workspace and a pending changelist for the build. Sync the project and shared plugin, then apply first-floor shelf **42426** in that workspace. Run the final build commands from the root of this Git checkout.
+Use a clean Perforce workspace and a pending changelist for the build. Sync the project and shared plugin, then apply first-floor shelf **42426** in that workspace. Close Unreal Editor and the demo before packaging. Leave room for compiled code, cooked content, and staging files as well as the final package. Run these commands from the root of this Git checkout.
 
 ```powershell
 # Use your synced project path and the number of your pending changelist.
@@ -31,7 +31,8 @@ Pop-Location
 
 python tools/install_navigator.py $Project --changelist $Change
 python tools/install_navigator.py $Project --check
-& .\tools\package_first_floor_demo.ps1 -Project $Project -FullCook -VerifyOffline -ArchiveDirectory "$env:USERPROFILE\PFTDemo"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\package_first_floor_demo.ps1 `
+    -Project $Project -FullCook -VerifyOffline -ArchiveDirectory "$env:USERPROFILE\PFTDemo"
 ```
 
 Resolve any Perforce conflicts and fix any setup or installer error before continuing. The first cook can take a while because Unreal prepares the map and its dependencies. A successful run publishes `PFTDemo\Windows` in your user folder. The package's `PFTDemoBuild.json` records the source revision, map, and test results.
