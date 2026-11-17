@@ -13,6 +13,7 @@ set "DemoFPS=30"
 set "DemoHttp=-ini:Engine:[HTTP]:bEnableHttp=False"
 if /i "%~1"=="smooth" set "DemoFPS=45"
 if /i "%~1"=="profile" if /i "%~2"=="smooth" set "DemoFPS=45"
+if /i "%~1"=="profileguided" if /i "%~2"=="smooth" set "DemoFPS=45"
 set "DemoSettings=%DemoSettings%,t.MaxFPS %DemoFPS%"
 if /i "%~1"=="walkthrough" goto checks
 if /i "%~1"=="verify" goto verify
@@ -20,7 +21,9 @@ if /i "%~1"=="verifyextended" goto verify
 if /i "%~1"=="verifyoffline" goto verify
 if /i "%~1"=="crossbuilding" goto crossbuilding
 if /i "%~1"=="guidedwalk" goto guidedwalk
+if /i "%~1"=="reroute" goto reroute
 if /i "%~1"=="profile" goto profile
+if /i "%~1"=="profileguided" goto profileguided
 
 if /i "%~1"=="offline" set "DemoArgs=%DemoArgs% %DemoHttp%"
 start "" "PFTDigitalTwin.exe" %DemoMap% %DemoArgs% -ExecCmds="%DemoSettings%"
@@ -39,6 +42,10 @@ goto checks_done
 call :walk_with_guidance
 goto checks_done
 
+:reroute
+call :check_reroute -RenderOffscreen
+goto checks_done
+
 :walk_with_guidance
 call :run_check GuidedWalk PFTFirstFloor.GuidedWalk GuidedWalk %~1
 if errorlevel 1 exit /b %errorlevel%
@@ -47,6 +54,12 @@ exit /b %errorlevel%
 
 :walk_to_c1007
 call :run_check C1007Walk PFTFirstFloor.WalkToC1007 WalkToC1007 %~1
+if errorlevel 1 exit /b %errorlevel%
+call :check_assets
+exit /b %errorlevel%
+
+:check_reroute
+call :run_check Reroute PFTFirstFloor.RefocusAfterReroute RefocusAfterReroute %~1
 if errorlevel 1 exit /b %errorlevel%
 call :check_assets
 exit /b %errorlevel%
@@ -63,13 +76,25 @@ call :check_assets
 if errorlevel 1 goto checks_done
 call :walk_with_guidance -RenderOffscreen
 if errorlevel 1 goto checks_done
-if /i not "%~1"=="verify" call :walk_to_c1007 -RenderOffscreen
+if /i "%~1"=="verify" goto checks_done
+call :walk_to_c1007 -RenderOffscreen
+if errorlevel 1 goto checks_done
+call :check_reroute -RenderOffscreen
 goto checks_done
 
+:profileguided
+set "DemoArgs=%DemoArgs% %DemoHttp% -RenderOffscreen -PFTProfileGuidance"
+set "ProfileScenario=Guided Commons walk with map (%DemoFPS% FPS cap)"
+call :run_check GuidedProfile-%DemoFPS%FPS PFTFirstFloor.GuidedWalk GuidedWalk
+goto profile_report
+
 :profile
+set "ProfileScenario=Commons walkthrough"
 call :run_check CommonsProfile-%DemoFPS%FPS PFTFirstFloor.WalkToCommons WalkToCommons
+
+:profile_report
 if errorlevel 1 goto checks_done
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0measure_demo_frames.ps1" -Log "%TestLog%"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0measure_demo_frames.ps1" -Log "%TestLog%" -Scenario "%ProfileScenario%"
 
 :checks_done
 set "Result=%errorlevel%"
