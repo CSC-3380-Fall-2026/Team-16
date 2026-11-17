@@ -418,15 +418,19 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
                         // Leave the route entirely to exercise recovery without depending on manual input.
                         Character->SetActorLocation(ReturnPosition + FVector(0, 0, 5000), false, nullptr, ETeleportType::TeleportPhysics);
                         ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.25f));
-                        ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Routes]()
+                        auto* Trail = FindObject<ULineBatchComponent>(Routes, TEXT("PFTWalkingTrail"));
+                        ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Routes, Trail]()
                         {
                             TestTrue(TEXT("Leaving the route shows an update state"), Routes->IsReplanning());
+                            TestTrue(TEXT("Arrows stay drawn while the route updates"), Trail && !Trail->BatchedLines.IsEmpty());
                             return true;
                         }));
                         ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.7f));
-                        ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Routes, Character, ReturnPosition, Tree]()
+                        ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Routes, Character, ReturnPosition, Tree, Trail]()
                         {
                             TestTrue(TEXT("A disconnected position offers retry"), Routes->CanRetry());
+                            TestTrue(TEXT("Guidance and arrows persist when no new path is available"),
+                                Routes->IsGuiding() && Trail && !Trail->BatchedLines.IsEmpty());
                             TestTrue(TEXT("Retry is visible"), Tree->FindWidget(TEXT("RetryRouteButton"))->IsVisible());
                             Character->SetActorLocation(ReturnPosition, false, nullptr, ETeleportType::TeleportPhysics);
                             Character->GetCharacterMovement()->StopMovementImmediately();
@@ -460,7 +464,7 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
                     }));
                     return true;
                 }
-                if (!Routes->IsGuiding() || Position.Z < 65 || FPlatformTime::Seconds() > Deadline)
+                if (!Routes->IsGuiding() || Trail->BatchedLines.IsEmpty() || Position.Z < 65 || FPlatformTime::Seconds() > Deadline)
                 {
                     if (bProfileGuidance) FinishGuidanceProfile();
                     AddError(FString::Printf(TEXT("Guided walk stopped at %s with next point %s. %s"),
