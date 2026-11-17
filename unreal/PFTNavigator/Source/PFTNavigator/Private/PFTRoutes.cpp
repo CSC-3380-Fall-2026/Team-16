@@ -38,37 +38,22 @@ namespace
         return SquaredLength > UE_SMALL_NUMBER ? FVector2D::DotProduct(FVector2D(Position - Start), Edge) / SquaredLength : 0.0;
     }
 
-    TArray<FVector> StraightenPath(TArrayView<const FVector> Points, double MaxOffset,
+    TArray<FVector> StraightenPath(TArrayView<const FVector> Points,
         TFunctionRef<bool(const FVector&, const FVector&)> CanWalk)
     {
-        if (Points.Num() < 2) return TArray<FVector>(Points);
+        if (Points.IsEmpty()) return {};
         TArray<FVector> Result = {Points[0]};
-        TArray<FIntPoint> Sections = {{0, Points.Num() - 1}};
-        while (!Sections.IsEmpty())
+        int32 Anchor = 0;
+        while (Anchor + 1 < Points.Num())
         {
-            const FIntPoint Section = Sections.Pop(EAllowShrinking::No);
-            const FVector& Start = Points[Section.X];
-            const FVector& End = Points[Section.Y];
-            int32 Split = (Section.X + Section.Y) / 2;
-            double MaxDeviation = 0.0;
-            for (int32 Index = Section.X + 1; Index < Section.Y; ++Index)
+            // Use the longest clear leg ahead. A grid path may move sideways even in an open hallway.
+            int32 Next = Points.Num() - 1;
+            while (Next > Anchor + 1 && !CanWalk(Points[Anchor], Points[Next]))
             {
-                const FVector& Point = Points[Index];
-                const double Progress = FMath::Clamp(SegmentProgress(Point, Start, End), 0.0, 1.0);
-                const FVector OnLine = FMath::Lerp(Start, End, Progress);
-                const double Deviation = FMath::Max(FVector::Dist2D(Point, OnLine) / MaxOffset,
-                    FMath::Abs(Point.Z - OnLine.Z) / 6.0);
-                if (Deviation <= MaxDeviation) continue;
-                Split = Index;
-                MaxDeviation = Deviation;
+                --Next;
             }
-            if (Section.Y == Section.X + 1 || (MaxDeviation <= 1.0 && CanWalk(Start, End)))
-            {
-                Result.Add(End);
-                continue;
-            }
-            Sections.Emplace(Split, Section.Y);
-            Sections.Emplace(Section.X, Split);
+            Result.Add(Points[Next]);
+            Anchor = Next;
         }
         return Result;
     }
@@ -490,7 +475,7 @@ bool UPFTRoutes::BuildPath(const ACharacter& Character, const FIntPoint& Target,
         GridPath.Add(Position - FVector(0, 0, HalfHeight));
     }
     for (int32 Index = Reversed.Num() - 1; Index >= 0; --Index) GridPath.Add(Nodes.FindChecked(Reversed[Index]).Floor);
-    Points = StraightenPath(GridPath, Step * 1.25, [&](const FVector& Start, const FVector& End)
+    Points = StraightenPath(GridPath, [&](const FVector& Start, const FVector& End)
     {
         return CanWalk(CapsuleCenter(Character, Start), CapsuleCenter(Character, End), 7.0);
     });
@@ -811,17 +796,25 @@ bool FPFTRouteStepsTest::RunTest(const FString& Parameters)
     const TArray<FVector> Zigzag = {{0, 0, 0}, {60, 0, 0}, {60, 60, 0}, {120, 60, 0}, {120, 120, 0},
         {180, 120, 0}, {180, 180, 0}};
     const auto Clear = [](const FVector&, const FVector&) { return true; };
-    const auto Straight = StraightenPath(Zigzag, 75.0, Clear);
+    const auto Straight = StraightenPath(Zigzag, Clear);
     TestTrue(TEXT("A grid staircase in a clear corridor becomes one straight leg"),
         Straight == TArray<FVector>{Zigzag[0], Zigzag.Last()} && FindRouteTurns(Straight).IsEmpty());
     TestEqual(TEXT("Directions use the length of the straight leg"),
         FormatRouteSteps(Zigzag[0], Straight, MeasurePath(Straight), {}, 0, {}).ToString(),
         FString(TEXT("Walk 3 m to the destination")));
-    const auto Corners = StraightenPath(Path, 75.0, Clear);
-    TestTrue(TEXT("A hallway keeps its actual corners"), Corners == TArray<FVector>{Path[0], Path[3], Path[9], Path.Last()});
+    const TArray<FVector> HallwayJog = {{0, 0, 0}, {600, 0, 0}, {600, 240, 0}, {1800, 240, 0}, {1800, 0, 0}, {2400, 0, 0}};
+    TestTrue(TEXT("A sideways grid detour within a clear hallway leaves one straight leg"),
+        StraightenPath(HallwayJog, Clear) == TArray<FVector>{HallwayJog[0], HallwayJog.Last()});
+    const auto Hallway = [](const FVector& Start, const FVector& End)
+    {
+        return Start.Y == End.Y || (Start.X == 180 && End.X == 180);
+    };
+    const auto Corners = StraightenPath(Path, Hallway);
+    TestTrue(TEXT("Actual hallway turns remain when the shortcut is blocked"),
+        Corners == TArray<FVector>{Path[0], Path[3], Path[9], Path.Last()});
     const TArray<FVector> ShortRoute = {{0, 0, 0}, {60, 0, 0}, {60, 60, 0}};
     const auto Blocked = [](const FVector&, const FVector&) { return false; };
-    TestTrue(TEXT("A blocked shortcut keeps the corner"), StraightenPath(ShortRoute, 75.0, Blocked) == ShortRoute);
+    TestTrue(TEXT("A blocked shortcut keeps the corner"), StraightenPath(ShortRoute, Blocked) == ShortRoute);
     TestTrue(TEXT("A short route can still have a turn"), FindRouteTurns(ShortRoute) == TArray<int32>{1});
     TestEqual(TEXT("The final waypoint alone shows the destination"),
         FormatRouteSteps(Path.Last(), Path, Distances, Turns, Path.Num() - 1, Signs).ToString(),
