@@ -1,7 +1,8 @@
 PFT Digital Twin | Windows demo
 
 1. Extract the entire package to a local folder.
-2. Open Play PFT Demo.cmd.
+2. Open Play PFT Demo Offline.cmd for an offline presentation.
+   Open Play PFT Demo.cmd for regular play.
 3. Choose Skip tour to open the Navigator and walk around.
 4. Search for Commons, click the result, then choose Walk there.
    Follow the gold arrows using WASD. Hold the left mouse button in the scene to look around.
@@ -18,10 +19,6 @@ The launcher uses native 720p and a 30 FPS cap. From PowerShell in this folder,
 run the following command to try the 45 FPS preset.
 
 & '.\Play PFT Demo.cmd' smooth
-
-For a presentation without internet access, use the offline preset.
-
-& '.\Play PFT Demo.cmd' offline
 
 The local Navigator supports room and class search and first-floor walking
 directions. Live weather and the legacy server-backed Search are unavailable

@@ -9,6 +9,7 @@
 #include "Blueprint/WidgetTree.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Components/Border.h"
+#include "Components/ButtonSlot.h"
 #include "Components/CheckBox.h"
 #include "Components/EditableTextBox.h"
 #include "Components/HorizontalBox.h"
@@ -18,12 +19,14 @@
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Components/VerticalBoxSlot.h"
+#include "Components/WidgetSwitcher.h"
 #include "InputCoreTypes.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Styling/CoreStyle.h"
+#include "Widgets/Layout/SDPIScaler.h"
 
 namespace
 {
@@ -54,7 +57,12 @@ void UPFTSearchButton::SelectRoom()
 
 TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
 {
-    if (WidgetTree->RootWidget) return Super::RebuildWidget();
+    // Text, buttons, and the map all grow together, so nothing has to be resized one by one
+    const auto ScalePanel = [](TSharedRef<SWidget> Panel) -> TSharedRef<SWidget>
+    {
+        return SNew(SDPIScaler).DPIScale(PanelScale)[Panel];
+    };
+    if (WidgetTree->RootWidget) return ScalePanel(Super::RebuildWidget());
     auto* Border = WidgetTree->ConstructWidget<UBorder>();
     Border->SetPadding(FMargin(14));
     // Light background so the ink text and purple buttons from the LSU palette are easy to read
@@ -81,6 +89,51 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
         Column->AddChild(Label);
         return Label;
     };
+    auto AddRouteViews = [&](UVerticalBox* Parent, float Height, FName StepsName, TObjectPtr<UWidgetSwitcher>& Views,
+        TObjectPtr<UTextBlock>& Steps)
+    {
+        Views = WidgetTree->ConstructWidget<UWidgetSwitcher>();
+        Parent->AddChild(Views);
+        auto* MapBox = WidgetTree->ConstructWidget<UVerticalBox>();
+        Views->AddChild(MapBox);
+        auto* MapArea = WidgetTree->ConstructWidget<USizeBox>();
+        MapArea->SetHeightOverride(Height);
+        auto* Map = WidgetTree->ConstructWidget<UPFTRouteMap>();
+        Map->ForceVolatile(true);
+        Map->SetClipping(EWidgetClipping::ClipToBounds);
+        MapArea->SetContent(Map);
+        MapBox->AddChild(MapArea);
+        // Each legend symbol is the same color as its marker on the map
+        auto* Legend = WidgetTree->ConstructWidget<UHorizontalBox>();
+        const auto AddLegend = [&](const TCHAR* Text, const FColor& Color, float Gap, int32 Size = 14)
+        {
+            auto* Label = MakeText(Text);
+            Label->SetAutoWrapText(false);
+            Label->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Regular"), Size));
+            Label->SetColorAndOpacity(FSlateColor(FLinearColor(Color)));
+            auto* Slot = Legend->AddChildToHorizontalBox(Label);
+            Slot->SetPadding(FMargin(Gap, 0, 0, 0));
+            Slot->SetVerticalAlignment(VAlign_Center);
+        };
+        // The symbols are drawn larger than the words because these glyphs are small in the default font
+        AddLegend(TEXT("Floor 1"), PFTPalette::Ink, 0);
+        AddLegend(TEXT("▲"), PFTPalette::You, 16, 22);
+        AddLegend(TEXT("You"), PFTPalette::Ink, 4);
+        AddLegend(TEXT("◆"), PFTPalette::Purple, 16, 22);
+        AddLegend(TEXT("Destination"), PFTPalette::Ink, 4);
+        MapBox->AddChildToVerticalBox(Legend)->SetHorizontalAlignment(HAlign_Center);
+
+        auto* StepsArea = WidgetTree->ConstructWidget<USizeBox>();
+        StepsArea->SetHeightOverride(Height + 20);
+        auto* Scroll = WidgetTree->ConstructWidget<UScrollBox>();
+        Scroll->SetConsumeMouseWheel(EConsumeMouseWheel::WhenScrollingPossible);
+        Steps = MakeText(FString());
+        Steps->Rename(*StepsName.ToString());
+        Scroll->AddChild(Steps);
+        StepsArea->SetContent(Scroll);
+        Views->AddChild(StepsArea);
+        return Map;
+    };
     // The heading is purple like the rest of the controls in Claire's design
     auto* Title = AddText(TEXT("PFT Navigator"));
     Title->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), 20));
@@ -91,7 +144,7 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     Style.TextStyle.SetColorAndOpacity(FSlateColor(FLinearColor(PFTPalette::Ink)));
     Search->SetWidgetStyle(Style);
     Search->SetForegroundColor(FLinearColor(PFTPalette::Ink));
-    Search->SetHintText(FText::FromString(TEXT("Find a room or class")));
+    Search->SetHintText(FText::FromString(TEXT("Room or course, like CSC 1350")));
     Search->OnTextChanged.AddDynamic(this, &UPFTNavigatorWidget::SearchChanged);
     Column->AddChild(Search);
     SelectedRoomLabel = AddText(FString());
@@ -104,6 +157,18 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     auto* RoomActions = WidgetTree->ConstructWidget<UHorizontalBox>();
     Column->AddChild(RoomActions);
     RoomActions->SetVisibility(ESlateVisibility::Collapsed);
+    auto* RoutePreviewActions = WidgetTree->ConstructWidget<UHorizontalBox>();
+    Column->AddChild(RoutePreviewActions);
+    RoutePreviewActions->SetVisibility(ESlateVisibility::Collapsed);
+    RoutePreview = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("RoutePreview"));
+    RoutePreview->SetVisibility(ESlateVisibility::Collapsed);
+    Column->AddChild(RoutePreview);
+    RoutePreviewMessage = MakeText(FString());
+    RoutePreviewMessage->Rename(TEXT("RoutePreviewMessage"));
+    RoutePreview->AddChildToVerticalBox(RoutePreviewMessage)->SetPadding(FMargin(0, 0, 0, 4));
+    RoutePreviewMapBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("RoutePreviewMap"));
+    RoutePreview->AddChild(RoutePreviewMapBox);
+    PreviewMap = AddRouteViews(RoutePreviewMapBox, 230, TEXT("PreviewRouteSteps"), PreviewRouteViews, PreviewSteps);
     AddText(TEXT("Floor"));
     Floors = WidgetTree->ConstructWidget<UComboBoxString>(UComboBoxString::StaticClass(), TEXT("FloorFilter"));
     Floors->AddOption(TEXT("All floors"));
@@ -179,6 +244,25 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
         Slot->SetPadding(FMargin(0, 0, 4, 0));
         return Button;
     };
+    auto AddRouteViewButtons = [&](UVerticalBox* Parent, const TCHAR* StepsName, const TCHAR* ScaleName,
+        TObjectPtr<UTextBlock>& StepsLabel, TObjectPtr<UTextBlock>& ScaleLabel)
+    {
+        auto* Row = WidgetTree->ConstructWidget<UHorizontalBox>();
+        Parent->AddChildToVerticalBox(Row)->SetPadding(FMargin(0, 4, 0, 0));
+        UTextBlock* Label;
+        auto* Scale = AddButton(Row, TEXT("Full floor"), Label);
+        ScaleLabel = Label;
+        Scale->Rename(ScaleName);
+        CastChecked<UHorizontalBoxSlot>(Scale->Slot)->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
+        Scale->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ToggleRouteMapScale);
+        auto* Steps = AddButton(Row, TEXT("Show steps"), Label);
+        StepsLabel = Label;
+        Steps->Rename(StepsName);
+        CastChecked<UHorizontalBoxSlot>(Steps->Slot)->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
+        Steps->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ToggleRouteSteps);
+    };
+    AddRouteViewButtons(RoutePreviewMapBox, TEXT("PreviewStepsButton"), TEXT("RoutePreviewScaleButton"),
+        PreviewStepsLabel, PreviewMapScaleLabel);
     UTextBlock* Label;
     auto* ResetFiltersRow = WidgetTree->ConstructWidget<UHorizontalBox>();
     ClassFilters->AddChild(ResetFiltersRow);
@@ -201,8 +285,15 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     RouteButton->Rename(TEXT("RouteButton"));
     RouteButton->SetVisibility(ESlateVisibility::Collapsed);
     RouteButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::StartRoute);
+    RoutePreviewButton = AddButton(RoutePreviewActions, TEXT("Preview route"), Label);
+    CastChecked<UHorizontalBoxSlot>(RoutePreviewButton->Slot)->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
+    RoutePreviewLabel = Label;
+    RoutePreviewButton->Rename(TEXT("RoutePreviewButton"));
+    RoutePreviewButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ToggleRoutePreview);
     ViewButton = AddButton(RoomActions, TEXT("Preview room"), Label);
     ViewButton->Rename(TEXT("ViewRoomButton"));
+    // Sized to its label so the text is never cut off; Walk there takes the rest of the row
+    CastChecked<UHorizontalBoxSlot>(ViewButton->Slot)->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
     ViewButton->SetIsEnabled(false);
     ViewButton->SetVisibility(ESlateVisibility::Collapsed);
     ViewButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ToggleRoomPreview);
@@ -278,39 +369,55 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     Directions = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("DirectionsHud"));
     Content->AddChild(Directions);
     Directions->SetVisibility(ESlateVisibility::Collapsed);
+    // The destination is a small purple caption and the time is plain text, so the bold instruction is what you read first
+    RouteDestination = MakeText(FString());
+    RouteDestination->Rename(TEXT("RouteDestination"));
+    RouteDestination->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), 14));
+    RouteDestination->SetColorAndOpacity(FSlateColor(FLinearColor(PFTPalette::Purple)));
+    RouteDestination->SetVisibility(ESlateVisibility::Collapsed);
+    Directions->AddChild(RouteDestination);
     RouteHint = MakeText(FString());
     RouteHint->Rename(TEXT("RouteHint"));
-    Directions->AddChildToVerticalBox(RouteHint)->SetPadding(FMargin(0, 0, 0, 8));
+    Directions->AddChildToVerticalBox(RouteHint)->SetPadding(FMargin(0, 0, 0, 4));
+    RouteTime = MakeText(FString());
+    RouteTime->Rename(TEXT("RouteTime"));
+    RouteTime->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Regular"), 16));
+    RouteTime->SetVisibility(ESlateVisibility::Collapsed);
+    Directions->AddChildToVerticalBox(RouteTime)->SetPadding(FMargin(0, 0, 0, 4));
     auto* GuidanceActions = WidgetTree->ConstructWidget<UHorizontalBox>();
-    Directions->AddChild(GuidanceActions);
+    Directions->AddChildToVerticalBox(GuidanceActions)->SetPadding(FMargin(0, 4, 0, 0));
+    // The walking buttons get extra padding because they're clicked while moving
+    const auto MakeEasyToClick = [](UButton* Button)
+    {
+        CastChecked<UButtonSlot>(Button->GetContent()->Slot)->SetPadding(FMargin(8, 6));
+    };
     StopRouteButton = AddButton(GuidanceActions, TEXT("Stop route"), Label);
     StopRouteButton->Rename(TEXT("StopRouteButton"));
     StopRouteButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::StopRoute);
+    MakeEasyToClick(StopRouteButton);
     RouteOverviewButton = AddButton(GuidanceActions, TEXT("Show map"), Label);
     RouteOverviewLabel = Label;
     RouteOverviewButton->Rename(TEXT("RouteOverviewButton"));
     RouteOverviewButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::ToggleRouteOverview);
+    MakeEasyToClick(RouteOverviewButton);
     RetryRouteButton = AddButton(GuidanceActions, TEXT("Retry route"), Label);
     RetryRouteButton->Rename(TEXT("RetryRouteButton"));
     RetryRouteButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::StartRoute);
+    MakeEasyToClick(RetryRouteButton);
     FindAnotherRoomButton = AddButton(GuidanceActions, TEXT("Find another room"), Label);
     FindAnotherRoomButton->Rename(TEXT("FindAnotherRoomButton"));
     FindAnotherRoomButton->OnClicked.AddDynamic(this, &UPFTNavigatorWidget::FindAnotherRoom);
+    MakeEasyToClick(FindAnotherRoomButton);
     RouteOverview = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("RouteOverview"));
     RouteOverview->SetVisibility(ESlateVisibility::Collapsed);
     Directions->AddChildToVerticalBox(RouteOverview)->SetPadding(FMargin(0, 8, 0, 0));
-    auto* MapArea = WidgetTree->ConstructWidget<USizeBox>();
-    MapArea->SetHeightOverride(184);
-    RouteMap = WidgetTree->ConstructWidget<UPFTRouteMap>();
-    RouteMap->ForceVolatile(true);
-    RouteMap->SetClipping(EWidgetClipping::ClipToBounds);
-    MapArea->SetContent(RouteMap);
-    RouteOverview->AddChild(MapArea);
-    auto* Legend = MakeText(TEXT("Floor 1  ·  ▲ You   ◆ Destination"));
-    Legend->SetJustification(ETextJustify::Center);
-    RouteOverview->AddChild(Legend);
+    // The walking map is the larger one because it's read at a glance while moving
+    RouteMap = AddRouteViews(RouteOverview, 300, TEXT("WalkingRouteSteps"), WalkingRouteViews, WalkingSteps);
+    RouteMap->Rename(TEXT("WalkingRouteMap"));
+    AddRouteViewButtons(RouteOverview, TEXT("WalkingStepsButton"), TEXT("RouteOverviewScaleButton"),
+        WalkingStepsLabel, RouteMapScaleLabel);
     GetWorld()->GetSubsystem<UPFTRoutes>()->SetReducedMotion(Motion->IsChecked());
-    RouteHint->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), LargerText->IsChecked() ? 24 : 18));
+    SetDirectionsTextSize(LargerText->IsChecked());
     if (const auto* ScreenPercentage = IConsoleManager::Get().FindConsoleVariable(TEXT("r.ScreenPercentage")))
     {
         StandardRenderScale = ScreenPercentage->GetFloat();
@@ -319,7 +426,7 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     for (auto* Child : Column->GetAllChildren())
         Cast<UVerticalBoxSlot>(Child->Slot)->SetPadding(FMargin(0, 0, 0, 6));
     RefreshResults();
-    return Super::RebuildWidget();
+    return ScalePanel(Super::RebuildWidget());
 }
 
 void UPFTNavigatorWidget::SearchChanged(const FText& Text)
@@ -340,7 +447,7 @@ void UPFTNavigatorWidget::PreviewFilterChanged(bool bChecked)
 void UPFTNavigatorWidget::ClassFilterChanged(bool bChecked)
 {
     ClassFilters->SetVisibility(bChecked ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-    Search->SetHintText(FText::FromString(bChecked ? TEXT("Optional course code or title") : TEXT("Room, course, or department")));
+    Search->SetHintText(FText::FromString(bChecked ? TEXT("Optional course code or title") : TEXT("Room or course, like CSC 1350")));
     RefreshResults();
 }
 
@@ -508,6 +615,7 @@ void UPFTNavigatorWidget::ClearRoom()
     }
     Destinations->ClearSelection();
     GetWorld()->GetSubsystem<UPFTRoutes>()->Stop();
+    SetRoutePreviewVisible(false);
     SelectedRoomId.Empty();
     SelectedCourseId.Empty();
     SelectedCourseLabel->SetText(FText::GetEmpty());
@@ -610,13 +718,58 @@ void UPFTNavigatorWidget::FindAnotherRoom()
     Search->SetKeyboardFocus();
 }
 
+void UPFTNavigatorWidget::ToggleRoutePreview()
+{
+    if (RoutePreview->IsVisible())
+    {
+        SetRoutePreviewVisible(false);
+        return;
+    }
+    auto* Player = GetOwningPlayer();
+    const auto* Character = Player ? Player->GetCharacter() : nullptr;
+    auto* Routes = GetWorld()->GetSubsystem<UPFTRoutes>();
+    if (!Character || !Routes->HasDestination(SelectedRoomId)) return;
+
+    RoutePreviewOrigin = Character->GetActorLocation();
+    TArray<FVector> Points;
+    FString Estimate;
+    const bool bHasRoute = Routes->Preview(*Character, SelectedRoomId, Points, Estimate);
+    const bool bShowMap = bHasRoute && PreviewMap->Load(*Routes, *Player);
+    if (bShowMap)
+    {
+        PreviewSteps->SetText(Routes->DescribeSteps(RoutePreviewOrigin, Points));
+        PreviewMap->SetPreview(RoutePreviewOrigin, MoveTemp(Points));
+        PreviewMapScaleLabel->SetText(FText::FromString(TEXT("Full floor")));
+    }
+    RoutePreviewMapBox->SetVisibility(bShowMap ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
+    RoutePreviewMessage->SetText(FText::FromString(bHasRoute ? Estimate
+        : FString(TEXT("Walk to a first-floor hallway to preview this route."))));
+    SetRoutePreviewVisible(true);
+}
+
+void UPFTNavigatorWidget::SetRoutePreviewVisible(bool bVisible)
+{
+    if (bVisible == RoutePreview->IsVisible()) return;
+    if (!bVisible) SetRouteStepsVisible(true, false);
+    RoutePreview->SetVisibility(bVisible ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
+    RoutePreviewLabel->SetText(FText::FromString(bVisible ? TEXT("Hide route") : TEXT("Preview route")));
+}
+
 void UPFTNavigatorWidget::SetCompactDirections(bool bCompact)
 {
     if (bCompactDirections == bCompact) return;
     bCompactDirections = bCompact;
     Browser->SetVisibility(bCompact ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
     Directions->SetVisibility(bCompact ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-    SetDesiredSizeInViewport(FVector2D(400, bCompact ? 160 : 575));
+    CompactHeight = 0.0f;
+    CompactLayoutFrame = GFrameCounter;
+    SetDesiredSizeInViewport(FVector2D(GetPanelWidth(), bCompact ? 180 : 575) * PanelScale);
+}
+
+// The walking panel is wider while its map is open so the map is big enough to read
+float UPFTNavigatorWidget::GetPanelWidth() const
+{
+    return bCompactDirections && RouteOverview->IsVisible() ? 520.0f : 400.0f;
 }
 
 void UPFTNavigatorWidget::ToggleRouteOverview()
@@ -625,15 +778,57 @@ void UPFTNavigatorWidget::ToggleRouteOverview()
     auto* Player = GetOwningPlayer();
     if (!Routes->IsGuiding() || !Player) return;
     if (RouteOverview->IsVisible()) SetRouteOverviewVisible(false);
-    else if (RouteMap->Load(*Routes, *Player)) SetRouteOverviewVisible(true);
+    else if (RouteMap->Load(*Routes, *Player))
+    {
+        RouteMapScaleLabel->SetText(FText::FromString(TEXT("Full floor")));
+        SetRouteOverviewVisible(true);
+    }
+}
+
+void UPFTNavigatorWidget::ToggleRouteMapScale()
+{
+    const bool bPreview = RoutePreview->IsVisible();
+    auto* Map = bPreview ? PreviewMap.Get() : RouteMap.Get();
+    auto* Label = bPreview ? PreviewMapScaleLabel.Get() : RouteMapScaleLabel.Get();
+    Label->SetText(FText::FromString(Map->ToggleFullFloor() ? TEXT("Focus route") : TEXT("Full floor")));
+}
+
+void UPFTNavigatorWidget::ToggleRouteSteps()
+{
+    const bool bPreview = RoutePreview->IsVisible();
+    const auto* Views = bPreview ? PreviewRouteViews.Get() : WalkingRouteViews.Get();
+    SetRouteStepsVisible(bPreview, Views->GetActiveWidgetIndex() == 0);
+    UpdateRouteControls();
+}
+
+void UPFTNavigatorWidget::SetRouteStepsVisible(bool bPreview, bool bVisible)
+{
+    auto* Views = bPreview ? PreviewRouteViews.Get() : WalkingRouteViews.Get();
+    auto* Label = bPreview ? PreviewStepsLabel.Get() : WalkingStepsLabel.Get();
+    auto* Scale = bPreview ? PreviewMapScaleLabel.Get() : RouteMapScaleLabel.Get();
+    Views->SetActiveWidgetIndex(bVisible ? 1 : 0);
+    Label->SetText(FText::FromString(bVisible ? TEXT("Show map") : TEXT("Show steps")));
+    Scale->GetParent()->SetVisibility(bVisible ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
+    if (bVisible)
+    {
+        auto* Steps = bPreview ? PreviewSteps.Get() : WalkingSteps.Get();
+        CastChecked<UScrollBox>(Steps->GetParent())->ScrollToStart();
+        if (!bPreview) NextStepsUpdate = 0.0;
+    }
 }
 
 void UPFTNavigatorWidget::SetRouteOverviewVisible(bool bVisible)
 {
     if (bVisible == RouteOverview->IsVisible()) return;
-    RouteOverview->SetVisibility(bVisible ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
-    RouteOverviewLabel->SetText(FText::FromString(bVisible ? TEXT("Hide map") : TEXT("Show map")));
-    if (bCompactDirections) SetDesiredSizeInViewport(FVector2D(400, bVisible ? 370 : 160));
+    if (!bVisible) SetRouteStepsVisible(false, false);
+    RouteOverview->SetVisibility(bVisible ? ESlateVisibility::SelfHitTestInvisible : ESlateVisibility::Collapsed);
+    RouteOverviewLabel->SetText(FText::FromString(bVisible ? TEXT("Hide route") : TEXT("Show map")));
+    if (bCompactDirections)
+    {
+        CompactHeight = 0.0f;
+        CompactLayoutFrame = GFrameCounter;
+        SetDesiredSizeInViewport(FVector2D(GetPanelWidth(), bVisible ? 560 : 180) * PanelScale);
+    }
 }
 
 void UPFTNavigatorWidget::UpdateRouteControls()
@@ -645,6 +840,9 @@ void UPFTNavigatorWidget::UpdateRouteControls()
     SelectedRoomLabel->SetVisibility(bSelected ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
     RouteButton->GetParent()->SetVisibility(bSelected ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
     RouteButton->SetVisibility(bAvailable ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+    const auto* Player = GetOwningPlayer();
+    const auto* Character = Player ? Player->GetCharacter() : nullptr;
+    RoutePreviewButton->GetParent()->SetVisibility(bAvailable && Character ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
     const bool bCanPreview = ViewButton->GetIsEnabled();
     ViewButton->SetVisibility(bCanPreview ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
     RouteUnavailable->SetVisibility(!bAvailable && bSelected ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
@@ -653,14 +851,61 @@ void UPFTNavigatorWidget::UpdateRouteControls()
         RouteUnavailable->SetText(FText::FromString(bCanPreview ? TEXT("Walking directions unavailable. You can preview this room.")
             : TEXT("Walking directions and preview unavailable. Room details are below.")));
     }
-    SetCompactDirections(Routes->IsGuiding() || Routes->CanRetry() || Routes->HasArrived());
+    const bool bShowDirections = Routes->IsGuiding() || Routes->CanRetry() || Routes->HasArrived();
+    if (RoutePreview->IsVisible() && (bShowDirections || !bAvailable || !Character
+        || FVector::DistSquared(RoutePreviewOrigin, Character->GetActorLocation()) > FMath::Square(100.0)))
+    {
+        SetRoutePreviewVisible(false);
+    }
+    SetCompactDirections(bShowDirections);
     StopRouteButton->SetVisibility(Routes->IsGuiding() || Routes->CanRetry() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
     RouteOverviewButton->SetVisibility(Routes->IsGuiding() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
     if (!Routes->IsGuiding()) SetRouteOverviewVisible(false);
     RetryRouteButton->SetVisibility(Routes->CanRetry() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
     FindAnotherRoomButton->SetVisibility(Routes->HasArrived() ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-    const FText& Message = Routes->GetMessage();
-    if (!RouteHint->GetText().EqualTo(Message)) RouteHint->SetText(Message);
+    const FString Message = Routes->GetMessage().ToString();
+    if (Message != ShownRouteMessage)
+    {
+        ShownRouteMessage = Message;
+        // While walking the message is "destination / instruction / time left". Other messages are a single line
+        TArray<FString> Lines;
+        Message.ParseIntoArrayLines(Lines);
+        const int32 HintLine = Lines.Num() > 1 ? 1 : 0;
+        RouteDestination->SetText(FText::FromString(HintLine ? TEXT("To ") + Lines[0] : FString()));
+        RouteDestination->SetVisibility(HintLine ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+        RouteHint->SetText(FText::FromString(Lines.IsValidIndex(HintLine) ? Lines[HintLine] : FString()));
+        RouteTime->SetText(FText::FromString(Lines.IsValidIndex(2) ? Lines[2] : FString()));
+        RouteTime->SetVisibility(Lines.IsValidIndex(2) ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+    }
+    // Wait for a full frame to be drawn after a change, since the size is measured when the panel is drawn
+    if (bCompactDirections && GFrameCounter > CompactLayoutFrame + 1)
+    {
+        // Fit the walking panel to its lines so a wrapped instruction or the map is never cut off
+        const float Height = FMath::Min(WidgetTree->RootWidget->GetDesiredSize().Y, 620.0f);
+        if (Height > 0 && !FMath::IsNearlyEqual(Height, CompactHeight, 0.5f))
+        {
+            CompactHeight = Height;
+            SetDesiredSizeInViewport(FVector2D(GetPanelWidth(), Height) * PanelScale);
+        }
+    }
+    RefreshWalkingSteps(*Routes);
+}
+
+void UPFTNavigatorWidget::RefreshWalkingSteps(const UPFTRoutes& Routes)
+{
+    if (!RouteOverview->IsVisible() || WalkingRouteViews->GetActiveWidgetIndex() != 1) return;
+    const uint32 Revision = Routes.GetPlanRevision();
+    if (StepsPlanRevision != Revision)
+    {
+        CastChecked<UScrollBox>(WalkingSteps->GetParent())->ScrollToStart();
+        StepsPlanRevision = Revision;
+        NextStepsUpdate = 0.0;
+    }
+    const double Now = GetWorld()->GetTimeSeconds();
+    if (Now < NextStepsUpdate) return;
+    const FText Steps = Routes.GetRemainingSteps();
+    if (!WalkingSteps->GetText().EqualTo(Steps)) WalkingSteps->SetText(Steps);
+    NextStepsUpdate = Now + 0.2;
 }
 
 void UPFTNavigatorWidget::ToggleSettings()
@@ -678,8 +923,16 @@ void UPFTNavigatorWidget::MotionChanged(bool bChecked)
 
 void UPFTNavigatorWidget::DirectionsSizeChanged(bool bChecked)
 {
-    RouteHint->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), bChecked ? 24 : 18));
+    SetDirectionsTextSize(bChecked);
     SavePreference(TEXT("LargerDirections"), bChecked);
+}
+
+void UPFTNavigatorWidget::SetDirectionsTextSize(bool bLarge)
+{
+    RouteHint->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), bLarge ? 24 : 18));
+    const auto StepsFont = FCoreStyle::GetDefaultFontStyle(TEXT("Regular"), bLarge ? 18 : 14);
+    PreviewSteps->SetFont(StepsFont);
+    WalkingSteps->SetFont(StepsFont);
 }
 
 void UPFTNavigatorWidget::PerformanceChanged(bool bChecked)

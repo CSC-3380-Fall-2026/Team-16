@@ -1,60 +1,69 @@
-# PFT Navigator : Team 16
-# Members
-Project Manager: Jayden Hong (jaydenhongfails)\
-Communications Lead: Josemaria Ramos (jramo18)\
-Git Master: Malek Badawi (malekbadawi21)\
-Design Lead: Claire Bonius (claire-coded)\
-Quality Assurance Tester: Laila Holland (lailaholland)
+# PFT Navigator · Team 16
 
-# About Our Software
+PFT Navigator helps students find rooms and classes inside Patrick F. Taylor Hall. The Windows MVP runs in the existing Unreal Engine 5.8 digital twin. It includes a local directory, room previews and first-floor walking directions with animated arrows, an overview map, and a list of upcoming turns. Class filters use selected Fall 2026 CSC lecture meetings.
 
-Our idea is to make the PFT Digital Twin more student-facing. We already have permission to use the existing digital twin as our foundation, so instead of rebuilding that, we're adding a layer that helps students actually use it. The Digital Twin will have four main steps. First, Explore, students can look around the PFT in 3D. Second, search-they can search for a specific room, professor, or destination. Third, route, the system gives them directions on where they need to go. Finally, there's walk, they can switch to a first person view and follow the route through the building.
+The GitHub repo contains the Navigator plugin, JSON data, build tools, tests, and docs. LSU Perforce holds the Unreal project, building assets, and shared `DigitalTwinTools` plugin. Building from source requires access to both.
 
-The Digital Twin itself is on LSU's Perforce server. This repo has our data files (rooms, faculty, courses, departments), docs, and a script to check the data. Digital Twin files should not be committed here.
+## Play the packaged Windows demo
 
-## Platforms Tested on
-- Windows (UE 5.8 editor build, see [task progress](docs/task-progress.md))
-- Mac not tested yet
+1. Get the Windows demo ZIP from the team. Allow about 3 GB for the ZIP and extracted demo.
+2. Extract the entire ZIP to a local folder and open **Play PFT Demo Offline.cmd** in the `Windows` folder. If Windows reports a missing Visual C++ runtime, run the included `Engine\Extras\Redist\en-us\vc_redist.x64.exe`, then open the demo again.
+3. Choose **Skip tour**. In PFT Navigator, search **Commons**, select **PFT Commons**, and choose **Preview route** or **Walk there**. Walk with WASD and hold the left mouse button in the scene to look around.
+4. To try class search, enable **Find a class by instructor or time** and enter **Duncan** in the instructor field. Choose **Wednesday** and **10:30 AM** to find **CSC 1350** in **PFT 1200**.
 
-# Important Links
-Kanban Board: [link]\
-Designs: [Figma](https://www.figma.com/design/nF6y5i40ezSFQVI5zOSS9M/PFT-Navigator-UI---Team-16), [Design doc](docs/design.md)\
-Styles Guide(s): [Code Standards](docs/style-guide.md)\
-Git Workflow: [Branches and pull requests](docs/git-workflow.md)
+## Build the Windows demo from source
 
-# How to Run Dev and Test Environment
+Install Unreal Engine **5.8**, Microsoft C++ Build Tools with the Windows SDK and .NET Framework 4.8 SDK, Python **3.10+**, and Perforce P4V with the `p4` CLI. Follow [Windows Unreal setup](docs/unreal-setup.md) and [Perforce setup](docs/perforce-setup.md). Use your own Perforce login and verify your workspace maps both the PFT project and the shared plugin.
 
-## Dependencies
-- Python 3.10+ (for the data check script)
-- Unreal Engine 5.8, matching the Digital Twin project
-- Perforce P4V (to access the Digital Twin)
-### Downloading Dependencies
-- Python: https://www.python.org/downloads/
-- Unreal Engine: through the Epic Games Launcher, https://www.unrealengine.com/download
-- Perforce P4V: https://www.perforce.com/downloads
+Use a clean Perforce workspace and a pending changelist for the build. Sync the project and shared plugin, then apply first-floor shelf **42426** in that workspace. Close Unreal Editor and the demo before packaging. Leave room for compiled code, cooked content, and staging files as well as the final package. Run these commands from the root of this Git checkout.
 
-## Commands
-See [Perforce setup](docs/perforce-setup.md) and [Unreal setup](docs/unreal-setup.md)
-to sync, build, and open the existing digital twin. Run these from this repo's root
-to check the directory data:
+```powershell
+# Use your synced project path and the number of your pending changelist.
+$Project = 'C:\path\to\PFTDigitalTwin.uproject'
+$Change = Read-Host 'Pending Perforce changelist number'
 
-```sh
-python tools/validate_data.py
+Push-Location (Split-Path -Parent $Project)
+p4 login -s
+p4 where PFTDigitalTwin.uproject
+p4 where Plugins/DigitalTwinTools/DigitalTwinTools.uplugin
+p4 unshelve -s 42426 -c $Change
+Pop-Location
+
+python tools/install_navigator.py $Project --changelist $Change
+python tools/install_navigator.py $Project --check
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\package_first_floor_demo.ps1 `
+    -Project $Project -FullCook -VerifyOffline -ArchiveDirectory "$env:USERPROFILE\PFTDemo"
 ```
 
-```sh
+Resolve any Perforce conflicts and fix any setup or installer error before continuing. The first cook can take a while because Unreal prepares the map and its dependencies. A successful run publishes `PFTDemo\Windows` in your user folder. The package's `PFTDemoBuild.json` records the source revision, map, and test results.
+
+Use `-EngineRoot` with the package command if Unreal 5.8 is installed in a custom location. For later C++ changes on the same machine, see the [cook reuse and troubleshooting instructions](docs/first-floor-build.md). Keep the Unreal project, assets, and generated build output in their local or Perforce locations.
+
+## Run checks
+
+From the Git checkout, run the directory validator and Python tests.
+
+```powershell
+python tools/validate_data.py
 python -m unittest discover -s tools
 ```
 
-These also run automatically on every pull request. On Mac you may need to use `python3` instead of `python`.
+From the packaged `Windows` folder, run the offline checks with the game closed.
 
-## Navigator prototype
+```powershell
+& '.\Play PFT Demo.cmd' verifyoffline
+```
 
-Our UE 5.8 plugin adds local room/course search, destination markers, and flying
-exploration controls. See [plugin installation and controls](docs/navigator-plugin.md)
-and [task branches and remaining checks](docs/task-progress.md). The original
-digital twin stays in Perforce; GitHub contains our separate plugin source.
+The offline suite checks startup and onboarding, walking to the Commons, guided arrival, the cross-building route to C1007, and automatic rerouting. See [Navigator controls](docs/navigator-plugin.md) and the [first-floor build guide](docs/first-floor-build.md) for more checks.
 
-For a lighter startup and packaged map, see the [first-floor build instructions](docs/first-floor-build.md).
-The generation and verification tools are in this repository; the Unreal project
-changes and generated map are shelved in Perforce changelist 42426.
+## Team and design
+
+| Role | Member |
+| --- | --- |
+| Project Manager | Jayden Hong (jaydenhongfails) |
+| Communications Lead | Josemaria Ramos (jramo18) |
+| Git Master | Malek Badawi (malekbadawi21) |
+| Design Lead | Claire Bonius (claire-coded) |
+| Quality Assurance | Laila Holland (lailaholland) |
+
+[Design in Figma](https://www.figma.com/design/nF6y5i40ezSFQVI5zOSS9M/PFT-Navigator-UI---Team-16) · [Design notes](docs/design.md) · [Code standards](docs/style-guide.md) · [Git workflow](docs/git-workflow.md)

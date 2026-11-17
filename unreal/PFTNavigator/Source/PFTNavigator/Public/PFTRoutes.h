@@ -21,6 +21,7 @@ public:
     void Deinitialize() override;
 
     bool HasDestination(const FString& RoomId) const { return Destinations.Contains(RoomId); }
+    bool Preview(const ACharacter& Character, const FString& RoomId, TArray<FVector>& Points, FString& Estimate) const;
     bool Start(ACharacter& Character, const FString& RoomId, const FString& RoomName);
     void Stop();
 
@@ -31,7 +32,11 @@ public:
     void SetReducedMotion(bool bEnabled) { bReducedMotion = bEnabled; }
     FVector NextPoint() const { return Path.IsValidIndex(NextIndex) ? Path[NextIndex] : FVector::ZeroVector; }
     const FText& GetMessage() const { return Message; }
+    uint32 GetPlanRevision() const { return PlanRevision; }
     TArrayView<const FVector> GetRemainingPath() const;
+    FText DescribeSteps(const FVector& Position, TArrayView<const FVector> Points) const;
+    FText GetRemainingSteps() const;
+    const TPair<FString, FVector2D>* GetRouteLandmark(TArrayView<const FVector> Points) const;
     int32 CopyWalkableCells(TArray<FIntPoint>& Cells) const;
 
 private:
@@ -39,12 +44,16 @@ private:
     {
         FVector Floor;
         uint8 Links;
+        int32 StepsFromBoundary = 0;
     };
 
     void LoadGraph(const FString& Map);
-    bool Plan(ACharacter& Character, const FIntPoint& Goal);
-    bool CanCross(ACharacter& Character, const FVector& Start, const FVector& End) const;
-    void DrawPath();
+    void MeasureClearance();
+    bool Plan(const ACharacter& Character, const FIntPoint& Target);
+    bool BuildPath(const ACharacter& Character, const FIntPoint& Target, TArray<FVector>& Points, TArray<double>& Turns) const;
+    bool CanCross(const ACharacter& Character, const FVector& Start, const FVector& End) const;
+    void AdvanceWaypoints(const ACharacter& Character, const FVector& Position);
+    void DrawPath(const FVector& Position);
     void ShowArrival(const FVector& Position);
     void UpdateDirections(const FVector& Position, const FRotator& View, double WalkSpeed);
     void EndGuidance(const FText& NewMessage);
@@ -54,14 +63,17 @@ private:
     TMap<FString, FVector2D> Landmarks;
     TArray<FVector> Path;
     TArray<double> TurnSeconds;
+    TArray<int32> TurnPoints;
     UPROPERTY() TObjectPtr<ULineBatchComponent> Trail;
     UPROPERTY() TObjectPtr<UTextRenderComponent> ArrivalLabel;
     TWeakObjectPtr<ACharacter> Walker;
     FString Destination;
+    FVector RouteOrigin = FVector::ZeroVector;
     FIntPoint Goal;
     FText Message;
     int32 Step = 0;
     int32 NextIndex = 0;
+    uint32 PlanRevision = 0;
     float UpdateTime = 0;
     bool bArrived = false;
     bool bCanRetry = false;

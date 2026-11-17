@@ -53,6 +53,7 @@ $candidate = Join-Path $packageParent "$packageName.pending-$buildId"
 $previous = Join-Path $packageParent "$packageName.previous-$buildId"
 $automationTool = Join-Path $EngineRoot 'Engine\Build\BatchFiles\RunUAT.bat'
 $launcher = Join-Path $PSScriptRoot 'Play PFT Demo.cmd'
+$offlineLauncher = Join-Path $PSScriptRoot 'Play PFT Demo Offline.cmd'
 $frameReport = Join-Path $PSScriptRoot 'measure_demo_frames.ps1'
 $assetCheck = Join-Path $PSScriptRoot 'check_demo_assets.ps1'
 $demoGuide = Join-Path $PSScriptRoot 'Read Me - PFT Demo.txt'
@@ -65,6 +66,7 @@ if (!(Test-Path -LiteralPath $automationTool -PathType Leaf)) {
     throw 'Unreal Automation Tool is missing. Set UE_ROOT or pass -EngineRoot.'
 }
 if (!(Test-Path -LiteralPath $launcher -PathType Leaf)) { throw 'Play PFT Demo.cmd must be beside this script.' }
+if (!(Test-Path -LiteralPath $offlineLauncher -PathType Leaf)) { throw 'Play PFT Demo Offline.cmd must be beside this script.' }
 if (!(Test-Path -LiteralPath $frameReport -PathType Leaf)) { throw 'measure_demo_frames.ps1 must be beside this script.' }
 if (!(Test-Path -LiteralPath $assetCheck -PathType Leaf)) { throw 'check_demo_assets.ps1 must be beside this script.' }
 if (!(Test-Path -LiteralPath $demoGuide -PathType Leaf)) { throw 'Read Me - PFT Demo.txt must be beside this script.' }
@@ -207,7 +209,7 @@ function Get-ToolsRevision {
     # Git can report that the tools are outside a checkout on Windows PowerShell.
     $ErrorActionPreference = 'Continue'
     $files = @(
-        'package_first_floor_demo.ps1', 'Play PFT Demo.cmd', 'measure_demo_frames.ps1',
+        'package_first_floor_demo.ps1', 'Play PFT Demo.cmd', 'Play PFT Demo Offline.cmd', 'measure_demo_frames.ps1',
         'check_demo_assets.ps1', 'Read Me - PFT Demo.txt', 'install_navigator.py', 'validate_data.py'
     )
     $tracked = & $git.Source -C $PSScriptRoot ls-files -- @files 2>$null
@@ -300,7 +302,8 @@ $cookDirectory = Join-Path $projectRoot 'Saved\Cooked\Windows'
 $arguments = @(
     'BuildCookRun', "-project=$($projectFile.FullName)", '-platform=Win64', '-clientconfig=Development',
     '-build', '-stage', '-pak', '-iostore', '-archive', '-prereqs', "-archivedirectory=$candidate",
-    "-map=$map", '-unattended', '-nop4', '-utf8output', '-ubtargs=-NoHotReloadFromIDE'
+    "-map=$map", '-unattended', '-nop4', '-utf8output',
+    '-ubtargs=-NoHotReloadFromIDE -ForceUnity -DisableAdaptiveUnity'
 )
 if ($map -ne $defaultMap) {
     # Keep the candidate's cooked packages and metadata separate from the standard demo.
@@ -368,6 +371,14 @@ try {
         if (!$FullCook) { $arguments += '-AdditionalCookerOptions=-CookIncremental' }
     }
 
+    # Refresh both source lists so Unreal detects added and removed files.
+    $buildCache = Join-Path $projectRoot 'Intermediate/Build/Win64/x64'
+    foreach ($target in @($projectFile.BaseName, "$($projectFile.BaseName)Editor")) {
+        $makefile = Join-Path $buildCache "$target/Development/Makefile.bin"
+        if (Test-Path -LiteralPath $makefile -PathType Leaf) {
+            Remove-Item -LiteralPath $makefile -Force
+        }
+    }
     & $automationTool @arguments
     if ($LASTEXITCODE -ne 0) { throw "Unreal packaging failed with exit code $LASTEXITCODE." }
 
@@ -401,6 +412,7 @@ try {
 
     $packageLauncher = Join-Path $candidate 'Play PFT Demo.cmd'
     [IO.File]::WriteAllText($packageLauncher, $launcherText.Replace($defaultMap, $map))
+    Copy-Item -LiteralPath $offlineLauncher -Destination $candidate
     Copy-Item -LiteralPath $frameReport -Destination $candidate
     Copy-Item -LiteralPath $assetCheck -Destination $candidate
     Copy-Item -LiteralPath $demoGuide -Destination $candidate
@@ -416,7 +428,10 @@ try {
             Navigator = 'PFTNavigator.Panel.AfterOnboarding'
             GuidedWalk = 'PFTFirstFloor.GuidedWalk'
         }
-        if ($verifyMode -ne 'verify') { $suites['C1007Walk'] = 'PFTFirstFloor.WalkToC1007' }
+        if ($verifyMode -ne 'verify') {
+            $suites['C1007Walk'] = 'PFTFirstFloor.WalkToC1007'
+            $suites['Reroute'] = 'PFTFirstFloor.RefocusAfterReroute'
+        }
         foreach ($suite in $suites.Keys) {
             $report = "PFTDigitalTwin/Saved/Automation/$suite/index.json"
             Confirm-WalkthroughReport (Join-Path $candidate $report) $suites[$suite]

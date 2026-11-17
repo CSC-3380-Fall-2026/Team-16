@@ -29,6 +29,9 @@ $Project = 'C:\path\to\PFTDigitalTwin.uproject'
 & .\tools\package_first_floor_demo.ps1 -Project $Project -ReuseCook -Verify
 ```
 
+For the first build on a new Windows machine, use `-FullCook -VerifyOffline`
+in place of `-ReuseCook -Verify`. See the [Windows MVP setup](../README.md).
+
 Packaging from the Git checkout uses Python to check that the installed
 Navigator source and directory data match that checkout. If the check reports
 differences, run the installer with your pending changelist as described in
@@ -209,16 +212,18 @@ checkout also record its commit and whether the packaging tools, Navigator
 source, or directory data had local changes. The test report paths are relative
 to the package folder.
 The archive includes Unreal's bundled Microsoft Visual C++ x64 installer and
-first-run instructions in `Read Me - PFT Demo.txt`. Extract the entire package
-before running the launcher.
+first-run instructions in `Read Me - PFT Demo.txt`. Extract the entire package,
+then double-click `Play PFT Demo Offline.cmd` to present without Unreal HTTP
+requests. `Play PFT Demo.cmd` opens the regular demo.
 The project settings on Perforce shelf `42426` use the Unreal 5.8 include order
 and keep local `UserEngine.ini` overrides out of the Windows package.
 
 Pass `-Verify` to run the Commons walkthrough, Navigator click test, and guided
 walk before replacing the playable archive. Verification also checks runtime
 logs for missing packages, missing imports, and default-material fallbacks.
-Use `-VerifyExtended` to also walk through the Commons to C1007 before
-publishing a review build. Use `-VerifyOffline` to run the extended checks
+Use `-VerifyExtended` to also walk through the Commons to C1007 and check that
+the walking map refocuses after an automatic reroute before publishing a review
+build. Use `-VerifyOffline` to run the extended checks
 with Unreal HTTP requests disabled. `PFTDemoBuild.json` records the mode and
 result.
 Before publishing, packaging confirms that each report names the expected test
@@ -228,12 +233,13 @@ reports in the printed `failed` folder. Successful builds move into the launcher
 location. The previous archive is kept in a `previous` folder beside it.
 
 For C++ implementation edits, pass `-ReuseCook` to rebuild the executable and
-package the saved Windows cook. The script checks the selected map, project and
-plugin files, headers, and cook metadata. Rewriting an identical header or
-settings file keeps the cook reusable. If the script needs to cook, it reports
-which inputs changed or whether the cook receipt or metadata is missing. Older
-receipts are refreshed on the next cook. Use a regular cook after changing
-asset defaults or serialization in C++.
+package the saved Windows cook. Packaging refreshes Unreal's source file list
+before compiling to pick up added and removed C++ files. The script checks the
+selected map, project and plugin files, headers, and cook metadata. Rewriting an
+identical header or settings file keeps the cook reusable. If the script needs
+to cook, it reports which inputs changed or whether the cook receipt or metadata
+is missing. Older receipts are refreshed on the next cook. Use a regular cook
+after changing asset defaults or serialization in C++.
 
 ```powershell
 & .\Tools\package_first_floor_demo.ps1 -Project .\PFTDigitalTwin.uproject `
@@ -332,8 +338,9 @@ run the shorter Zone 1200 route on its own. The game exits after each test.
 Use `& '.\Play PFT Demo.cmd' crossbuilding` to continue beyond the Commons to
 hallway C1007. This extended walk checks floor collision, the destination HUD
 label on maps with local room data, and the runtime log for asset failures.
-Use `& '.\Play PFT Demo.cmd' verifyextended` to run all four checks on an
-existing package.
+Use `& '.\Play PFT Demo.cmd' reroute` to verify that guidance and the map
+update from C1007. Use `& '.\Play PFT Demo.cmd' verifyextended` to run all
+five checks on an existing package.
 
 Logs are in `PFTDigitalTwin\Saved\Logs`. The `CommonsWalk` and `Navigator`
 folders under `PFTDigitalTwin\Saved\Automation` each contain an `index.json`
@@ -341,7 +348,14 @@ with the test result. The shorter walkthrough writes to `FirstFloorWalk`.
 Run `& '.\Play PFT Demo.cmd' profile` from the Windows package to measure frame
 pacing on the Commons route at 30 FPS, or `& '.\Play PFT Demo.cmd' profile smooth`
 to measure the 45 FPS preset. It prints frame-time percentiles, the slowest frame,
-and counts above 50 ms and 100 ms. The text report sits beside the test log and
+and counts above 50 ms and 100 ms. When available, the report also shows the
+95th percentile and maximum timings for the game thread, render thread, RHI
+thread, and GPU. The text report sits beside the test log and
 links to the exact CSV under `PFTDigitalTwin\Saved\Profiling\CSV`. Close other
 copies of the demo when comparing runs. The report measures the walk after
 onboarding, and its timing does not affect the pass or fail result of `verify`.
+
+Run `& '.\Play PFT Demo.cmd' profileguided` to measure the Commons walk
+with animated arrows and the route map open. Add `smooth` for the 45 FPS
+preset. The guided capture renders offscreen with HTTP disabled, starts after
+the map opens, and stops at the Commons.

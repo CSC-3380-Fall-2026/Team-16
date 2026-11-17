@@ -17,11 +17,23 @@ REPORTS = {
     "Navigator": "PFTNavigator.Panel.AfterOnboarding",
     "GuidedWalk": "PFTFirstFloor.GuidedWalk",
     "C1007Walk": "PFTFirstFloor.WalkToC1007",
+    "Reroute": "PFTFirstFloor.RefocusAfterReroute",
 }
 
 
-def stage_fixture(archive, case):
+def build_makefiles(project):
+    targets = project.parent / "Intermediate" / "Build" / "Win64" / "x64"
+    return [targets / target / "Development" / "Makefile.bin"
+            for target in (project.stem, f"{project.stem}Editor")]
+
+
+def stage_fixture(archive, case, *arguments):
     """Stand in for UAT staging and the game's automation report export."""
+    project, = (Path(arg.split("=", 1)[1]) for arg in arguments if arg.startswith("-project="))
+    if any(path.exists() for path in build_makefiles(project)):
+        sys.exit("Both Unreal source lists must be cleared before building.")
+    if "-ubtargs=-NoHotReloadFromIDE -ForceUnity -DisableAdaptiveUnity" not in arguments:
+        sys.exit("Windows packaging must pass the unity options together to Unreal Build Tool.")
     package, = Path(archive).glob("Windows.pending-*")
     (package / "PFTDigitalTwin.exe").write_text(case)
     if case == "cook failure":
@@ -35,9 +47,11 @@ def stage_fixture(archive, case):
     logs.mkdir(parents=True)
     (logs / "Navigator.log").write_text(case)
     for suite, test_path in REPORTS.items():
+        if case == "basic" and suite in {"C1007Walk", "Reroute"}:
+            continue
         report = saved / "Automation" / suite / "index.json"
         report.parent.mkdir(parents=True)
-        failed = case == "bad report" and suite == "Navigator"
+        failed = (case, suite) in {("bad report", "Navigator"), ("bad reroute", "Reroute")}
         report.write_text(json.dumps({
             "succeeded": int(not failed),
             "succeededWithWarnings": 0,
@@ -58,17 +72,25 @@ class TestWindowsDemoPackage(unittest.TestCase):
         self.archive = self.root / "Review Builds"
         self.project = self.root / "PFTDigitalTwin.uproject"
         self.project.write_text('{"EngineAssociation":"5.8"}')
+        for path in build_makefiles(self.project):
+            path.parent.mkdir(parents=True)
+            path.touch()
+        self.compiled_object = build_makefiles(self.project)[0].with_name("PFTDigitalTwin.obj")
+        self.compiled_object.touch()
         self.engine = self.root / "Unreal Engine"
         batch = self.engine / "Engine" / "Build" / "BatchFiles"
         batch.mkdir(parents=True)
         (batch / "RunUAT.bat").write_text(
-            '@echo off\n"%PFT_TEST_PYTHON%" "%PFT_TEST_SCRIPT%" "%PFT_TEST_ARCHIVE%" "%PFT_TEST_CASE%"\nexit /b %errorlevel%\n'
+            '@echo off\n'
+            '"%PFT_TEST_PYTHON%" "%PFT_TEST_SCRIPT%" "%PFT_TEST_ARCHIVE%" "%PFT_TEST_CASE%" %*\n'
+            'exit /b %errorlevel%\n'
         )
         (self.tools / "Play PFT Demo.cmd").write_text(
             '@echo off\nrem /Game/Level/PFTFirstFloorComplete\nif not "%~1"=="%PFT_TEST_MODE%" exit /b 1\nexit /b 0\n'
         )
         for name in ("package_first_floor_demo.ps1", "install_navigator.py", "validate_data.py",
-                     "measure_demo_frames.ps1", "check_demo_assets.ps1", "Read Me - PFT Demo.txt"):
+                     "measure_demo_frames.ps1", "check_demo_assets.ps1", "Read Me - PFT Demo.txt",
+                     "Play PFT Demo Offline.cmd"):
             shutil.copyfile(ROOT / "tools" / name, self.tools / name)
         for directory in ("unreal", "data"):
             shutil.copytree(ROOT / directory, self.root / directory)
@@ -85,7 +107,7 @@ class TestWindowsDemoPackage(unittest.TestCase):
         }))
 
     def run_package(self, case, *options, mode="verifyextended"):
-        verify_flag = "-VerifyOffline" if mode == "verifyoffline" else "-VerifyExtended"
+        verify_flag = {"verify": "-Verify", "verifyextended": "-VerifyExtended", "verifyoffline": "-VerifyOffline"}[mode]
         return subprocess.run(
             [shutil.which("pwsh") or "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
              "-File", str(self.tools / "package_first_floor_demo.ps1"), "-Project", str(self.project),
@@ -111,6 +133,7 @@ class TestWindowsDemoPackage(unittest.TestCase):
         self.install("--walking-graph", str(self.graph))
         good = self.run_package("passed", *graph_options)
         self.assertEqual(good.returncode, 0, good.stdout + good.stderr)
+        self.assertTrue(self.compiled_object.is_file())
         package = self.archive / "Windows"
         manifest = package / "PFTDemoBuild.json"
         original = manifest.read_bytes()
@@ -159,10 +182,30 @@ class TestWindowsDemoPackage(unittest.TestCase):
         result = self.run_package("offline", "-WalkingGraph", str(self.graph), mode="verifyoffline")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         manifest = self.archive / "Windows" / "PFTDemoBuild.json"
-        record = json.loads(manifest.read_text(encoding="utf-8-sig"))
+        original = manifest.read_bytes()
+        record = json.loads(original.decode("utf-8-sig"))
         self.assertEqual(record["Verification"], "Passed")
         self.assertEqual(record["VerificationMode"], "verifyoffline")
         self.assertEqual(set(record["TestReports"]), set(REPORTS))
+        failed = self.run_package("bad reroute", "-WalkingGraph", str(self.graph), mode="verifyoffline")
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertIn("did not confirm a successful PFTFirstFloor.RefocusAfterReroute", failed.stderr)
+        self.assertEqual(manifest.read_bytes(), original)
+
+    def test_basic_verification_records_three_checks(self):
+        self.install("--walking-graph", str(self.graph))
+        result = self.run_package("basic", "-WalkingGraph", str(self.graph), mode="verify")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        manifest = self.archive / "Windows" / "PFTDemoBuild.json"
+        record = json.loads(manifest.read_text(encoding="utf-8-sig"))
+        self.assertEqual(set(record["TestReports"]), {"CommonsWalk", "Navigator", "GuidedWalk"})
+
+        offline_launcher = self.archive / "Windows" / "Play PFT Demo Offline.cmd"
+        self.assertTrue(offline_launcher.is_file())
+        command = [os.environ.get("ComSpec", "cmd.exe"), "/d", "/c", "call", str(offline_launcher)]
+        launch = subprocess.run(command, cwd=self.root, env={**os.environ, "PFT_TEST_MODE": "offline"},
+                                capture_output=True, text=True, timeout=10, check=False)
+        self.assertEqual(launch.returncode, 0, launch.stdout + launch.stderr)
 
 
 if __name__ == "__main__":

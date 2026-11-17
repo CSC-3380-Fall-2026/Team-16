@@ -30,10 +30,20 @@ Room, faculty, and department records include sourced directory entries; see
 [data sources](data-schema.md). Course results show selected Fall 2026 CSC
 lectures in PFT. Students can confirm their own section in LSU Course Offerings.
 
-On the first-floor demo map, select a room with a walking route and choose
-**Walk there**. Follow the gold arrows with WASD. The Navigator shows
-which way to turn and confirms arrival. Choose **Stop route** or **Clear** to end
-guidance. Room previews and free camera are available from the same panel.
+In Walk mode on the first-floor demo map, select a room with a walking route. Choose
+**Preview route** to see the path from your position, estimated walking time,
+and distance. The map fits the route on screen. Choose **Full floor** to see
+the entire floor or **Focus route** to return to the closer view. These controls
+are also available under **Show map** during guidance. The map marks the first
+landmark along the route when the floor data includes one.
+The closer view fits the updated route when guidance reroutes from a new hallway.
+Choose **Show steps** in either map view to read upcoming turns, nearby landmarks,
+and the distance for each leg. During guidance, the list updates as you walk or reroute.
+Choose **Walk there** and follow the gold arrows with WASD.
+Routes favor open space in the walkway. At a corner, the arrows point toward the
+turn until you reach it. The Navigator confirms arrival at the destination. Choose **Stop route**
+or **Clear** to end guidance. Room previews and free camera are available from
+the same panel.
 No original twin source or building assets are included in the GitHub plugin.
 
 ## Task 5 destinations

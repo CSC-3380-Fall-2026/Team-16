@@ -15,4 +15,7 @@ namespace PFTPalette
 
     // Ink #1C1526: text
     inline const FColor Ink(28, 21, 38);
+
+    // Marker blue #1E4D8E: the You arrow on the route map and its legend, so it never reads as part of the purple route
+    inline const FColor You(30, 77, 142);
 }
