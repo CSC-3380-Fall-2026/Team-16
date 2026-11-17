@@ -302,7 +302,8 @@ $cookDirectory = Join-Path $projectRoot 'Saved\Cooked\Windows'
 $arguments = @(
     'BuildCookRun', "-project=$($projectFile.FullName)", '-platform=Win64', '-clientconfig=Development',
     '-build', '-stage', '-pak', '-iostore', '-archive', '-prereqs', "-archivedirectory=$candidate",
-    "-map=$map", '-unattended', '-nop4', '-utf8output', '-ubtargs=-NoHotReloadFromIDE'
+    "-map=$map", '-unattended', '-nop4', '-utf8output',
+    '-ubtargs=-NoHotReloadFromIDE -ForceUnity -DisableAdaptiveUnity'
 )
 if ($map -ne $defaultMap) {
     # Keep the candidate's cooked packages and metadata separate from the standard demo.

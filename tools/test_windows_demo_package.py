@@ -32,6 +32,8 @@ def stage_fixture(archive, case, *arguments):
     project, = (Path(arg.split("=", 1)[1]) for arg in arguments if arg.startswith("-project="))
     if any(path.exists() for path in build_makefiles(project)):
         sys.exit("Both Unreal source lists must be cleared before building.")
+    if "-ubtargs=-NoHotReloadFromIDE -ForceUnity -DisableAdaptiveUnity" not in arguments:
+        sys.exit("Windows packaging must pass the unity options together to Unreal Build Tool.")
     package, = Path(archive).glob("Windows.pending-*")
     (package / "PFTDigitalTwin.exe").write_text(case)
     if case == "cook failure":

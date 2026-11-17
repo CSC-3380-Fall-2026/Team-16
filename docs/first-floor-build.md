@@ -29,6 +29,9 @@ $Project = 'C:\path\to\PFTDigitalTwin.uproject'
 & .\tools\package_first_floor_demo.ps1 -Project $Project -ReuseCook -Verify
 ```
 
+For the first build on a new Windows machine, use `-FullCook -VerifyOffline`
+in place of `-ReuseCook -Verify`. See the [Windows MVP setup](../README.md).
+
 Packaging from the Git checkout uses Python to check that the installed
 Navigator source and directory data match that checkout. If the check reports
 differences, run the installer with your pending changelist as described in
