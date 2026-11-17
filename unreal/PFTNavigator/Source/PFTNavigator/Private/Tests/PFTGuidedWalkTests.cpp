@@ -6,6 +6,7 @@
 #include "PFTRoutes.h"
 #include "PFTViewportTest.h"
 #include "Components/CheckBox.h"
+#include "Components/ComboBoxString.h"
 #include "Components/EditableTextBox.h"
 #include "Components/LineBatchComponent.h"
 #include "Components/TextBlock.h"
@@ -24,6 +25,19 @@
 
 namespace
 {
+    UPFTSearchButton* FindDuncanClass(FAutomationTestBase& Test, UWidgetTree* Tree)
+    {
+        TArray<UPFTSearchButton*> Results;
+        Tree->ForEachWidget([&Results](UWidget* Widget)
+        {
+            if (auto* Button = Cast<UPFTSearchButton>(Widget)) Results.Add(Button);
+        });
+        if (!Test.TestEqual(TEXT("The instructor, day, and start time identify one class"), Results.Num(), 1)) return nullptr;
+        Test.TestEqual(TEXT("The result is CSC 1350"), Results[0]->CourseId, FString(TEXT("CSC_1350")));
+        Test.TestEqual(TEXT("The class meets in PFT 1200"), Results[0]->RoomId, FString(TEXT("PFT_1200")));
+        return Results[0];
+    }
+
     void CheckSettings(FAutomationTestBase& Test, UWidgetTree* Tree)
     {
         auto* SettingsButton = Cast<UButton>(Tree->FindWidget(TEXT("RouteSettingsButton")));
@@ -352,7 +366,7 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
                     }
                     TestTrue(TEXT("Passed turns drop out of the walking steps"), StepCounts->Y > 0 && StepCounts->Y < StepCounts->X);
                     ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
-                    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Navigator, Tree, Character, Routes, ArrivalLabel]()
+                    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Navigator, Tree, Routes, ArrivalLabel]()
                     {
                         TestFalse(TEXT("Arrival closes the walking steps"), Tree->FindWidget(TEXT("RouteOverview"))->IsVisible());
                         TestTrue(TEXT("Arrival clears the overview path"), Routes->GetRemainingPath().IsEmpty());
@@ -366,9 +380,40 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
                         TestTrue(TEXT("An unsupported room explains walking directions are unavailable"),
                             Tree->FindWidget(TEXT("RouteUnavailable"))->IsVisible());
                         TestFalse(TEXT("An unsupported room cannot start a route"), Tree->FindWidget(TEXT("RouteButton"))->IsVisible());
-                        Navigator->ChooseRoom(TEXT("PFT_1200"));
-                        CastChecked<UButton>(Tree->FindWidget(TEXT("RouteButton")))->OnClicked.Broadcast();
-                        if (!TestTrue(TEXT("A second route starts at the Commons"), Routes->IsGuiding())) return true;
+                        return true;
+                    }));
+                    ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
+                    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Tree]()
+                    {
+                        auto* ClassFilter = CastChecked<UCheckBox>(Tree->FindWidget(TEXT("ClassSearchFilter")));
+                        if (!TestTrue(TEXT("Class search opens after arrival"),
+                            PFTViewportTest::ClickVisibleWidget(ClassFilter))) return true;
+                        auto* Instructor = CastChecked<UEditableTextBox>(Tree->FindWidget(TEXT("InstructorSearch")));
+                        Instructor->SetText(FText::FromString(TEXT("Duncan")));
+                        Instructor->OnTextChanged.Broadcast(Instructor->GetText());
+                        CastChecked<UComboBoxString>(Tree->FindWidget(TEXT("ClassDay")))->SetSelectedOption(TEXT("Wednesday"));
+                        CastChecked<UComboBoxString>(Tree->FindWidget(TEXT("ClassStart")))->SetSelectedOption(TEXT("10:30 AM"));
+                        return true;
+                    }));
+                    ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
+                    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Tree]()
+                    {
+                        auto* ClassResult = FindDuncanClass(*this, Tree);
+                        if (!ClassResult || !TestTrue(TEXT("The class result is clickable"),
+                            PFTViewportTest::ClickVisibleWidget(ClassResult))) return true;
+                        const auto* ClassLabel = CastChecked<UTextBlock>(Tree->FindWidget(TEXT("SelectedCourseLabel")));
+                        TestTrue(TEXT("The selected class is shown before starting the walk"),
+                            ClassLabel->IsVisible() && ClassLabel->GetText().ToString().Contains(TEXT("CSC 1350")));
+                        if (FParse::Param(FCommandLine::Get(), TEXT("PFTQAScreenshots")))
+                            FScreenshotRequest::RequestScreenshot(TEXT("PFTQA-ClassToWalk"), true, true, false);
+                        return true;
+                    }));
+                    ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
+                    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Tree, Character, Routes]()
+                    {
+                        if (!TestTrue(TEXT("Walk there is clickable after class search"),
+                            PFTViewportTest::ClickVisibleWidget(Tree->FindWidget(TEXT("RouteButton"))))) return true;
+                        if (!TestTrue(TEXT("The route to class starts at the Commons"), Routes->IsGuiding())) return true;
                         const FVector ReturnPosition = Character->GetActorLocation();
                         // Leave the route entirely to exercise recovery without depending on manual input.
                         Character->SetActorLocation(ReturnPosition + FVector(0, 0, 5000), false, nullptr, ETeleportType::TeleportPhysics);
@@ -396,7 +441,7 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
                             if (Routes->HasArrived())
                             {
                                 const auto* Hint = CastChecked<UTextBlock>(Tree->FindWidget(TEXT("RouteHint")));
-                                TestTrue(TEXT("The second leg arrives at room 1200"), Hint->GetText().ToString().Contains(TEXT("Arrived at PFT 1200")));
+                                TestTrue(TEXT("The classroom route arrives at PFT 1200"), Hint->GetText().ToString().Contains(TEXT("Arrived at PFT 1200")));
                                 return true;
                             }
                             if (!Routes->IsGuiding() || FPlatformTime::Seconds() > Deadline)
