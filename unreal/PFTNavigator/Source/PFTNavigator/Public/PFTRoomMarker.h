@@ -20,4 +20,7 @@ public:
     UPROPERTY(EditAnywhere, Category = "Room") FVector ViewOffset = FVector(-500, -500, 250);
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly) TObjectPtr<UTextRenderComponent> Label;
+
+protected:
+    virtual void BeginPlay() override;
 };
