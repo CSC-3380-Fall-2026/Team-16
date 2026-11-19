@@ -9,6 +9,7 @@
 #include "PFTViewportTest.h"
 #include "Components/CheckBox.h"
 #include "Components/ComboBoxString.h"
+#include "Components/CapsuleComponent.h"
 #include "Components/EditableTextBox.h"
 #include "Components/LineBatchComponent.h"
 #include "Components/TextBlock.h"
@@ -18,10 +19,13 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
+#include "Interfaces/IPluginManager.h"
 #include "Misc/CommandLine.h"
 #include "Misc/ConfigCacheIni.h"
+#include "Misc/FileHelper.h"
 #include "Misc/Parse.h"
 #include "ProfilingDebugging/CsvProfiler.h"
+#include "Serialization/JsonSerializer.h"
 #include "Tests/AutomationCommon.h"
 #include "UnrealClient.h"
 
@@ -520,13 +524,14 @@ bool FPFTWalkToRoom1218Test::RunTest(const FString& Parameters)
                 const FVector Position = Character->GetActorLocation();
                 if (Routes->HasArrived())
                 {
-                    const FVector HallwayStop(10440, -5700, 0);
-                    TestTrue(TEXT("The player stops in the hallway by the signed door"),
-                        FVector::Dist2D(Position, HallwayStop) <= 65.0 && Position.X < 10500
+                    const FVector Doorway(10522.7, -5710.9, 0);
+                    const double Inside = FVector::DotProduct(Position - Doorway, FVector(0.96, 0.27, 0));
+                    TestTrue(TEXT("The player stops just inside the signed door"),
+                        Inside > 0 && FVector::Dist2D(Position, Doorway) < 200
                         && Character->GetCharacterMovement()->IsMovingOnGround());
                     const auto* Hint = CastChecked<UTextBlock>(Tree->FindWidget(TEXT("RouteHint")));
                     TestTrue(TEXT("The arrival message names PFT 1218"), Hint->GetText().ToString().Contains(TEXT("Arrived at PFT 1218")));
-                    AddInfo(FString::Printf(TEXT("Reached the Room 1218 hallway stop at %s"), *Position.ToCompactString()));
+                    AddInfo(FString::Printf(TEXT("Reached the Room 1218 entrance at %s"), *Position.ToCompactString()));
                     return true;
                 }
                 if (!Routes->IsGuiding() || Position.Z < 65 || FPlatformTime::Seconds() > Deadline)
@@ -594,6 +599,77 @@ bool FPFTWalkToRoom1100Test::RunTest(const FString& Parameters)
         Character->AddMovementInput(Direction, FMath::Clamp(Delta.Size2D() / 95.0, 0.16, 0.8));
         return false;
     }));
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPFTWalkRoomEntrancesTest, "PFTFirstFloor.WalkRoomEntrances",
+    EAutomationTestFlags::ClientContext | EAutomationTestFlags::EngineFilter)
+
+bool FPFTWalkRoomEntrancesTest::RunTest(const FString& Parameters)
+{
+    UWorld* World = GEngine && GEngine->GameViewport ? GEngine->GameViewport->GetWorld() : nullptr;
+    auto* Player = World ? World->GetFirstPlayerController() : nullptr;
+    auto* Character = Player ? Player->GetCharacter() : nullptr;
+    if (!TestNotNull(TEXT("First-person walking pawn"), Character)) return false;
+    if (!TestTrue(TEXT("Skip tour is clickable"), PFTViewportTest::SkipWelcome(World))) return false;
+
+    const auto Plugin = IPluginManager::Get().FindPlugin(TEXT("PFTNavigator"));
+    TSharedPtr<FJsonObject> Graph;
+    FString Text;
+    if (!TestTrue(TEXT("Load the walking graph"),
+        Plugin && FFileHelper::LoadFileToString(Text, *(Plugin->GetContentDir() / TEXT("Data/first_floor_routes.json")))
+        && FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Graph))) return false;
+    const auto Stops = Graph->GetObjectField(TEXT("RoomStops"));
+    if (!TestTrue(TEXT("Rooms have doorway stops"), Stops && Stops->Values.Num() >= 2)) return false;
+    const auto Destinations = Graph->GetObjectField(TEXT("Destinations"));
+    const double Step = Graph->GetNumberField(TEXT("Step"));
+    auto* Routes = World->GetSubsystem<UPFTRoutes>();
+    auto* Movement = Character->GetCharacterMovement();
+    const double HalfHeight = Character->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+    for (const auto& Pair : Stops->Values)
+    {
+        const FString Room(Pair.Key);
+        const auto Point = Pair.Value->AsArray();
+        const FVector Stop(Point[0]->AsNumber(), Point[1]->AsNumber(), Point[2]->AsNumber());
+        const auto& Cell = Destinations->GetArrayField(Room);
+        const FVector Approach(Cell[0]->AsNumber() * Step, Cell[1]->AsNumber() * Step, Stop.Z + HalfHeight + 4);
+        ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([Character, Movement, Routes, Approach]()
+        {
+            Routes->Stop();
+            Character->SetActorLocation(Approach, false, nullptr, ETeleportType::TeleportPhysics);
+            Movement->StopMovementImmediately();
+            Movement->SetMovementMode(MOVE_Walking);
+            return true;
+        }));
+        ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.2f));
+        ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Character, Routes, Room, Stop, Started = 0.0]() mutable
+        {
+            if (Started == 0.0)
+            {
+                Started = FPlatformTime::Seconds();
+                if (!TestTrue(*FString::Printf(TEXT("%s starts guidance outside the doorway"), *Room),
+                    Routes->Start(*Character, Room, Room) && Routes->IsGuiding())) return true;
+            }
+            const FVector Position = Character->GetActorLocation();
+            if (Routes->HasArrived())
+            {
+                TestTrue(*FString::Printf(TEXT("%s arrives within the inside stop's radius"), *Room),
+                    FVector::Dist2D(Position, Stop) <= 66.0);
+                return true;
+            }
+            if (!Routes->IsGuiding() || FPlatformTime::Seconds() - Started > 6.0)
+            {
+                AddError(FString::Printf(TEXT("%s did not arrive at its doorway from %s. %s"),
+                    *Room, *Position.ToCompactString(), *Routes->GetMessage().ToString()));
+                return true;
+            }
+            const FVector Delta = Routes->NextPoint() - Position;
+            const FVector Direction = Delta.GetSafeNormal2D();
+            Character->GetController()->SetControlRotation(Direction.Rotation());
+            Character->AddMovementInput(Direction, FMath::Clamp(Delta.Size2D() / 95.0, 0.16, 0.8));
+            return false;
+        }));
+    }
     return true;
 }
 
