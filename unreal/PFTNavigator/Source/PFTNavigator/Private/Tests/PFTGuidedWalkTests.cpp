@@ -2,7 +2,9 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "PFTDestinations.h"
 #include "PFTNavigatorWidget.h"
+#include "PFTRoomMarker.h"
 #include "PFTRoutes.h"
 #include "PFTViewportTest.h"
 #include "Components/CheckBox.h"
@@ -542,6 +544,55 @@ bool FPFTWalkToRoom1218Test::RunTest(const FString& Parameters)
             return true;
         }));
         return true;
+    }));
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPFTWalkToRoom1100Test, "PFTFirstFloor.WalkToRoom1100",
+    EAutomationTestFlags::ClientContext | EAutomationTestFlags::EngineFilter)
+
+bool FPFTWalkToRoom1100Test::RunTest(const FString& Parameters)
+{
+    UWorld* World = GEngine && GEngine->GameViewport ? GEngine->GameViewport->GetWorld() : nullptr;
+    auto* Player = World ? World->GetFirstPlayerController() : nullptr;
+    auto* Character = Player ? Player->GetCharacter() : nullptr;
+    if (!TestNotNull(TEXT("First-person walking pawn"), Character)) return false;
+    if (!TestTrue(TEXT("Skip tour is clickable"), PFTViewportTest::SkipWelcome(World))) return false;
+    auto* Destinations = World->GetSubsystem<UPFTDestinations>();
+    auto* Routes = World->GetSubsystem<UPFTRoutes>();
+    const FString RoomId = TEXT("PFT_1100");
+    if (!TestTrue(TEXT("Select the auditorium"), Destinations->SelectRoom(RoomId))) return false;
+    const auto* Marker = Destinations->ActiveMarker.Get();
+    TestTrue(TEXT("The selected room shows its label without the mesh"), !Marker->IsHidden()
+        && Marker->Label->IsVisible() && !Marker->Label->bHiddenInGame && Marker->GetRootComponent()->bHiddenInGame);
+    if (!TestTrue(TEXT("Start walking directions to the auditorium"),
+        Routes->Start(*Character, RoomId, TEXT("PFT 1100")) && Routes->IsGuiding())) return false;
+
+    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Character, Routes, Deadline = FPlatformTime::Seconds() + 60.0]()
+    {
+        const FVector Position = Character->GetActorLocation();
+        if (Routes->HasArrived())
+        {
+            const FVector Doorway(6786, 2034, 0);
+            const double Inside = FVector::DotProduct(Position - Doorway, FVector(-0.96, -0.28, 0));
+            TestTrue(TEXT("Arrival is just inside the auditorium doorway"),
+                Inside > 0 && FVector::Dist2D(Position, Doorway) < 200);
+            TestEqual(TEXT("The arrival message names the auditorium"), Routes->GetMessage().ToString(),
+                FString(TEXT("Arrived at PFT 1100.")));
+            AddInfo(FString::Printf(TEXT("Arrived at %s"), *Position.ToCompactString()));
+            return true;
+        }
+        if (!Routes->IsGuiding() || FPlatformTime::Seconds() > Deadline)
+        {
+            AddError(FString::Printf(TEXT("The auditorium route stopped at %s. %s"),
+                *Position.ToCompactString(), *Routes->GetMessage().ToString()));
+            return true;
+        }
+        const FVector Delta = Routes->NextPoint() - Position;
+        const FVector Direction = Delta.GetSafeNormal2D();
+        Character->GetController()->SetControlRotation(Direction.Rotation());
+        Character->AddMovementInput(Direction, FMath::Clamp(Delta.Size2D() / 95.0, 0.16, 0.8));
+        return false;
     }));
     return true;
 }

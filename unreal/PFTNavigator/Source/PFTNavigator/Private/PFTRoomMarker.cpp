@@ -25,6 +25,12 @@ APFTRoomMarker::APFTRoomMarker()
     SetSelected(false);
 }
 
+void APFTRoomMarker::BeginPlay()
+{
+    Super::BeginPlay();
+    GetRootComponent()->SetHiddenInGame(true);
+}
+
 void APFTRoomMarker::SetSelected(bool bSelected)
 {
     SetActorHiddenInGame(!bSelected);

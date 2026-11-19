@@ -15,6 +15,8 @@ RADIUS = 42
 HALF_HEIGHT = 92
 EDGES = ((1, 0), (0, 1), (-1, 0), (0, -1))
 COMMONS = (14900, -5160)
+# Leave enough room past the door that the 65 cm arrival radius stays inside.
+AUDITORIUM_STOP = (6660, 2040)
 HALLWAY_DOORS = {
     "PFT_1218": ("HallwayC1003", "SM_LongWindowDoor_2"),
 }
@@ -125,6 +127,12 @@ def bake(map_path, output):
             if 0 <= distance < 0.1:
                 if room_id != "PFT_1140" or math.dist((point.x, point.y), target) <= 180:
                     candidates.append(node)
+        if room_id == "PFT_1100":
+            stop = tuple(round(coordinate / STEP) for coordinate in AUDITORIUM_STOP)
+            if stop not in candidates:
+                raise RuntimeError("No walkable stop inside the auditorium entrance")
+            destinations[room_id] = stop
+            continue
         if candidates:
             def distance_to_target(node):
                 return math.dist((node[0] * STEP, node[1] * STEP), target)
