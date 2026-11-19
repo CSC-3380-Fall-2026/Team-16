@@ -15,12 +15,20 @@ RADIUS = 42
 HALF_HEIGHT = 92
 EDGES = ((1, 0), (0, 1), (-1, 0), (0, -1))
 COMMONS = (14900, -5160)
-# Leave enough room past the door that the 65 cm arrival radius stays inside.
-AUDITORIUM_STOP = (6660, 2040)
-HALLWAY_DOORS = {
-    "PFT_1218": ("HallwayC1003", "SM_LongWindowDoor_2"),
-}
 LANDMARK_ACTORS = {"SM_Zone1200SouthWest3": "Zone 1200 sign"}
+
+
+def hallway_distances(links, hallway):
+    distances = dict.fromkeys(hallway, 0)
+    pending = deque(hallway)
+    while pending:
+        x, y = pending.popleft()
+        for index, (dx, dy) in enumerate(EDGES):
+            neighbor = x + dx, y + dy
+            if links[x, y] & (1 << index) and neighbor not in distances:
+                distances[neighbor] = distances[x, y] + 1
+                pending.append(neighbor)
+    return distances
 
 
 def bake(map_path, output):
@@ -32,9 +40,16 @@ def bake(map_path, output):
     actors = unreal.get_editor_subsystem(unreal.EditorActorSubsystem).get_all_level_actors()
     markers = [actor for actor in actors if isinstance(actor, unreal.PFTRoomMarker)]
     rooms = {actor.get_actor_label(): actor for actor in actors if isinstance(actor, unreal.PFTAreaTriggers)}
-    actors_by_label = {actor.get_actor_label(): actor for actor in actors}
     spawn = next(actor.get_actor_location() for actor in actors if isinstance(actor, unreal.PlayerStart))
     up = unreal.Vector(0, 0, 1)
+    mode = world.get_world_settings().get_editor_property("default_game_mode")
+    if not mode:
+        settings = unreal.get_default_object(unreal.GameMapsSettings)
+        mode = unreal.load_class(None, str(settings.get_editor_property("global_default_game_mode").get_asset_path_name()))
+    pawn = unreal.get_default_object(mode).get_editor_property("default_pawn_class")
+    capsule = unreal.get_default_object(pawn).get_component_by_class(unreal.CapsuleComponent)
+    door_radius = capsule.get_scaled_capsule_radius()
+    door_half_height = capsule.get_scaled_capsule_half_height()
 
     def floor(x, y):
         hit = unreal.SystemLibrary.line_trace_single_by_profile(
@@ -47,9 +62,9 @@ def bake(map_path, output):
                 return result["impact_point"]
         return None
 
-    def clear(start, end):
+    def clear(start, end, radius=RADIUS, half_height=HALF_HEIGHT):
         return unreal.SystemLibrary.capsule_trace_single_by_profile(
-            world, start, end, RADIUS, HALF_HEIGHT, "Pawn", False, [], unreal.DrawDebugTrace.NONE, False,
+            world, start, end, radius, half_height, "Pawn", False, [], unreal.DrawDebugTrace.NONE, False,
         ) is None
 
     bounds = [room.get_actor_bounds(False) for room in rooms.values()]
@@ -87,65 +102,101 @@ def bake(map_path, output):
             links[node] |= 1 << index
             links[other] |= 1 << ((index + 2) % len(EDGES))
 
+    def contains(brush, point):
+        distance, _ = brush.get_closest_point_on_collision(point)
+        return 0 <= distance < 0.1
+
+    def volume_cells(volume):
+        center, extent = volume.get_actor_bounds(False)
+        brush = volume.get_component_by_class(unreal.BrushComponent)
+        for x in range(math.ceil((center.x - extent.x) / STEP), math.floor((center.x + extent.x) / STEP) + 1):
+            for y in range(math.ceil((center.y - extent.y) / STEP), math.floor((center.y + extent.y) / STEP) + 1):
+                node = x, y
+                if node in links and contains(brush, positions[node]):
+                    yield node
+
+    hallway = {node for label, room in rooms.items() if label.startswith("Hallway") for node in volume_cells(room)}
+    from_hallway = hallway_distances(links, hallway)
+    doors = []
+    for actor in actors:
+        if "door" not in actor.get_actor_label().lower():
+            continue
+        center, extent = actor.get_actor_bounds(False)
+        if extent.z >= 75 and -22 <= center.z - extent.z <= 65 and max(extent.x, extent.y) <= 180:
+            angle = math.radians(actor.get_actor_rotation().yaw)
+            tangent = unreal.Vector(math.cos(angle), math.sin(angle), 0)
+            doors.append((center, tangent))
+
+    def door_stop(door, tangent, marker, brush):
+        normal = unreal.Vector(-tangent.y, tangent.x, 0)
+        if (marker.x - door.x) * normal.x + (marker.y - door.y) * normal.y < 0:
+            normal = normal * -1
+        x, y = round(door.x / STEP), round(door.y / STEP)
+        anchors = []
+        for nx in range(x - 3, x + 4):
+            for ny in range(y - 3, y + 4):
+                cell = nx, ny
+                if cell in from_hallway:
+                    point = positions[cell]
+                    if (point.x - door.x) * normal.x + (point.y - door.y) * normal.y < -5:
+                        anchors.append(cell)
+        # Prefer a short approach on the grid, then use the actual pawn capsule through the doorway.
+        anchors.sort(key=lambda cell: (from_hallway[cell], math.hypot(cell[0] * STEP - door.x, cell[1] * STEP - door.y), cell))
+        # Leave the 65 cm arrival radius on the inside of the doorway.
+        for depth in (100, 85, 120):
+            for shift in (0, -10, 10, -20, 20, -30, 30):
+                point = door + normal * depth + tangent * shift
+                stop = floor(point.x, point.y)
+                if stop is None or not contains(brush, stop + up * door_half_height):
+                    continue
+                for cell in anchors:
+                    start = positions[cell] + up * (door_half_height - HALF_HEIGHT)
+                    length = math.hypot(stop.x - start.x, stop.y - start.y)
+                    if length > STEP * 4 or not clear(start, stop + up * (door_half_height + 4), door_radius, door_half_height):
+                        continue
+                    start_floor = positions[cell].z - HALF_HEIGHT - 4
+                    steps = math.ceil(length / (STEP / 2))
+                    for i in range(1, steps):
+                        alpha = i / steps
+                        sample = start + (stop - start) * alpha
+                        surface = floor(sample.x, sample.y)
+                        if surface is None or abs(surface.z - (start_floor + (stop.z - start_floor) * alpha)) > 7:
+                            break
+                    else:
+                        return cell, stop
+        return None
+
     destinations = {}
+    stops = {}
     for marker in sorted(markers, key=lambda actor: actor.get_editor_property("room_id")):
         room_id = marker.get_editor_property("room_id")
-        if room_id in HALLWAY_DOORS:
-            hallway, door_label = HALLWAY_DOORS[room_id]
-            door = actors_by_label[door_label]
-            brush = rooms[hallway].get_component_by_class(unreal.BrushComponent)
-            target, _ = door.get_actor_bounds(False)
-            nearby = sorted(links, key=lambda node: math.dist(positions[node].to_tuple(), target.to_tuple()))
-            for node in nearby:
-                point = positions[node]
-                if math.dist(point.to_tuple(), target.to_tuple()) > 180:
-                    break
-                distance, _ = brush.get_closest_point_on_collision(point)
-                if not 0 <= distance < 0.1:
-                    continue
-                hit = unreal.SystemLibrary.line_trace_single_by_profile(
-                    world, point, target, "Pawn", False, [door], unreal.DrawDebugTrace.NONE, False,
-                )
-                if hit is None:
-                    destinations[room_id] = node
-                    break
-            if room_id not in destinations:
-                raise RuntimeError(f"No walkable hallway point faces the door to {room_id}")
+        if room_id == "PFT_COMMONS":
+            cell = min(volume_cells(rooms["HallwayC1008"]),
+                       key=lambda node: math.dist((node[0] * STEP, node[1] * STEP), COMMONS), default=None)
+            if cell is not None:
+                destinations[room_id] = cell
             continue
-        room_label = {"PFT_COMMONS": "HallwayC1008", "PFT_1140": "HallwayC1001"}.get(
-            room_id, f"Room{room_id.removeprefix('PFT_')}")
-        room = rooms[room_label]
+        room = rooms[f"Room{room_id.removeprefix('PFT_')}"]
         brush = room.get_component_by_class(unreal.BrushComponent)
         center, extent = room.get_actor_bounds(False)
-        target = COMMONS if room_id == "PFT_COMMONS" else marker.get_actor_location().to_tuple()[:2]
+        location = center if room_id == "PFT_1140" else marker.get_actor_location()
         candidates = []
-        for node in links:
-            point = positions[node]
-            if abs(point.x - center.x) > extent.x or abs(point.y - center.y) > extent.y:
-                continue
-            distance, _ = brush.get_closest_point_on_collision(point)
-            if 0 <= distance < 0.1:
-                if room_id != "PFT_1140" or math.dist((point.x, point.y), target) <= 180:
-                    candidates.append(node)
-        if room_id == "PFT_1100":
-            stop = tuple(round(coordinate / STEP) for coordinate in AUDITORIUM_STOP)
-            if stop not in candidates:
-                raise RuntimeError("No walkable stop inside the auditorium entrance")
-            destinations[room_id] = stop
-            continue
+        for door, tangent in doors:
+            if abs(door.x - center.x) <= extent.x + 180 and abs(door.y - center.y) <= extent.y + 180:
+                result = door_stop(door, tangent, location, brush)
+                if result is not None:
+                    cell, stop = result
+                    candidates.append((from_hallway[cell], math.hypot(door.x - location.x, door.y - location.y), cell, stop))
         if candidates:
-            def distance_to_target(node):
-                return math.dist((node[0] * STEP, node[1] * STEP), target)
-
-            inside = set(candidates)
-            # A connected edge across the room boundary marks a walkable entrance.
-            entrances = [node for node in candidates if any(
-                links[node] & (1 << index) and (node[0] + dx, node[1] + dy) not in inside
-                for index, (dx, dy) in enumerate(EDGES)
-            )]
-            if room_id in {"PFT_COMMONS", "PFT_1140"}:
-                entrances = []
-            destinations[room_id] = min(entrances or candidates, key=distance_to_target)
+            _, _, cell, stop = min(candidates, key=lambda item: item[:3])
+            destinations[room_id] = cell
+            stops[room_id] = [round(value, 2) for value in stop.to_tuple()]
+        elif room_id == "PFT_1140":
+            target = marker.get_actor_location().to_tuple()[:2]
+            cell = min(volume_cells(rooms["HallwayC1001"]),
+                       key=lambda node: math.dist((node[0] * STEP, node[1] * STEP), target), default=None)
+            if cell is not None and math.dist((cell[0] * STEP, cell[1] * STEP), target) <= 180:
+                destinations[room_id] = cell
 
     if "PFT_COMMONS" not in destinations or len(destinations) < 2:
         raise RuntimeError(f"Too few rooms connect to the walking graph: {sorted(destinations)}")
@@ -158,7 +209,7 @@ def bake(map_path, output):
                 landmarks[label] = [round(center.x), round(center.y)]
     nodes = (json.dumps([x, y, round(positions[x, y].z - HALF_HEIGHT - 4, 2), links[x, y]], separators=(",", ":"))
              for x, y in sorted(links))
-    text = json.dumps({"Map": map_path, "Step": STEP, "Destinations": destinations, "Landmarks": landmarks},
+    text = json.dumps({"Map": map_path, "Step": STEP, "Destinations": destinations, "RoomStops": stops, "Landmarks": landmarks},
                       separators=(",", ":"))
     output.write_text(text[:-1] + ',"Nodes":[\n' + ",\n".join(nodes) + "\n]}\n", encoding="utf-8")
     unreal.log(f"PFT routes: {len(links)} connected points, {len(destinations)} destinations: {', '.join(destinations)}")

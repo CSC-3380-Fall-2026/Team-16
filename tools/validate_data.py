@@ -254,7 +254,7 @@ def check_walking_graph(graph, room_ids):
             return [f"{prefix} invalid edge mask at {(x, y)}"]
         if (x, y) in nodes:
             return [f"{prefix} duplicate node {(x, y)}"]
-        nodes[x, y] = links
+        nodes[x, y] = height, links
 
     for room, cell in destinations.items():
         if room not in room_ids:
@@ -262,17 +262,28 @@ def check_walking_graph(graph, room_ids):
         if not isinstance(cell, list) or len(cell) != 2 or not is_grid_cell(cell) or tuple(cell) not in nodes:
             return [f"{prefix} {room} does not point to a walking node"]
 
+    stops = graph.get("RoomStops", {})
+    if not isinstance(stops, dict):
+        return [f"{prefix} RoomStops must be an object"]
+    for room, point in stops.items():
+        if (room not in destinations or not isinstance(point, list) or len(point) != 3
+                or any(type(value) not in (int, float) or not -1_000_000 <= value <= 1_000_000 for value in point)):
+            return [f"{prefix} invalid room stop for {room}"]
+        x, y = destinations[room]
+        if math.dist(point[:2], (x * step, y * step)) > step * 4 + 0.02 or abs(point[2] - nodes[x, y][0]) > 45:
+            return [f"{prefix} room stop for {room} is too far from its walking node"]
+
     start = tuple(destinations["PFT_COMMONS"])
     visited = {start}
     pending = deque([start])
     while pending:
         x, y = pending.popleft()
         for index, (dx, dy) in enumerate(WALKING_EDGES):
-            if not nodes[x, y] & (1 << index):
+            if not nodes[x, y][1] & (1 << index):
                 continue
             neighbor = (x + dx, y + dy)
             reverse = 1 << ((index + 2) % len(WALKING_EDGES))
-            if not nodes.get(neighbor, 0) & reverse:
+            if neighbor not in nodes or not nodes[neighbor][1] & reverse:
                 return [f"{prefix} edge from {(x, y)} to {neighbor} has no return edge"]
             if neighbor not in visited:
                 visited.add(neighbor)

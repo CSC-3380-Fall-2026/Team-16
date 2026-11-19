@@ -70,7 +70,9 @@ class TestValidateData(unittest.TestCase):
         self.data["first_floor_routes.json"] = graph
         self.write_files()
         self.assertEqual(validate_data.validate(self.folder), [])
-        self.data["first_floor_routes.json"] = {**graph, "Landmarks": {"Zone 1200 sign": [25, -60]}}
+        self.data["first_floor_routes.json"] = {
+            **graph, "Landmarks": {"Zone 1200 sign": [25, -60]}, "RoomStops": {"PFT_1200": [160.5, 0, 0]}
+        }
         self.write_files()
         self.assertEqual(validate_data.validate(self.folder), [])
         cases = [
@@ -84,6 +86,10 @@ class TestValidateData(unittest.TestCase):
             ({"Landmarks": []}, "Landmarks must be an object"),
             ({"Landmarks": {"": [0, 0]}}, "invalid landmark"),
             ({"Landmarks": {"Zone 1200 sign": [True, 0]}}, "invalid landmark"),
+            ({"RoomStops": []}, "RoomStops must be an object"),
+            ({"RoomStops": {"PFT_1200": [1, 2]}}, "invalid room stop"),
+            ({"RoomStops": {"PFT_3325": [160, 0, 0]}}, "invalid room stop"),
+            ({"RoomStops": {"PFT_1200": [301, 0, 0]}}, "too far from its walking node"),
         ]
         for overrides, message in cases:
             with self.subTest(message=message):

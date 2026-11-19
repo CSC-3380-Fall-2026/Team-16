@@ -26,6 +26,7 @@ namespace
     constexpr double ArrivalRadius = 65.0;
     constexpr double FloorTolerance = 45.0;
     constexpr int32 StartSearchCells = 3;
+    constexpr int32 DoorApproachCells = 4;
     constexpr double ArrowSpacing = 125.0;
     constexpr double ArrowSpeed = 85.0;
     constexpr double TrailLength = 1600.0;
@@ -334,16 +335,30 @@ void UPFTRoutes::LoadGraph(const FString& Map)
         }
         GraphNodes.Add(FIntPoint(int32(X), int32(Y)), {FVector(X * GridStep, Y * GridStep, Z), uint8(Links)});
     }
+    const TSharedPtr<FJsonObject>* RoomStops = nullptr;
+    Graph->TryGetObjectField(TEXT("RoomStops"), RoomStops);
     for (const auto& Room : (*Rooms)->Values)
     {
         const TArray<TSharedPtr<FJsonValue>>* Values;
-        double X, Y;
+        double X, Y, Z;
         if (Room.Value->TryGetArray(Values) && Values->Num() == 2
             && (*Values)[0]->TryGetNumber(X) && (*Values)[1]->TryGetNumber(Y)
             && FMath::Abs(X) <= 10000 && FMath::Abs(Y) <= 10000)
         {
             const FIntPoint Cell{int32(X), int32(Y)};
-            if (GraphNodes.Contains(Cell)) Destinations.Add(FString(Room.Key), Cell);
+            const FNode* Node = GraphNodes.Find(Cell);
+            if (!Node) continue;
+            FRouteTarget Target{Cell, {}};
+            if (RoomStops && (*RoomStops)->HasField(Room.Key))
+            {
+                if (!(*RoomStops)->TryGetArrayField(Room.Key, Values) || Values->Num() != 3
+                    || !(*Values)[0]->TryGetNumber(X) || !(*Values)[1]->TryGetNumber(Y) || !(*Values)[2]->TryGetNumber(Z)
+                    || !FMath::IsFinite(X) || !FMath::IsFinite(Y) || !FMath::IsFinite(Z)
+                    || FVector::Dist2D(Node->Floor, FVector(X, Y, Z)) > GridStep * DoorApproachCells + 0.02
+                    || FMath::Abs(Z - Node->Floor.Z) > FloorTolerance) continue;
+                Target.RoomStop = FVector(X, Y, Z);
+            }
+            Destinations.Add(FString(Room.Key), Target);
         }
     }
     Step = GridStep;
@@ -410,7 +425,7 @@ bool UPFTRoutes::CanCross(const ACharacter& Character, const FVector& Start, con
     return !GetWorld()->SweepTestByProfile(Start, End, FQuat::Identity, Capsule->GetCollisionProfileName(), Shape, Query);
 }
 
-bool UPFTRoutes::BuildPath(const ACharacter& Character, const FIntPoint& Target, TArray<FVector>& Points) const
+bool UPFTRoutes::BuildPath(const ACharacter& Character, const FRouteTarget& Target, TArray<FVector>& Points) const
 {
     const FVector Position = Character.GetActorLocation();
     const FVector RaisedPosition = Position + FVector(0, 0, 4);
@@ -437,6 +452,18 @@ bool UPFTRoutes::BuildPath(const ACharacter& Character, const FIntPoint& Target,
         }
         return true;
     };
+    if (Target.RoomStop.IsSet())
+    {
+        const FVector End = CapsuleCenter(Character, Target.RoomStop.GetValue());
+        if (FVector::Dist2D(RaisedPosition, End) <= Step * DoorApproachCells
+            && FMath::Abs(RaisedPosition.Z - End.Z) <= FloorTolerance && CanWalk(RaisedPosition, End, 7.0))
+        {
+            Points = {Position - FVector(0, 0, HalfHeight), Target.RoomStop.GetValue()};
+            return true;
+        }
+        const FVector Approach = CapsuleCenter(Character, Nodes.FindChecked(Target.Cell).Floor);
+        if (!CanWalk(Approach, End, 7.0)) return false;
+    }
     for (int32 X = -StartSearchCells; X <= StartSearchCells; ++X)
     {
         for (int32 Y = -StartSearchCells; Y <= StartSearchCells; ++Y)
@@ -460,7 +487,7 @@ bool UPFTRoutes::BuildPath(const ACharacter& Character, const FIntPoint& Target,
     const double SecondsPerStep = Step / Speed;
     // Prefer staying in the walkway over zigzagging between individual high-clearance cells.
     const double TurnCost = SecondsPerQuarterTurn + SecondsPerStep * TurnCostInGridSteps;
-    const auto Reversed = FindFastestPath(Entries, Target, SecondsPerStep, [this](const FIntPoint& Cell)
+    const auto Reversed = FindFastestPath(Entries, Target.Cell, SecondsPerStep, [this](const FIntPoint& Cell)
     {
         return Nodes.FindChecked(Cell).Links;
     }, [this](const FIntPoint& Cell)
@@ -475,6 +502,7 @@ bool UPFTRoutes::BuildPath(const ACharacter& Character, const FIntPoint& Target,
         GridPath.Add(Position - FVector(0, 0, HalfHeight));
     }
     for (int32 Index = Reversed.Num() - 1; Index >= 0; --Index) GridPath.Add(Nodes.FindChecked(Reversed[Index]).Floor);
+    if (Target.RoomStop.IsSet()) GridPath.Add(Target.RoomStop.GetValue());
     Points = StraightenPath(GridPath, [&](const FVector& Start, const FVector& End)
     {
         return CanWalk(CapsuleCenter(Character, Start), CapsuleCenter(Character, End), 7.0);
@@ -482,7 +510,7 @@ bool UPFTRoutes::BuildPath(const ACharacter& Character, const FIntPoint& Target,
     return true;
 }
 
-bool UPFTRoutes::Plan(const ACharacter& Character, const FIntPoint& Target)
+bool UPFTRoutes::Plan(const ACharacter& Character, const FRouteTarget& Target)
 {
     if (!BuildPath(Character, Target, Path)) return false;
     PathDistances = MeasurePath(Path);
@@ -496,7 +524,7 @@ bool UPFTRoutes::Preview(const ACharacter& Character, const FString& RoomId, TAr
 {
     Points.Reset();
     Estimate.Reset();
-    const FIntPoint* Target = Destinations.Find(RoomId);
+    const FRouteTarget* Target = Destinations.Find(RoomId);
     if (!Target || !Character.GetCharacterMovement()->IsMovingOnGround()
         || !BuildPath(Character, *Target, Points)) return false;
 
@@ -510,7 +538,7 @@ bool UPFTRoutes::Preview(const ACharacter& Character, const FString& RoomId, TAr
 
 bool UPFTRoutes::Start(ACharacter& Character, const FString& RoomId, const FString& RoomName)
 {
-    const FIntPoint* Target = Destinations.Find(RoomId);
+    const FRouteTarget* Target = Destinations.Find(RoomId);
     if (!Target) return false;
     if (!Character.GetCharacterMovement()->IsMovingOnGround() || !Plan(Character, *Target))
     {
