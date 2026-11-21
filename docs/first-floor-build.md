@@ -71,11 +71,12 @@ distances to reduce the number of distant lights rendered during the walkthrough
 The selection retains ambiguous upper-floor meshes and drops known furnishing
 and equipment categories outside the first-floor height band. It also omits
 the source map's unloaded MEP and cinematic layers, campus buildings, landscaping,
-exterior paving, World Partition landscape tiles, and HLODs. The exterior exit
-doors use solid panels in their existing frames. To apply this finish to an
-existing standalone map, run `create_first_floor_level.py --finish-exterior`
-through Unreal's `-ExecutePythonScript` option. The verifier checks the saved
-door materials and scenery on maps updated by this pass.
+exterior paving, World Partition landscape tiles, and HLODs. Exterior doors,
+facade windows, and roof clerestories use opaque panels in their existing frames.
+Interior windows and doors retain their glazing. To update an existing standalone
+map, run `create_first_floor_level.py --finish-exterior` through Unreal's
+`-ExecutePythonScript` option. The verifier checks the exterior glazing and scenery
+on maps updated by this pass.
 The output is a standalone map, so opening it does not scan the full twin's
 World Partition actors. The finishing pass places first-floor destination
 markers and preview cameras using the room volumes. It checks the floor, camera
