@@ -1,17 +1,30 @@
-"""Finish the standalone demo's exterior doors and remove campus scenery."""
+"""Make the demo's exterior glazing opaque and remove campus scenery."""
 
 import unreal
 
 
 INTERIOR_ONLY_TAG = "PFTInteriorOnly"
-OPAQUE_DOOR_MATERIAL = "/Game/MaterialInstances/Shared/Metals/MI_Gray_03Metal"
-GLASS_MATERIALS = "/game/materialinstances/shared/glass/"
+OPAQUE_GLAZING_TAG = "PFTExteriorGlazingOpaque"
+OPAQUE_PANEL_MATERIAL = "/Game/MaterialInstances/Shared/Metals/MI_Gray_03Metal"
+GLASS_MATERIALS = (
+    "/game/materialinstances/shared/glass/",
+    "/basicmastermaterials/materials/materialinstances/surfaces/mi_glass_",
+    "/basicmastermaterials/materials/materialinstances/surfaces/mi_cheapglass.",
+    "/basicmastermaterials/materials/masters/m_glass_",
+)
 EXTERIOR_DOOR_MESHES = (
     "sm_entrancedoortype",
     "doors_sgl-al1-panel_ext-",
     "doors_pair-al1-8_in__bottom_rail-panel_ext-",
     "doors_curtain_wall_single_flush_door_curtain_wall_single_flush_door",
 )
+FACADE_GLAZING_MESHES = (
+    "sm_glasswall_",
+    "sm_glasswindow_3rdfloor_",
+    "sm_wallglasswindow_",
+    "doors_double-flush-transom_72__x_84__x_24__transom",
+)
+CLERESTORY_MIN_HEIGHT = 1400
 SITE_MESH_PATHS = (
     "/game/level/_generated/sm_c1003terrain.",
     "/game/staticmeshes/lsucampus/",
@@ -73,25 +86,42 @@ def is_site_mesh(path):
     return path.casefold().startswith(SITE_MESH_PATHS)
 
 
+def mesh_name(path):
+    """Return the case-insensitive name of the mesh asset."""
+    return path.rsplit("/", 1)[-1].split(".", 1)[0].casefold()
+
+
 def is_exterior_door(path):
-    """Recognize the exterior door families used in the first-floor map."""
-    mesh_name = path.rsplit("/", 1)[-1].split(".", 1)[0]
-    return mesh_name.casefold().startswith(EXTERIOR_DOOR_MESHES)
+    """Recognize the exterior door families used in older demo maps."""
+    return mesh_name(path).startswith(EXTERIOR_DOOR_MESHES)
+
+
+def is_facade_glazing(component, path):
+    """Identify the facade assemblies and the glass band above the roof."""
+    name = mesh_name(path)
+    if name.startswith(FACADE_GLAZING_MESHES):
+        return True
+    if name == "sm_wallcurtainglass":
+        # The same panel also encloses indoor atriums below the roof.
+        center, _, _ = unreal.SystemLibrary.get_component_bounds(component)
+        return center.z >= CLERESTORY_MIN_HEIGHT
+    return False
 
 
 def glass_slots(component):
-    """Yield the material slots for glass panes on a door component."""
+    """Yield glass material slots without including the surrounding frame."""
     for index in range(component.get_num_materials()):
         material = component.get_material(index)
         if material and material.get_path_name().casefold().startswith(GLASS_MATERIALS):
             yield index
 
 
-def exterior_parts(actors):
-    """Separate removable scenery, mixed actors, and exterior door components."""
+def exterior_parts(actors, include_glazing):
+    """Collect site scenery, exit doors, and fixed glass on the building envelope."""
     scenery = []
     mixed = []
     doors = []
+    glazing = []
     for actor in actors:
         if actor.get_actor_label() in MECHANICAL_BUILDING_ACTORS:
             scenery.append(actor)
@@ -102,40 +132,54 @@ def exterior_parts(actors):
             (scenery if all(site_meshes) else mixed).append(actor)
             continue
         doors.extend(component for component, path in components if is_exterior_door(path))
-    return scenery, mixed, doors
+        if include_glazing:
+            glazing.extend(component for component, path in components if is_facade_glazing(component, path))
+    return scenery, mixed, doors, glazing
 
 
 def finish_exterior(world, subsystem, actors):
-    """Make the exit panes opaque and remove only scenery actors from the demo."""
-    scenery, mixed, doors = exterior_parts(actors)
+    """Make exterior panes opaque and remove site scenery from the demo."""
+    scenery, mixed, doors, glazing = exterior_parts(actors, include_glazing=True)
     if mixed:
         labels = ", ".join(actor.get_actor_label() for actor in mixed)
         raise RuntimeError(f"Exterior scenery shares an actor with the building: {labels}")
     if not doors:
         raise RuntimeError("No exterior doors were found in the first-floor demo")
-    panes = [(component, index) for component in doors for index in glass_slots(component)]
+    if not glazing:
+        raise RuntimeError("No facade glazing was found in the first-floor demo")
+    exit_panes = [(component, index) for component in doors for index in glass_slots(component)]
+    facade_panes = [(component, index) for component in glazing for index in glass_slots(component)]
+    panes = exit_panes + facade_panes
     if panes:
-        material = unreal.load_asset(OPAQUE_DOOR_MATERIAL)
+        material = unreal.load_asset(OPAQUE_PANEL_MATERIAL)
         if not isinstance(material, unreal.MaterialInterface):
-            raise RuntimeError(f"Could not load door panel material {OPAQUE_DOOR_MATERIAL}")
+            raise RuntimeError(f"Could not load opaque panel material {OPAQUE_PANEL_MATERIAL}")
         for component, index in panes:
             component.set_material(index, material)
     if scenery and not subsystem.destroy_actors(scenery):
         raise RuntimeError("Could not remove exterior scenery from the demo")
     settings = world.get_world_settings()
     tags = settings.get_editor_property("tags")
-    if INTERIOR_ONLY_TAG not in [str(tag) for tag in tags]:
-        settings.set_editor_property("tags", list(tags) + [INTERIOR_ONLY_TAG])
-    return {"OpaqueExitPanels": len(panes), "RemovedSceneryActors": len(scenery)}
+    existing_tags = {str(tag) for tag in tags}
+    missing_tags = [tag for tag in (INTERIOR_ONLY_TAG, OPAQUE_GLAZING_TAG) if tag not in existing_tags]
+    if missing_tags:
+        settings.set_editor_property("tags", list(tags) + missing_tags)
+    return {
+        "OpaqueExitPanels": len(exit_panes),
+        "OpaqueFacadePanels": len(facade_panes),
+        "RemovedSceneryActors": len(scenery),
+    }
 
 
-def check_exterior_finish(actors):
-    """Return errors if an interior-only map still contains site props or exit glass."""
-    scenery, mixed, doors = exterior_parts(actors)
+def check_exterior_finish(actors, include_glazing=False):
+    """Return errors if the saved map still shows site scenery or see-through exterior panes."""
+    scenery, mixed, doors, glazing = exterior_parts(actors, include_glazing)
     errors = [f"Exterior scenery remains: {actor.get_actor_label()}" for actor in scenery + mixed]
     if not doors:
         errors.append("Missing exterior doors")
-    for component in doors:
-        if list(glass_slots(component)):
-            errors.append(f"Exterior door is still see-through: {component.get_owner().get_actor_label()}")
+    if include_glazing and not glazing:
+        errors.append("Missing facade glazing")
+    for component in doors + glazing:
+        if next(glass_slots(component), None) is not None:
+            errors.append(f"Exterior glazing is still see-through: {component.get_owner().get_actor_label()}")
     return errors

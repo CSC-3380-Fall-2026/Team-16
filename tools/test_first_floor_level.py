@@ -16,7 +16,9 @@ from create_first_floor_level import (
     disable_fixture_shadows, limit_fixture_draw_distance, load_selected_actors, missing_material_assets,
     map_report_path, read_build_report, read_map_build_report, select_actors, valid_output_map, write_report,
 )
-from first_floor_exterior import glass_slots, is_exterior_door, is_site_mesh
+from first_floor_exterior import (
+    check_exterior_finish, glass_slots, is_exterior_door, is_facade_glazing, is_site_mesh,
+)
 from first_floor_materials import MESHES, REVIT, SHARED, WORLD_GRID, restore_surface_materials
 from verify_first_floor_level import (
     MAP, SOURCE, check_location_tags, check_room_ids, find_dependencies, find_missing_required_packages,
@@ -53,12 +55,61 @@ class ExteriorFinishTests(unittest.TestCase):
         self.assertTrue(is_exterior_door(f"{REVIT}/Doors_Sgl-AL1-Panel_Ext-3__0_x7__0_x2_"))
         self.assertTrue(is_exterior_door(f"{MESHES}/Outdoors/Models/SM_EntranceDoorType1"))
         self.assertFalse(is_exterior_door(f"{REVIT}/Doors_Curtain_Wall_Dbl_Glass_Curtain_Wall_Dbl_Glass"))
-        materials = (f"{SHARED}/Metals/MI_BlackMetalIron", f"{SHARED}/Glass/MI_Glass_MediumTint")
+        materials = (
+            f"{SHARED}/Metals/MI_BlackMetalIron",
+            f"{SHARED}/Glass/MI_Glass_MediumTint",
+            "/BasicMasterMaterials/Materials/MaterialInstances/Surfaces/MI_CheapGlass.MI_CheapGlass",
+        )
         component = SimpleNamespace(
             get_num_materials=lambda: len(materials),
             get_material=lambda index: SimpleNamespace(get_path_name=lambda: materials[index]),
         )
-        self.assertEqual([1], list(glass_slots(component)))
+        self.assertEqual([1, 2], list(glass_slots(component)))
+
+    def test_facade_meshes_exclude_indoor_windows_and_vestibules(self):
+        """Use the envelope assets and leave reused interior glazing transparent."""
+        self.assertTrue(is_facade_glazing(None, f"{REVIT}/SM_GlassWall_1stFloor_3Doors"))
+        self.assertTrue(is_facade_glazing(None, f"{MESHES}/SM_WallGlassWindow_1"))
+        self.assertTrue(is_facade_glazing(None, f"{REVIT}/Doors_Double-Flush-Transom_72__x_84__x_24__Transom"))
+        self.assertFalse(is_facade_glazing(None, f"{REVIT}/Windows_Fixed_60__x_66_"))
+        self.assertFalse(is_facade_glazing(None, f"{REVIT}/Curtain_Panels_System_Panel_Exterior_Glazed"))
+
+    def test_clerestories_are_exterior_above_the_atrium(self):
+        """Distinguish the exposed roof band from panels of the same mesh inside."""
+        path = f"{MESHES}/SM_WallCurtainGlass.SM_WallCurtainGlass"
+        system = SimpleNamespace(get_component_bounds=lambda z: (SimpleNamespace(z=z), None, None))
+        with mock.patch("unreal.SystemLibrary", system, create=True):
+            self.assertTrue(is_facade_glazing(1484, path))
+            self.assertFalse(is_facade_glazing(1306, path))
+            self.assertFalse(is_facade_glazing(355, path))
+
+    def test_verifier_checks_windows_when_full_exterior_finish_is_present(self):
+        """Check the facade finish while retaining support for older saved demo maps."""
+        def mesh_actor(label, asset_name, material_path):
+            actor = SimpleNamespace(get_actor_label=lambda: label)
+            mesh = SimpleNamespace(get_path_name=lambda: f"{REVIT}/{asset_name}")
+            component = SimpleNamespace(
+                get_editor_property=lambda name: mesh,
+                get_owner=lambda: actor,
+                get_num_materials=lambda: 1,
+                get_material=lambda index: SimpleNamespace(get_path_name=lambda: material_path),
+            )
+            actor.get_components_by_class = lambda kind: [component]
+            return actor
+
+        pane = f"{SHARED}/Glass/MI_Glass_Medium"
+        solid = f"{SHARED}/Metals/MI_Gray_03Metal"
+        actors = [
+            mesh_actor("Exit", "SM_EntranceDoorType1", solid),
+            mesh_actor("Facade", "SM_GlassWall_1stFloor_Door", pane),
+            mesh_actor("Interior", "Windows_Fixed_60__x_66_", pane),
+        ]
+        with mock.patch("unreal.StaticMeshComponent", object(), create=True):
+            self.assertEqual([], check_exterior_finish(actors))
+            self.assertEqual(
+                ["Exterior glazing is still see-through: Facade"],
+                check_exterior_finish(actors, include_glazing=True),
+            )
 
 
 class RoomIdTests(unittest.TestCase):

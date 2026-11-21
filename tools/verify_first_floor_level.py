@@ -17,7 +17,7 @@ from create_first_floor_level import (
 )
 from first_floor_destinations import check_room_markers
 from first_floor_exit_signs import check_exit_signs
-from first_floor_exterior import INTERIOR_ONLY_TAG, check_exterior_finish
+from first_floor_exterior import INTERIOR_ONLY_TAG, OPAQUE_GLAZING_TAG, check_exterior_finish
 from first_floor_materials import fallback_material_slots, replacement_material
 
 
@@ -180,9 +180,11 @@ def verification_report(world, actors, visited, paths, map_path=MAP, missing_pac
     if any(actor.get_actor_label() == CAMPUS_ROAD_OVERLAY for actor in actors):
         errors.append("Output includes the elevated campus road overlay")
     tags = world.get_world_settings().get_editor_property("tags")
-    interior_only = INTERIOR_ONLY_TAG in [str(tag) for tag in tags]
+    tag_names = {str(tag) for tag in tags}
+    interior_only = INTERIOR_ONLY_TAG in tag_names
+    opaque_glazing = OPAQUE_GLAZING_TAG in tag_names
     if interior_only:
-        errors.extend(check_exterior_finish(actors))
+        errors.extend(check_exterior_finish(actors, include_glazing=opaque_glazing))
     else:
         errors.extend(check_entrance_terrain(actors, visited))
     errors.extend(check_room_markers(world, actors, markers))
@@ -225,6 +227,7 @@ def verification_report(world, actors, visited, paths, map_path=MAP, missing_pac
         "RoomMarkers": [actor.get_editor_property("room_id") for actor in markers],
         "EntranceTerrain": C1003_TERRAIN if C1003_TERRAIN in visited else None,
         "InteriorOnly": interior_only,
+        "ExteriorGlazingOpaque": opaque_glazing,
         "PreservedRoomIds": len(rooms),
         "ExitSignsFinished": exit_signs,
         "Errors": errors,
