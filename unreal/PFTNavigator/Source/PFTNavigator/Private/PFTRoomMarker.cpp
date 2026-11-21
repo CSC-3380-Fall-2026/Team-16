@@ -2,9 +2,7 @@
 #include "PFTPalette.h"
 #include "Components/StaticMeshComponent.h"
 #include "Components/TextRenderComponent.h"
-#include "Engine/StaticMesh.h"
 #include "GameFramework/PlayerController.h"
-#include "UObject/ConstructorHelpers.h"
 
 APFTRoomMarker::APFTRoomMarker()
 {
@@ -12,8 +10,7 @@ APFTRoomMarker::APFTRoomMarker()
     auto* Mesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Marker"));
     SetRootComponent(Mesh);
     Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-    static ConstructorHelpers::FObjectFinder<UStaticMesh> Sphere(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
-    Mesh->SetStaticMesh(Sphere.Object);
+    Mesh->SetHiddenInGame(true);
     Mesh->SetRelativeScale3D(FVector(0.4));
     Label = CreateDefaultSubobject<UTextRenderComponent>(TEXT("RoomLabel"));
     Label->SetupAttachment(Mesh);
@@ -28,6 +25,7 @@ APFTRoomMarker::APFTRoomMarker()
 void APFTRoomMarker::BeginPlay()
 {
     Super::BeginPlay();
+    // Placed markers can carry a saved mesh. Hide it without hiding the room label.
     GetRootComponent()->SetHiddenInGame(true);
 }
 
