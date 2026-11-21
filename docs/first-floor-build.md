@@ -47,14 +47,14 @@ cooks this map and its dependencies instead of cooking every map in the project.
 The complete twin remains at `/Game/Level/PatrickFTaylorHall` for editing.
 
 `create_first_floor_level.py` keeps the first-floor actors, room volumes, roof,
-and upper-floor architecture and lighting. Unfiled structure and nearby site
-meshes are included so the building stays visible through entrances and atriums.
+and upper-floor architecture and lighting. It also keeps unfiled structure that
+forms the building envelope or is visible from the atriums.
 The source `Floor_MainHallway` group keeps its original floor meshes and walking
 collision through C1003.
 The player starts in C1003 facing the Zone 1200 signs.
 The finishing pass replaces checkerboard slots on the lounge seating and tables,
 the C1003 wall, floor pieces in rooms 1221 and 1363, the Panera soda fountain,
-foundation slabs, and nearby paving. It uses existing building materials on the
+and foundation slabs. It uses existing building materials on the
 demo's mesh components and preserves material assignments that already work.
 Retained upper-floor meshes also get matching finishes on the floor pieces,
 chairs, cushions, couches, and lab benches where slots are blank or checkered.
@@ -70,13 +70,12 @@ authored limits are kept. The Windows launcher uses half of those draw
 distances to reduce the number of distant lights rendered during the walkthrough.
 The selection retains ambiguous upper-floor meshes and drops known furnishing
 and equipment categories outside the first-floor height band. It also omits
-the source map's unloaded MEP and cinematic layers, distant campus meshes,
-World Partition landscape tiles, and HLODs. Review the result in Unreal from
-the entrances, atriums, and other public first-floor spaces.
-The C1003 entrance uses a baked static mesh of the original outdoor terrain.
-Its textures are stored with the mesh, and its `NoCollision` profile leaves
-walking collision to the original building meshes. The generator excludes the
-elevated `SM_road_full_block` overlay from the standalone map.
+the source map's unloaded MEP and cinematic layers, campus buildings, landscaping,
+exterior paving, World Partition landscape tiles, and HLODs. The exterior exit
+doors use solid panels in their existing frames. To apply this finish to an
+existing standalone map, run `create_first_floor_level.py --finish-exterior`
+through Unreal's `-ExecutePythonScript` option. The verifier checks the saved
+door materials and scenery on maps updated by this pass.
 The output is a standalone map, so opening it does not scan the full twin's
 World Partition actors. The finishing pass places first-floor destination
 markers and preview cameras using the room volumes. It checks the floor, camera

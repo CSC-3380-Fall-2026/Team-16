@@ -16,6 +16,7 @@ from create_first_floor_level import (
     disable_fixture_shadows, limit_fixture_draw_distance, load_selected_actors, missing_material_assets,
     map_report_path, read_build_report, read_map_build_report, select_actors, valid_output_map, write_report,
 )
+from first_floor_exterior import glass_slots, is_exterior_door, is_site_mesh
 from first_floor_materials import MESHES, REVIT, SHARED, WORLD_GRID, restore_surface_materials
 from verify_first_floor_level import (
     MAP, SOURCE, check_location_tags, check_room_ids, find_dependencies, find_missing_required_packages,
@@ -34,6 +35,30 @@ def actor(label, layer="", kind="StaticMeshActor", low=0, high=100, editor_only=
             min=SimpleNamespace(x=x, y=0, z=low), max=SimpleNamespace(x=x + 100, y=100, z=high),
         ),
     )
+
+
+class ExteriorFinishTests(unittest.TestCase):
+    def test_site_meshes_exclude_the_building_entrance_and_indoor_plant(self):
+        """Keep architecture and indoor props that use assets in the outdoor folder."""
+        outdoor = f"{MESHES}/Outdoors"
+        entrance = f"{outdoor}/Models/SM_EntranceDoorType1.SM_EntranceDoorType1"
+        self.assertFalse(is_site_mesh(entrance))
+        self.assertFalse(is_site_mesh(f"{outdoor}/Foliage/SM_AirplanePlant_Var5"))
+        self.assertTrue(is_site_mesh(f"{outdoor}/Trees/SM_LargeOakTree"))
+        self.assertTrue(is_site_mesh(f"{outdoor}/SideWalks/SM_Sidewalk_03"))
+        self.assertTrue(is_site_mesh(f"{MESHES}/LSUCampus/SM_FacilityServices"))
+
+    def test_door_selection_keeps_interior_glazing(self):
+        """Recognize exterior door meshes and only their separate glass slots."""
+        self.assertTrue(is_exterior_door(f"{REVIT}/Doors_Sgl-AL1-Panel_Ext-3__0_x7__0_x2_"))
+        self.assertTrue(is_exterior_door(f"{MESHES}/Outdoors/Models/SM_EntranceDoorType1"))
+        self.assertFalse(is_exterior_door(f"{REVIT}/Doors_Curtain_Wall_Dbl_Glass_Curtain_Wall_Dbl_Glass"))
+        materials = (f"{SHARED}/Metals/MI_BlackMetalIron", f"{SHARED}/Glass/MI_Glass_MediumTint")
+        component = SimpleNamespace(
+            get_num_materials=lambda: len(materials),
+            get_material=lambda index: SimpleNamespace(get_path_name=lambda: materials[index]),
+        )
+        self.assertEqual([1], list(glass_slots(component)))
 
 
 class RoomIdTests(unittest.TestCase):
@@ -86,14 +111,14 @@ class FirstFloorSelectionTests(unittest.TestCase):
         selected, _ = select_actors([self.room, upper_wall, roof, desk, duct])
         self.assertEqual([self.room, upper_wall, roof], selected)
 
-    def test_unfiled_structure_and_nearby_scenery_are_retained(self):
-        """Keep shared geometry and entrance scenery without copying distant campus meshes."""
+    def test_unfiled_structure_is_retained_without_site_scenery(self):
+        """Keep building geometry while excluding even nearby campus scenery."""
         tall_wall = actor("TallWall", "/Game/DataLayers/ToBeFiled.ToBeFiled", low=0, high=1200)
         entrance = actor("EntranceSlab", low=-150, high=-60)
         tree = actor("Tree", "/Game/DataLayers/Landscapes.Landscapes", x=500)
         distant_building = actor("CampusBuilding", "/Game/DataLayers/OtherLSUBuildings.OtherLSUBuildings", x=5000)
         selected, _ = select_actors([self.room, tall_wall, entrance, tree, distant_building])
-        self.assertEqual([self.room, tall_wall, entrance, tree], selected)
+        self.assertEqual([self.room, tall_wall, entrance], selected)
 
     def test_shared_lighting_and_room_volumes_are_kept(self):
         """Retain shared lighting and first-floor rooms without copying upper-floor rooms."""
@@ -111,12 +136,12 @@ class FirstFloorSelectionTests(unittest.TestCase):
         selected, _ = select_actors([self.room, floor])
         self.assertEqual([self.room, floor], selected)
 
-    def test_campus_road_overlay_is_excluded(self):
-        """Keep the entrance sidewalk while dropping the elevated campus-wide road mesh."""
+    def test_campus_road_and_sidewalk_are_excluded(self):
+        """Exclude campus paving and the elevated road overlay from the demo."""
         road = actor(CAMPUS_ROAD_OVERLAY, "/Game/DataLayers/LSUCampusWide.LSUCampusWide", low=1177, high=1202)
         sidewalk = actor("SM_Sidewalk_03", "/Game/DataLayers/Landscapes.Landscapes", low=-15, high=0)
         selected, _ = select_actors([self.room, road, sidewalk])
-        self.assertEqual([self.room, sidewalk], selected)
+        self.assertEqual([self.room], selected)
 
     def test_editor_only_actors_are_excluded(self):
         """Reject editor helpers even when they belong to the first-floor layer."""
