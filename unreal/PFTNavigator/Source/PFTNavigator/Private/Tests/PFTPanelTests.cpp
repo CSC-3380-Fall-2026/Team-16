@@ -171,6 +171,17 @@ namespace
         return Widgets.Num() == 1 ? Cast<UPFTNavigatorWidget>(Widgets[0]) : nullptr;
     }
 
+    UUserWidget* FindMovementControlsMenu(UWorld* World)
+    {
+        TArray<UUserWidget*> Widgets;
+        UWidgetBlueprintLibrary::GetAllWidgetsOfClass(World, Widgets, UUserWidget::StaticClass(), true);
+        for (UUserWidget* Widget : Widgets)
+        {
+            if (Widget->GetWidgetFromName(TEXT("AdminModes"))) return Widget;
+        }
+        return nullptr;
+    }
+
     FString GetCameraHelp(UPFTNavigatorWidget* Panel)
     {
         const auto* Help = Cast<UTextBlock>(Panel->WidgetTree->FindWidget(TEXT("CameraHelp")));
@@ -193,6 +204,33 @@ bool FPFTNavigatorAfterOnboardingTest::RunTest(const FString& Parameters)
     if (!TestTrue(TEXT("Skip tour is clickable"), PFTViewportTest::SkipWelcome(World))) return false;
     TestFalse(TEXT("Walking is unlocked after Skip tour"), Player->IsMoveInputIgnored());
     TestFalse(TEXT("Looking is unlocked after Skip tour"), Player->IsLookInputIgnored());
+
+    ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.4f));
+    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World, Player, OriginalPawn = Player->GetPawn()]()
+    {
+        auto* Menu = FindMovementControlsMenu(World);
+        if (!TestNotNull(TEXT("The main menu is available"), Menu)) return true;
+        auto* Controls = Menu->GetWidgetFromName(TEXT("AdminModes"));
+        auto* Toggle = Menu->GetWidgetFromName(TEXT("MovementControlsToggle"));
+        TestTrue(TEXT("Movement controls start open"), Controls->IsVisible());
+        if (!TestTrue(TEXT("Hide controls is clickable"), ClickVisibleWidget(Toggle))) return true;
+        TestTrue(TEXT("Hiding controls collapses the entire strip"), Controls->GetVisibility() == ESlateVisibility::Collapsed);
+        TestTrue(TEXT("The controls toggle stays visible"), Toggle->IsVisible());
+        TestTrue(TEXT("Hiding controls keeps the current pawn and movement"), Player->GetPawn() == OriginalPawn
+            && !Player->IsMoveInputIgnored() && !Player->IsLookInputIgnored());
+        CaptureQAView(TEXT("PFTQA-MovementControlsClosed"));
+        return true;
+    }));
+    ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
+    ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World]()
+    {
+        auto* Menu = FindMovementControlsMenu(World);
+        if (!Menu) return true;
+        TestTrue(TEXT("Show controls is clickable"), ClickVisibleWidget(Menu->GetWidgetFromName(TEXT("MovementControlsToggle"))));
+        TestTrue(TEXT("Showing controls restores the movement strip"), Menu->GetWidgetFromName(TEXT("AdminModes"))->IsVisible());
+        CaptureQAView(TEXT("PFTQA-MovementControlsOpen"));
+        return true;
+    }));
 
     ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.4f));
     ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, World, Player]()
