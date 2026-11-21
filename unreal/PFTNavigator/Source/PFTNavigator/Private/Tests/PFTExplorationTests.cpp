@@ -7,6 +7,7 @@
 #include "Components/EditableTextBox.h"
 #include "Components/InputComponent.h"
 #include "Components/ScrollBox.h"
+#include "Components/StaticMeshComponent.h"
 #include "Components/TextBlock.h"
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
@@ -101,6 +102,9 @@ bool FPFTExplorationTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("Course search produces one button"), ResultCount, 1);
     TestTrue(TEXT("Click selects course destination"), World->GetSubsystem<UPFTDestinations>()->ActiveMarker == Marker);
     TestFalse(TEXT("Selecting a room shows its marker"), Marker->IsHidden());
+    const auto* MarkerMesh = CastChecked<UStaticMeshComponent>(Marker->GetRootComponent());
+    TestNull(TEXT("The selected marker has no default mesh"), MarkerMesh->GetStaticMesh());
+    TestTrue(TEXT("The selected marker mesh stays hidden"), MarkerMesh->bHiddenInGame);
     TestTrue(TEXT("Selected details show floor"), Details->GetText().ToString().Contains(TEXT("Floor 1")));
     TestTrue(TEXT("Selected details show course"), Details->GetText().ToString().Contains(TEXT("CSC 1350")));
     TestTrue(TEXT("Bound room enables view"), ViewButton->GetIsEnabled());
