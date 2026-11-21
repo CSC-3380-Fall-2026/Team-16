@@ -97,7 +97,7 @@ def keep_actor(descriptor, floor_bottom, floor_top, footprint):
     if ROOF_LAYER in layers:
         return True
     if layers & SITE_LAYERS and not layers & UPPER_LAYERS:
-        return near_building(descriptor.bounds, footprint)
+        return False
     bounds = descriptor.bounds
     if bounds.min.z <= floor_top and bounds.max.z >= floor_bottom:
         return bool(layers & UPPER_LAYERS) or near_building(bounds, footprint)
@@ -271,22 +271,6 @@ def limit_fixture_draw_distance(actors):
     return adjusted
 
 
-def add_entrance_terrain(subsystem, actors):
-    """Place the textured source terrain at its baked world coordinates."""
-    mesh = unreal.EditorAssetLibrary.load_asset(C1003_TERRAIN)
-    if not mesh:
-        raise RuntimeError(f"Missing {C1003_TERRAIN}; sync or bake the C1003 terrain first")
-    terrain = next((actor for actor in actors if actor.get_actor_label() == C1003_TERRAIN_LABEL), None)
-    if terrain is None:
-        terrain = subsystem.spawn_actor_from_object(mesh, unreal.Vector(), unreal.Rotator())
-        if terrain is None:
-            raise RuntimeError("Could not place the C1003 exterior terrain")
-        terrain.set_actor_label(C1003_TERRAIN_LABEL)
-    terrain.static_mesh_component.set_static_mesh(mesh)
-    terrain.static_mesh_component.set_collision_profile_name("NoCollision")
-    return terrain
-
-
 def baked_terrain_textures(material):
     """Return the material instance's saved textures without requiring a graphics device."""
     if not isinstance(material, unreal.MaterialInstanceConstant):
@@ -303,6 +287,7 @@ def baked_terrain_textures(material):
 def finish_map(world, room_ids):
     """Finish the map and return counts for the build report."""
     from first_floor_exit_signs import finish_exit_signs
+    from first_floor_exterior import finish_exterior
     from first_floor_materials import restore_surface_materials
 
     subsystem = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
@@ -312,7 +297,6 @@ def finish_map(world, room_ids):
     set_location_tags(world, rooms)
     cleared = sum(clear_import_templates(actor) for actor in actors)
     move_player_start(actors)
-    add_entrance_terrain(subsystem, actors)
     return {
         "ClearedImportTemplates": cleared,
         "LocalLocationVolumes": len(rooms),
@@ -320,6 +304,7 @@ def finish_map(world, room_ids):
         "FixtureDrawLimitsApplied": limit_fixture_draw_distance(actors),
         "SurfaceMaterialsRepaired": restore_surface_materials(actors),
         "ExitSignsFinished": finish_exit_signs(subsystem, actors),
+        **finish_exterior(world, subsystem, actors),
     }
 
 
@@ -447,6 +432,20 @@ def finish_saved_map(output, report_path):
     unreal.log(f"FIRST_FLOOR_BUILD_COMPLETE: {output}, {report['SelectedActors']} copied actors")
 
 
+def finish_saved_exterior(output):
+    """Update only the exterior finish on an already-built first-floor map."""
+    from first_floor_exterior import finish_exterior
+
+    world = unreal.EditorLoadingAndSavingUtils.load_map(output)
+    if not world or world.get_world_settings().get_editor_property("world_partition"):
+        raise RuntimeError("Choose an existing standalone first-floor map")
+    subsystem = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+    changes = finish_exterior(world, subsystem, subsystem.get_all_level_actors())
+    if not unreal.EditorLoadingAndSavingUtils.save_map(world, output):
+        raise RuntimeError(f"Could not save {output}")
+    unreal.log(f"FIRST_FLOOR_EXTERIOR_COMPLETE: {output}, {changes}")
+
+
 def main():
     """Read CLI options and run one generation pass; raise on invalid editor settings."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -454,11 +453,16 @@ def main():
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--dry-run", action="store_true")
     mode.add_argument("--finish", action="store_true", help="Finish geometry in a fresh editor process")
+    mode.add_argument("--finish-exterior", action="store_true", help="Update exit doors and scenery on a saved map")
     args = parser.parse_args()
     if "-run=" in unreal.SystemLibrary.get_command_line().lower():
         raise RuntimeError("Use -ExecutePythonScript, not -run=PythonScript; duplication needs the editor")
     if not valid_output_map(args.output):
         raise RuntimeError("Output must be a first-floor map package under /Game/")
+    if args.finish_exterior:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        finish_saved_exterior(args.output)
+        return
     if not args.dry_run:
         missing_assets = missing_material_assets()
         if missing_assets:
