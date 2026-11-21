@@ -396,7 +396,11 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     // The walking buttons get extra padding because they're clicked while moving
     const auto MakeEasyToClick = [](UButton* Button)
     {
-        CastChecked<UButtonSlot>(Button->GetContent()->Slot)->SetPadding(FMargin(8, 6));
+        auto* Label = CastChecked<UTextBlock>(Button->GetContent());
+        Label->SetMinDesiredWidth(100.0f);
+        CastChecked<UButtonSlot>(Label->Slot)->SetPadding(FMargin(8, 6));
+        // Keep the controls in place as opening the walking map widens the panel.
+        CastChecked<UHorizontalBoxSlot>(Button->Slot)->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
     };
     StopRouteButton = AddButton(GuidanceActions, TEXT("Stop route"), Label);
     StopRouteButton->Rename(TEXT("StopRouteButton"));
