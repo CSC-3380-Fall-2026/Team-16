@@ -29,6 +29,9 @@ private:
     FBox2D FloorBounds;
     mutable FBox2D FocusBounds;
     mutable uint32 FocusRevision = 0;
+    mutable TOptional<TPair<FString, FVector2D>> CachedLandmark;
+    mutable uint32 LandmarkPlanRevision = 0;
+    mutable int32 LandmarkPathCount = INDEX_NONE;
     FVector PreviewOrigin = FVector::ZeroVector;
     TArray<FVector> PreviewPoints;
     TWeakObjectPtr<UPFTRoutes> Routes;

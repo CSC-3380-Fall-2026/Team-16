@@ -159,5 +159,4 @@ private:
     // Frame when the walking panel last changed shape. Its new size is only known after that frame is drawn
     uint64 CompactLayoutFrame = 0;
     bool bResettingClassSearch = false;
-    float StandardRenderScale = 100.0f;
 };

@@ -110,6 +110,7 @@ bool UPFTRouteMap::Load(UPFTRoutes& InRoutes, APlayerController& InPlayer)
     Player = &InPlayer;
     bFullFloor = false;
     FocusBounds = FBox2D(ForceInit);
+    LandmarkPathCount = INDEX_NONE;
     if (FloorBrush.GetResourceObject()) return true;
 
     TArray<FIntPoint> Cells;
@@ -152,6 +153,7 @@ void UPFTRouteMap::SetPreview(const FVector& Origin, TArray<FVector> Points)
     PreviewOrigin = Origin;
     PreviewPoints = MoveTemp(Points);
     FocusBounds = FitRouteBounds(FVector2D(Origin), PreviewPoints);
+    LandmarkPathCount = INDEX_NONE;
 }
 
 bool UPFTRouteMap::ToggleFullFloor()
@@ -202,9 +204,17 @@ int32 UPFTRouteMap::NativePaint(const FPaintArgs& Args, const FGeometry& Geometr
         Line.Add(Here);
         for (const FVector& Point : Path) Line.Add(Projection.Point(FVector2D(Point)));
         const FVector2f Goal = Line.Last();
-        if (const auto* Landmark = Routes->GetRouteLandmark(Path))
+        // The remaining landmarks change when the player advances a waypoint or gets a new route.
+        if (LandmarkPlanRevision != PlanRevision || LandmarkPathCount != Path.Num())
         {
-            DrawLandmark(Geometry, Draw, Layer + 4, Projection.Point(Landmark->Value), Landmark->Key, Line);
+            LandmarkPlanRevision = PlanRevision;
+            LandmarkPathCount = Path.Num();
+            const auto* Landmark = Routes->GetRouteLandmark(Path);
+            CachedLandmark = Landmark ? TOptional<TPair<FString, FVector2D>>(*Landmark) : NullOpt;
+        }
+        if (CachedLandmark)
+        {
+            DrawLandmark(Geometry, Draw, Layer + 4, Projection.Point(CachedLandmark->Value), CachedLandmark->Key, Line);
         }
         FSlateDrawElement::MakeLines(Draw, Layer + 1, Paint, MoveTemp(Line), ESlateDrawEffect::None, Purple, true, 5.0f);
         // A gold diamond with a purple edge, large enough to find without hunting for it

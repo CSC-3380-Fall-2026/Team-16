@@ -7,8 +7,18 @@ if not exist "%~dp0PFTDigitalTwin.exe" (
 )
 pushd "%~dp0" || exit /b 1
 set "DemoMap=/Game/Level/PFTFirstFloorComplete"
-set "DemoArgs=-d3d11 -windowed -ResX=1280 -ResY=720 -nosplash"
-set "DemoSettings=r.SetRes 1280x720w,r.VSync 0,sg.ShadowQuality 1,sg.GlobalIlluminationQuality 0,sg.ReflectionQuality 0,sg.PostProcessQuality 1,sg.EffectsQuality 1,r.ScreenPercentage 100,r.LightMaxDrawDistanceScale 0.5"
+set "DemoWidth=1600"
+set "DemoHeight=900"
+set "DemoRenderScale=75"
+set "DemoPreset=%~1"
+if not "%~2"=="" set "DemoPreset=%~2"
+if /i "%DemoPreset%"=="compact" (
+    set "DemoWidth=1280"
+    set "DemoHeight=720"
+    set "DemoRenderScale=100"
+)
+set "DemoArgs=-d3d11 -windowed -ResX=%DemoWidth% -ResY=%DemoHeight% -nosplash -ini:Engine:[ConsoleVariables]:r.ScreenPercentage=%DemoRenderScale%"
+set "DemoSettings=r.SetRes %DemoWidth%x%DemoHeight%w,r.VSync 0,sg.ShadowQuality 1,sg.GlobalIlluminationQuality 0,sg.ReflectionQuality 0,sg.PostProcessQuality 1,sg.EffectsQuality 1,r.LightMaxDrawDistanceScale 0.5,r.AntiAliasingMethod 2,r.TemporalAA.Upsampling 1,r.MaxAnisotropy 8,r.Tonemapper.Sharpen 0.30"
 set "DemoFPS=30"
 set "DemoHttp=-ini:Engine:[HTTP]:bEnableHttp=False"
 if /i "%~1"=="smooth" set "DemoFPS=45"
