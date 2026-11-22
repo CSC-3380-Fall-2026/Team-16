@@ -453,7 +453,7 @@ def main():
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--dry-run", action="store_true")
     mode.add_argument("--finish", action="store_true", help="Finish geometry in a fresh editor process")
-    mode.add_argument("--finish-exterior", action="store_true", help="Update exit doors and scenery on a saved map")
+    mode.add_argument("--finish-exterior", action="store_true", help="Update exterior glazing and scenery on a saved map")
     args = parser.parse_args()
     if "-run=" in unreal.SystemLibrary.get_command_line().lower():
         raise RuntimeError("Use -ExecutePythonScript, not -run=PythonScript; duplication needs the editor")
