@@ -2,9 +2,63 @@
 #include "PFTDestinations.h"
 #include "PFTExplorePawn.h"
 #include "PFTNavigatorWidget.h"
+#include "PFTPalette.h"
 #include "PFTRoomMarker.h"
+#include "Blueprint/WidgetBlueprintLibrary.h"
+#include "Blueprint/WidgetTree.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
+#include "Components/NativeWidgetHost.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
+#include "Widgets/Input/SButton.h"
+
+namespace
+{
+    void AddMovementControlsToggle(UWorld& World)
+    {
+        TArray<UUserWidget*> Menus;
+        UWidgetBlueprintLibrary::GetAllWidgetsOfClass(&World, Menus, UUserWidget::StaticClass(), true);
+        for (UUserWidget* Menu : Menus)
+        {
+            // The twin's main menu groups Walk, Fly, Explore, and Top View on this canvas slot.
+            auto* Controls = Menu->GetWidgetFromName(TEXT("AdminModes"));
+            const auto* ControlsSlot = Controls ? Cast<UCanvasPanelSlot>(Controls->Slot) : nullptr;
+            auto* Canvas = ControlsSlot ? Cast<UCanvasPanel>(Controls->GetParent()) : nullptr;
+            if (!Canvas || !Controls->IsVisible() || Menu->GetWidgetFromName(TEXT("MovementControlsToggle"))) continue;
+
+            const TWeakObjectPtr<UWidget> MovementControls(Controls);
+            const ESlateVisibility OpenVisibility = Controls->GetVisibility();
+            auto* Toggle = Menu->WidgetTree->ConstructWidget<UNativeWidgetHost>(
+                UNativeWidgetHost::StaticClass(), TEXT("MovementControlsToggle"));
+            Toggle->SetContent(SNew(SButton)
+                .ButtonColorAndOpacity(FLinearColor(PFTPalette::Purple))
+                .ForegroundColor(FLinearColor::White)
+                .ContentPadding(FMargin(10, 4))
+                .Text_Lambda([MovementControls]
+                {
+                    return MovementControls.IsValid() && MovementControls->IsVisible()
+                        ? NSLOCTEXT("PFTNavigator", "HideMovementControls", "Hide controls")
+                        : NSLOCTEXT("PFTNavigator", "ShowMovementControls", "Show controls");
+                })
+                .OnClicked_Lambda([MovementControls, OpenVisibility]
+                {
+                    if (auto* Row = MovementControls.Get())
+                    {
+                        Row->SetVisibility(Row->IsVisible() ? ESlateVisibility::Collapsed : OpenVisibility);
+                    }
+                    return FReply::Handled();
+                }));
+
+            auto* ToggleSlot = Canvas->AddChildToCanvas(Toggle);
+            ToggleSlot->SetAnchors(ControlsSlot->GetAnchors());
+            ToggleSlot->SetAlignment(ControlsSlot->GetAlignment());
+            ToggleSlot->SetPosition(ControlsSlot->GetPosition() - FVector2D(0, 38));
+            ToggleSlot->SetAutoSize(true);
+            return;
+        }
+    }
+}
 
 bool UPFTExploration::DoesSupportWorldType(EWorldType::Type WorldType) const
 {
@@ -30,6 +84,7 @@ void UPFTExploration::Tick(float DeltaTime)
     // The welcome screen owns the cursor until the twin removes this tag.
     static const FName OnboardingActiveTag(TEXT("PFTOnboardingActive"));
     if (Player->ActorHasTag(OnboardingActiveTag)) return;
+    AddMovementControlsToggle(*GetWorld());
     Widget = CreateWidget<UPFTNavigatorWidget>(Player, UPFTNavigatorWidget::StaticClass());
     Widget->AddToViewport(20);
     Widget->SetPositionInViewport(FVector2D(24, 108));
