@@ -59,6 +59,24 @@ class TestDepartmentRooms(unittest.TestCase):
         # Nothing written to the folder, so there's no courses.json to load
         self.assertEqual(get_department_room_ids("DEPT_CSE", self.folder), [])
 
+    def test_includes_offices(self):
+        # The department office and faculty offices are department rooms too, not just classrooms
+        self.write_courses([{"Name": "CSC_3380", "DepartmentId": "DEPT_CSE", "RoomId": "PFT_1200"}])
+        files = {
+            "faculty.json": [
+                {"Name": "FAC_A", "DepartmentId": "DEPT_CSE", "OfficeRoomId": "PFT_3270C"},
+                {"Name": "FAC_B", "DepartmentId": "DEPT_ME", "OfficeRoomId": "PFT_2100"},
+            ],
+            "departments.json": [
+                {"Name": "DEPT_CSE", "OfficeRoomId": "PFT_3325"},
+                {"Name": "DEPT_ME", "OfficeRoomId": "PFT_2200"},
+            ],
+        }
+        for file_name, rows in files.items():
+            with open(os.path.join(self.folder, file_name), "w") as file:
+                json.dump(rows, file)
+        self.assertEqual(get_department_room_ids("DEPT_CSE", self.folder), ["PFT_1200", "PFT_3270C", "PFT_3325"])
+
 
 if __name__ == "__main__":
     unittest.main()
