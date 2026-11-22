@@ -71,6 +71,8 @@ Task 3 reuses the team's existing schema and placeholder rows. The validator
 also rejects malformed JSON, wrong row/field types, blank strings, duplicate room
 numbers, and broken references. Each course row identifies one selected lecture
 location. Use LSU Course Offerings to check a specific section and its meeting times.
+Two classes with full schedules can't be in the same room on the same day at
+overlapping times (back to back is fine).
 
 Run `python tools/validate_data.py` after changing anything in here.
 

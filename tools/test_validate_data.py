@@ -131,6 +131,21 @@ class TestValidateData(unittest.TestCase):
         self.write_files()
         self.assertTrue(any("invalid StartTime" in error for error in validate_data.validate(self.folder)))
 
+    def test_two_classes_in_one_room_at_once(self):
+        first = self.data["courses.json"][0]
+        first.update(Instructor="Test Person", MeetingDays="TR", StartTime="12:00", EndTime="13:20")
+        second = dict(first, Name="CSC_4330", CourseCode="CSC 4330", StartTime="13:00", EndTime="14:20")
+        self.data["courses.json"].append(second)
+        self.write_files()
+        self.assertIn("courses.json: CSC_3380 and CSC_4330 are in PFT_1200 at the same time",
+                      validate_data.validate(self.folder))
+        # Back to back, a different day, or a different room are all fine
+        for change in ({"StartTime": "13:20"}, {"MeetingDays": "MWF"}, {"RoomId": "PFT_3325"}):
+            with self.subTest(change=change):
+                self.data["courses.json"][1] = dict(second, **change)
+                self.write_files()
+                self.assertEqual(validate_data.validate(self.folder), [])
+
     def test_floor_limit_matches_unreal(self):
         self.data["rooms.json"][0]["Floor"] = 2147483647
         self.write_files()

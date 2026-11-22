@@ -105,6 +105,25 @@ def check_course_schedules(rows):
     return errors
 
 
+def check_room_conflicts(rows):
+    """Makes sure two classes aren't booked in the same room at the same time.
+    If they were, My classes would send two classes to one room and one of them is wrong.
+    Only classes with a full schedule (days, start and end) can be checked.
+    Params: rows - the rows from courses.json (schedules already checked)
+    Returns: a list of errors, one for each pair of classes that overlap
+    """
+    timed = [row for row in rows if row.get("MeetingDays") and row.get("StartTime") and row.get("EndTime")]
+    errors = []
+    for i, first in enumerate(timed):
+        for second in timed[i + 1:]:
+            same_day = set(first["MeetingDays"]) & set(second["MeetingDays"])
+            # HH:MM strings compare like times, so they overlap if each one starts before the other ends
+            overlap = first["StartTime"] < second["EndTime"] and second["StartTime"] < first["EndTime"]
+            if first["RoomId"] == second["RoomId"] and same_day and overlap:
+                errors.append(f"courses.json: {first['Name']} and {second['Name']} are in {first['RoomId']} at the same time")
+    return errors
+
+
 def check_duplicate_ids(file_name, rows):
     """Makes sure no two rows in a file have the same ID.
     Unreal uses the Name as the row name in a DataTable, so it has to be unique.
@@ -182,6 +201,7 @@ def validate(folder):
     # References need every file loaded, so skip them if one failed to load
     if len(data) == len(REQUIRED_FIELDS) and not errors:
         errors += check_references(data)
+        errors += check_room_conflicts(data["courses.json"])
         binding_path = os.path.join(folder, "room_bindings.json")
         if os.path.exists(binding_path):
             errors += check_bindings(load_file(folder, "room_bindings.json"), get_ids(data["rooms.json"]))
