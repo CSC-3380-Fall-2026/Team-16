@@ -314,9 +314,12 @@ selected map before starting Unreal. The build record includes the installed
 graph's SHA-256 hash. To switch back to the default map, run the installer
 without `--walking-graph`.
 
-The launcher opens the demo at native 720p with DirectX 11 and a 30 FPS cap.
-Run `& '.\Play PFT Demo.cmd' smooth` to use a 45 FPS cap at the same resolution
-and quality settings. The package includes both DirectX renderers.
+The launcher opens a 1600 by 900 window with DirectX 11 and a 30 FPS cap. It
+renders the scene at 75 percent scale and uses temporal upsampling with light
+sharpening. Menus, room labels in the Navigator, and the map stay at the output
+resolution. Anisotropic filtering keeps oblique floors and walls clearer.
+Use `& '.\Play PFT Demo.cmd' smooth` for a 45 FPS cap or `compact` for a native
+1280 by 720 window. The package includes both DirectX renderers.
 
 ## Verify a Windows package
 

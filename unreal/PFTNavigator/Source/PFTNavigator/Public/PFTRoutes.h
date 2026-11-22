@@ -16,6 +16,7 @@ class PFTNAVIGATOR_API UPFTRoutes : public UTickableWorldSubsystem
 public:
     bool DoesSupportWorldType(EWorldType::Type WorldType) const override;
     void OnWorldBeginPlay(UWorld& World) override;
+    bool IsTickable() const override;
     void Tick(float DeltaTime) override;
     TStatId GetStatId() const override;
     void Deinitialize() override;

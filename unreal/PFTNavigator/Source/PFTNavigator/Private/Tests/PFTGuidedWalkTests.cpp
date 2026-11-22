@@ -55,17 +55,20 @@ namespace
         auto* Hint = CastChecked<UTextBlock>(Tree->FindWidget(TEXT("RouteHint")));
         auto* RenderScale = IConsoleManager::Get().FindConsoleVariable(TEXT("r.ScreenPercentage"));
         if (!Test.TestNotNull(TEXT("Render resolution can be adjusted"), RenderScale)) return;
-        const float OriginalScale = RenderScale->GetFloat();
+        const FName TestScaleTag(TEXT("PFTTestRenderScale"));
+        Performance->OnCheckStateChanged.Broadcast(false);
+        RenderScale->Set(75.0f, ECVF_SetByTemp, TestScaleTag);
         LargerText->OnCheckStateChanged.Broadcast(true);
         Test.TestTrue(TEXT("Larger directions increases the text size"), Hint->GetFont().Size == 24.0f);
         Performance->OnCheckStateChanged.Broadcast(true);
-        Test.TestEqual(TEXT("Performance mode lowers rendering resolution"), RenderScale->GetFloat(), FMath::Min(75.0f, OriginalScale));
+        Test.TestEqual(TEXT("Performance mode lowers a 75 percent render scale to 60"), RenderScale->GetFloat(), 60.0f);
+        Performance->OnCheckStateChanged.Broadcast(true);
+        Test.TestEqual(TEXT("Reapplying performance mode keeps the same render scale"), RenderScale->GetFloat(), 60.0f);
         Performance->OnCheckStateChanged.Broadcast(false);
-        Test.TestEqual(TEXT("Performance mode can restore the original resolution"), RenderScale->GetFloat(), OriginalScale);
-        RenderScale->Set(OriginalScale, ECVF_SetByConsole);
+        Test.TestEqual(TEXT("Performance mode restores the launcher setting"), RenderScale->GetFloat(), 75.0f);
+        RenderScale->Unset(ECVF_SetByTemp, TestScaleTag);
         LargerText->OnCheckStateChanged.Broadcast(LargerText->IsChecked());
         Performance->OnCheckStateChanged.Broadcast(Performance->IsChecked());
-        RenderScale->Set(OriginalScale, ECVF_SetByConsole);
         SettingsButton->OnClicked.Broadcast();
     }
 

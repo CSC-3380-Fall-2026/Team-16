@@ -40,12 +40,19 @@ namespace
         GConfig->Flush(false, GGameUserSettingsIni);
     }
 
-    void ApplyPerformancePreset(bool bEnabled, float StandardRenderScale)
+    void ApplyPerformancePreset(bool bEnabled)
     {
         if (auto* ScreenPercentage = IConsoleManager::Get().FindConsoleVariable(TEXT("r.ScreenPercentage")))
         {
-            // The Windows launcher sets this at console priority.
-            ScreenPercentage->Set(bEnabled ? FMath::Min(75.0f, StandardRenderScale) : StandardRenderScale, ECVF_SetByConsole);
+            // Remove only our override so the launcher or engine setting is restored.
+            static const FName PerformanceTag(TEXT("PFTNavigatorPerformance"));
+            ScreenPercentage->Unset(ECVF_SetByTemp, PerformanceTag);
+            if (bEnabled)
+            {
+                const float CurrentScale = ScreenPercentage->GetFloat();
+                const float BaseScale = CurrentScale > 0.0f ? CurrentScale : 100.0f;
+                ScreenPercentage->Set(FMath::Min(75.0f, BaseScale * 0.8f), ECVF_SetByTemp, PerformanceTag);
+            }
         }
     }
 }
@@ -389,7 +396,11 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     // The walking buttons get extra padding because they're clicked while moving
     const auto MakeEasyToClick = [](UButton* Button)
     {
-        CastChecked<UButtonSlot>(Button->GetContent()->Slot)->SetPadding(FMargin(8, 6));
+        auto* Label = CastChecked<UTextBlock>(Button->GetContent());
+        Label->SetMinDesiredWidth(100.0f);
+        CastChecked<UButtonSlot>(Label->Slot)->SetPadding(FMargin(8, 6));
+        // Keep the controls in place as opening the walking map widens the panel.
+        CastChecked<UHorizontalBoxSlot>(Button->Slot)->SetSize(FSlateChildSize(ESlateSizeRule::Automatic));
     };
     StopRouteButton = AddButton(GuidanceActions, TEXT("Stop route"), Label);
     StopRouteButton->Rename(TEXT("StopRouteButton"));
@@ -418,11 +429,7 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
         WalkingStepsLabel, RouteMapScaleLabel);
     GetWorld()->GetSubsystem<UPFTRoutes>()->SetReducedMotion(Motion->IsChecked());
     SetDirectionsTextSize(LargerText->IsChecked());
-    if (const auto* ScreenPercentage = IConsoleManager::Get().FindConsoleVariable(TEXT("r.ScreenPercentage")))
-    {
-        StandardRenderScale = ScreenPercentage->GetFloat();
-    }
-    if (Performance->IsChecked()) ApplyPerformancePreset(true, StandardRenderScale);
+    ApplyPerformancePreset(Performance->IsChecked());
     for (auto* Child : Column->GetAllChildren())
         Cast<UVerticalBoxSlot>(Child->Slot)->SetPadding(FMargin(0, 0, 0, 6));
     RefreshResults();
@@ -937,7 +944,7 @@ void UPFTNavigatorWidget::SetDirectionsTextSize(bool bLarge)
 
 void UPFTNavigatorWidget::PerformanceChanged(bool bChecked)
 {
-    ApplyPerformancePreset(bChecked, StandardRenderScale);
+    ApplyPerformancePreset(bChecked);
     SavePreference(TEXT("PerformanceMode"), bChecked);
 }
 

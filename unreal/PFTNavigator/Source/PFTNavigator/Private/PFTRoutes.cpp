@@ -564,6 +564,11 @@ bool UPFTRoutes::Start(ACharacter& Character, const FString& RoomId, const FStri
     return IsGuiding() || HasArrived();
 }
 
+bool UPFTRoutes::IsTickable() const
+{
+    return !Path.IsEmpty() || bArrived;
+}
+
 void UPFTRoutes::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
@@ -689,6 +694,7 @@ void UPFTRoutes::DrawPath(const FVector& Position)
         Trail = NewObject<ULineBatchComponent>(this, TEXT("PFTWalkingTrail"));
         Trail->bCalculateAccurateBounds = true;
         Trail->RegisterComponentWithWorld(GetWorld());
+        Trail->SetComponentTickEnabled(false);
     }
     const int32 FirstIndex = FMath::Max(0, NextIndex - 1);
     const double Progress = FMath::Clamp(SegmentProgress(Position, Path[FirstIndex], Path[NextIndex]), 0.0, 1.0);
@@ -698,8 +704,9 @@ void UPFTRoutes::DrawPath(const FVector& Position)
     const double AnimationDistance = bReducedMotion ? ArrowSpacing * 0.5 : GetWorld()->GetTimeSeconds() * ArrowSpeed;
     const double Phase = AnimationDistance - VisibleStart;
     double ArrowDistance = VisibleStart + FMath::Fmod(FMath::Fmod(Phase, ArrowSpacing) + ArrowSpacing, ArrowSpacing);
-    TArray<FBatchedLine> Lines;
-    Lines.Reserve(56);
+    // This component owns only the current trail. Reuse its buffer as the arrows move.
+    TArray<FBatchedLine>& Lines = Trail->BatchedLines;
+    Lines.Reset(56);
     const FVector FloorLift(0, 0, 8);
     for (int32 Index = FirstIndex; Index + 1 < Path.Num() && ArrowDistance < VisibleEnd; ++Index)
     {
@@ -721,8 +728,7 @@ void UPFTRoutes::DrawPath(const FVector& Position)
         const FVector Direction = (Path[NextIndex] - Start).GetSafeNormal2D();
         AddArrow(Lines, Path[NextIndex] + FloorLift, Direction.IsNearlyZero() ? FVector::ForwardVector : Direction, 1.0f);
     }
-    Trail->Flush();
-    Trail->DrawLines(Lines);
+    Trail->MarkRenderStateDirty();
 }
 
 void UPFTRoutes::ShowArrival(const FVector& Position)
