@@ -18,7 +18,8 @@ Engine\Extras\Redist\en-us\vc_redist.x64.exe
 The launcher opens a 1600 by 900 window with a 30 FPS cap. Menus and maps use
 the full window resolution. The scene uses temporal upsampling to stay within
 the rendering budget. From PowerShell in this folder, use the 45 FPS preset
-or open a smaller 1280 by 720 window for a compact display.
+with a shorter draw distance for distant lights, or open a smaller 1280 by
+720 window for a compact display.
 
 & '.\Play PFT Demo.cmd' smooth
 & '.\Play PFT Demo.cmd' compact
