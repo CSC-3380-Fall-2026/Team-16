@@ -11,6 +11,7 @@ import unreal
 
 MAP = "/Game/Level/PFTFirstFloorComplete"
 STEP = 60
+WALKWAY_YAW = 15.45
 RADIUS = 42
 HALF_HEIGHT = 92
 EDGES = ((1, 0), (0, 1), (-1, 0), (0, -1))
@@ -244,7 +245,8 @@ def bake(map_path, output):
                 landmarks[label] = [round(center.x), round(center.y)]
     nodes = (json.dumps([x, y, round(positions[x, y].z - HALF_HEIGHT - 4, 2), links[x, y]], separators=(",", ":"))
              for x, y in sorted(links))
-    graph = {"Map": map_path, "Step": STEP, "Destinations": destinations, "RoomStops": stops, "Landmarks": landmarks}
+    graph = {"Map": map_path, "Step": STEP, "WalkwayYaw": WALKWAY_YAW,
+             "Destinations": destinations, "RoomStops": stops, "Landmarks": landmarks}
     if seating:
         graph["SeatingCells"] = seating
     text = json.dumps(graph, separators=(",", ":"))

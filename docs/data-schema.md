@@ -79,6 +79,9 @@ Run `python tools/validate_data.py` after changing anything in here.
 If `first_floor_routes.json` is present, validation also checks its grid,
 two-way links, and connectivity from the Commons to every listed first-floor
 destination. Unreal's walkthrough tests check movement on the actual map.
+The optional `WalkwayYaw` value gives the hallway axes in Unreal degrees.
+The browser and Unreal use it to keep right-angle turns aligned with the
+building. Older graphs use the grid axes.
 The optional `RoomStops` object maps a room ID to an XYZ floor point in
 centimetres inside its doorway. The room's grid destination is the approach
 to that doorway. Unreal checks the final walking segment against the pawn's collision.
