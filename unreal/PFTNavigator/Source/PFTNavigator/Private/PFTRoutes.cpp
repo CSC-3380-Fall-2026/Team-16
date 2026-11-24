@@ -5,6 +5,7 @@
 #include "Components/LineBatchComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Dom/JsonObject.h"
+#include "Engine/Texture2D.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -790,10 +791,51 @@ const TPair<FString, FVector2D>* UPFTRoutes::GetRouteLandmark(TArrayView<const F
     return FindRouteLandmark(Points, Landmarks);
 }
 
-int32 UPFTRoutes::CopyWalkableCells(TArray<FIntPoint>& Cells) const
+UTexture2D* UPFTRoutes::GetFloorMap(FBox2D& Bounds)
 {
-    Nodes.GenerateKeyArray(Cells);
-    return Step;
+    if (FloorMap)
+    {
+        Bounds = FloorMapBounds;
+        return FloorMap;
+    }
+    if (Nodes.IsEmpty() || Step <= 0)
+    {
+        Bounds = FBox2D(ForceInit);
+        return nullptr;
+    }
+
+    FIntPoint Min = Nodes.CreateConstIterator().Key();
+    FIntPoint Max = Min;
+    for (const auto& Pair : Nodes)
+    {
+        Min = Min.ComponentMin(Pair.Key);
+        Max = Max.ComponentMax(Pair.Key);
+    }
+    const FIntPoint Span = Max - Min + FIntPoint(1, 1);
+    const int32 CellsPerPixel = FMath::DivideAndRoundUp(FMath::Max(Span.X, Span.Y), 512);
+    const int32 Width = FMath::DivideAndRoundUp(Span.X, CellsPerPixel);
+    const int32 Height = FMath::DivideAndRoundUp(Span.Y, CellsPerPixel);
+    TArray<FColor> Pixels;
+    Pixels.Init(FColor(245, 243, 249), Width * Height);
+    for (const auto& Pair : Nodes)
+    {
+        const FIntPoint Pixel = (Pair.Key - Min) / CellsPerPixel;
+        Pixels[(Height - 1 - Pixel.Y) * Width + Pixel.X] = FColor(206, 198, 222);
+    }
+
+    const TConstArrayView64<uint8> Image(reinterpret_cast<const uint8*>(Pixels.GetData()), Pixels.Num() * sizeof(FColor));
+    FloorMap = UTexture2D::CreateTransient(Width, Height, PF_B8G8R8A8, NAME_None, Image);
+    if (!FloorMap)
+    {
+        Bounds = FBox2D(ForceInit);
+        return nullptr;
+    }
+    FloorMap->Filter = TF_Bilinear;
+    FloorMap->UpdateResource();
+    const FVector2D WorldMin = FVector2D(Min) * Step - FVector2D(Step * 0.5);
+    FloorMapBounds = FBox2D(WorldMin, WorldMin + FVector2D(Width, Height) * (Step * CellsPerPixel));
+    Bounds = FloorMapBounds;
+    return FloorMap;
 }
 
 void UPFTRoutes::Deinitialize()
