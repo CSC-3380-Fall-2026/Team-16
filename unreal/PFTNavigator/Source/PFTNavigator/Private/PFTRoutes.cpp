@@ -425,32 +425,45 @@ bool UPFTRoutes::CanCross(const ACharacter& Character, const FVector& Start, con
     return !GetWorld()->SweepTestByProfile(Start, End, FQuat::Identity, Capsule->GetCollisionProfileName(), Shape, Query);
 }
 
+bool UPFTRoutes::CanWalkSegment(const ACharacter& Character, const FVector& Start, const FVector& End,
+    double HeightTolerance, bool bCheckEnd) const
+{
+    if (!CanCross(Character, Start, End)) return false;
+    const FCollisionQueryParams FloorQuery(SCENE_QUERY_STAT(PFTWalkingEntry), false, &Character);
+    const auto* Capsule = Character.GetCapsuleComponent();
+    const FName Profile = Capsule->GetCollisionProfileName();
+    const double HalfHeight = Capsule->GetScaledCapsuleHalfHeight();
+    const double WalkableFloorZ = Character.GetCharacterMovement()->GetWalkableFloorZ();
+    // A clear capsule sweep can still pass over a gap or a drop.
+    const int32 Samples = FMath::Max(1, FMath::CeilToInt(FVector::Dist2D(Start, End) / (Step * 0.5)));
+    const int32 Limit = Samples + static_cast<int32>(bCheckEnd);
+    for (int32 Sample = 1; Sample < Limit; ++Sample)
+    {
+        const FVector Feet = FMath::Lerp(Start, End, double(Sample) / Samples) - FVector(0, 0, HalfHeight + 4.0);
+        FHitResult FloorHit;
+        if (!GetWorld()->LineTraceSingleByProfile(FloorHit, Feet + FVector(0, 0, FloorTolerance),
+            Feet - FVector(0, 0, FloorTolerance), Profile, FloorQuery)
+            || FloorHit.ImpactNormal.Z < WalkableFloorZ
+            || FMath::Abs(FloorHit.ImpactPoint.Z - Feet.Z) > HeightTolerance) return false;
+    }
+    return true;
+}
+
 bool UPFTRoutes::BuildPath(const ACharacter& Character, const FRouteTarget& Target, TArray<FVector>& Points) const
 {
+#if WITH_DEV_AUTOMATION_TESTS
+    ++PathBuildCount;
+#endif
     const FVector Position = Character.GetActorLocation();
     const FVector RaisedPosition = Position + FVector(0, 0, 4);
     const FIntPoint Near(FMath::RoundToInt(Position.X / Step), FMath::RoundToInt(Position.Y / Step));
     const double Speed = FMath::Max(1.0, static_cast<double>(Character.GetCharacterMovement()->MaxWalkSpeed));
     const double EntryRange = Step * StartSearchCells;
     TArray<FRouteEntry> Entries;
-    FCollisionQueryParams FloorQuery(SCENE_QUERY_STAT(PFTWalkingEntry), false, &Character);
-    const FName Profile = Character.GetCapsuleComponent()->GetCollisionProfileName();
     const double HalfHeight = Character.GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
     const auto CanWalk = [&](const FVector& Start, const FVector& End, double HeightTolerance)
     {
-        if (!CanCross(Character, Start, End)) return false;
-        // A clear capsule sweep can still pass over a gap or a drop.
-        const int32 Samples = FMath::CeilToInt(FVector::Dist2D(Start, End) / (Step * 0.5));
-        for (int32 Sample = 1; Sample < Samples; ++Sample)
-        {
-            const FVector Feet = FMath::Lerp(Start, End, double(Sample) / Samples) - FVector(0, 0, HalfHeight + 4.0);
-            FHitResult FloorHit;
-            if (!GetWorld()->LineTraceSingleByProfile(FloorHit, Feet + FVector(0, 0, FloorTolerance),
-                Feet - FVector(0, 0, FloorTolerance), Profile, FloorQuery)
-                || FloorHit.ImpactNormal.Z < Character.GetCharacterMovement()->GetWalkableFloorZ()
-                || FMath::Abs(FloorHit.ImpactPoint.Z - Feet.Z) > HeightTolerance) return false;
-        }
-        return true;
+        return CanWalkSegment(Character, Start, End, HeightTolerance);
     };
     if (Target.RoomStop.IsSet())
     {
@@ -510,9 +523,33 @@ bool UPFTRoutes::BuildPath(const ACharacter& Character, const FRouteTarget& Targ
     return true;
 }
 
-bool UPFTRoutes::Plan(const ACharacter& Character, const FRouteTarget& Target)
+bool UPFTRoutes::UsePreview(const ACharacter& Character, const FString& RoomId)
 {
-    if (!BuildPath(Character, Target, Path)) return false;
+    auto Preview = MoveTemp(LastPreview);
+    LastPreview.Reset();
+    if (!Preview || Preview->Character.Get() != &Character || Preview->RoomId != RoomId
+        || !Preview->Position.Equals(Character.GetActorLocation(), 1.0)
+        || Preview->WalkSpeed != Character.GetCharacterMovement()->MaxWalkSpeed) return false;
+
+    // Recheck the displayed legs against live collision in case the map changed after previewing.
+    FVector Start = Character.GetActorLocation() + FVector(0, 0, 4);
+    for (int32 Index = 0; Index < Preview->Points.Num(); ++Index)
+    {
+        const FVector End = CapsuleCenter(Character, Preview->Points[Index]);
+        if (!Start.Equals(End, 0.01) && !CanWalkSegment(Character, Start, End, Index ? 7.0 : FloorTolerance, true))
+        {
+            return false;
+        }
+        Start = End;
+    }
+    Path = MoveTemp(Preview->Points);
+    return true;
+}
+
+bool UPFTRoutes::Plan(const ACharacter& Character, const FRouteTarget& Target, const FString* PreviewRoomId)
+{
+    const bool bReusedPreview = PreviewRoomId && UsePreview(Character, *PreviewRoomId);
+    if (!bReusedPreview && !BuildPath(Character, Target, Path)) return false;
     PathDistances = MeasurePath(Path);
     NextIndex = FMath::Min(1, Path.Num() - 1);
     TurnPoints = FindRouteTurns(Path);
@@ -522,6 +559,7 @@ bool UPFTRoutes::Plan(const ACharacter& Character, const FRouteTarget& Target)
 
 bool UPFTRoutes::Preview(const ACharacter& Character, const FString& RoomId, TArray<FVector>& Points, FString& Estimate) const
 {
+    LastPreview.Reset();
     Points.Reset();
     Estimate.Reset();
     const FRouteTarget* Target = Destinations.Find(RoomId);
@@ -533,6 +571,8 @@ bool UPFTRoutes::Preview(const ACharacter& Character, const FString& RoomId, TAr
     const int32 Metres = FMath::RoundToInt(Distance / 100.0);
     const double TurnTime = FindRouteTurns(Points).Num() * SecondsPerQuarterTurn;
     Estimate = FString::Printf(TEXT("%s walk · %d m"), *WalkingTimeLabel(Distance / Speed + TurnTime), Metres);
+    LastPreview.Emplace(FPreviewRoute{&Character, RoomId, Character.GetActorLocation(),
+        Character.GetCharacterMovement()->MaxWalkSpeed, Points});
     return true;
 }
 
@@ -540,7 +580,7 @@ bool UPFTRoutes::Start(ACharacter& Character, const FString& RoomId, const FStri
 {
     const FRouteTarget* Target = Destinations.Find(RoomId);
     if (!Target) return false;
-    if (!Character.GetCharacterMovement()->IsMovingOnGround() || !Plan(Character, *Target))
+    if (!Character.GetCharacterMovement()->IsMovingOnGround() || !Plan(Character, *Target, &RoomId))
     {
         bCanRetry = true;
         if (!IsGuiding())
@@ -753,6 +793,7 @@ void UPFTRoutes::EndGuidance(const FText& NewMessage)
     Path.Reset();
     PathDistances.Reset();
     TurnPoints.Reset();
+    LastPreview.Reset();
     UpdateTime = 0;
     bReplanning = false;
     Message = NewMessage;
