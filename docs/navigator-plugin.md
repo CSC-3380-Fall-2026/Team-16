@@ -41,7 +41,9 @@ Choose **Show steps** in either map view to read upcoming turns, nearby landmark
 and the distance for each leg. During guidance, the list updates as you walk or reroute.
 Choose **Walk there** and follow the gold arrows with WASD.
 Routes follow the mapped walkway around corners and avoid cutting through the
-carpeted seating areas when the gray hallway connects. The gold arrows cover the rest
+carpeted seating areas when the gray hallway connects. At hallway intersections,
+the arrows stay straight into the corner and point down the next hallway after the turn.
+The gold arrows cover the rest
 of the route and stay visible until the Navigator confirms arrival. Choose **Stop route**
 or **Clear** to end guidance. Room previews and free camera are available from
 the same panel.

@@ -23,6 +23,8 @@ namespace
     constexpr double CornerRadius = 16.0;
     constexpr double PreferredClearance = 150.0;
     constexpr double TurnCostInGridSteps = 2.0;
+    constexpr int32 HallwayCornerRunCells = 5;
+    constexpr int32 CornerLeadCells = 3;
     constexpr double SeatingCostInGridSteps = 12.0;
     constexpr double ArrivalRadius = 65.0;
     constexpr double FloorTolerance = 45.0;
@@ -84,19 +86,67 @@ namespace
         return true;
     }
 
+    int32 GridDirection(const FVector& Delta)
+    {
+        if (FMath::IsNearlyZero(Delta.Y) && !FMath::IsNearlyZero(Delta.X)) return Delta.X > 0.0 ? 0 : 2;
+        if (FMath::IsNearlyZero(Delta.X) && !FMath::IsNearlyZero(Delta.Y)) return Delta.Y > 0.0 ? 1 : 3;
+        return INDEX_NONE;
+    }
+
+    TArray<int32> HallwayCornerStops(TArrayView<const FVector> Points)
+    {
+        TArray<int32> Stops;
+        int32 PreviousStart = 0;
+        int32 PreviousDirection = INDEX_NONE;
+        int32 Start = 0;
+        while (Start + 1 < Points.Num())
+        {
+            const int32 Direction = GridDirection(Points[Start + 1] - Points[Start]);
+            int32 End = Start + 1;
+            while (End + 1 < Points.Num() && GridDirection(Points[End + 1] - Points[End]) == Direction) ++End;
+            if (Direction != INDEX_NONE && PreviousDirection != INDEX_NONE && (Direction % 2) != (PreviousDirection % 2)
+                && Start - PreviousStart >= HallwayCornerRunCells && End - Start >= HallwayCornerRunCells)
+            {
+                // Keep a straight approach and exit at a hallway turn. Small grid jogs can still be smoothed.
+                Stops.AddUnique(Start - CornerLeadCells);
+                Stops.AddUnique(Start);
+                Stops.AddUnique(Start + CornerLeadCells);
+            }
+            PreviousStart = Start;
+            PreviousDirection = Direction;
+            Start = End;
+        }
+        Stops.Sort();
+        return Stops;
+    }
+
     TArray<FVector> StraightenPath(TArrayView<const FVector> Points,
-        TFunctionRef<bool(const FVector&, const FVector&)> CanWalk)
+        TFunctionRef<bool(const FVector&, const FVector&)> CanWalk, TArrayView<const int32> Stops = {})
     {
         if (Points.IsEmpty()) return {};
         TArray<FVector> Result = {Points[0]};
         int32 Anchor = 0;
+        int32 StopIndex = 0;
         while (Anchor + 1 < Points.Num())
         {
             // Use the longest clear leg ahead. A grid path may move sideways even in an open hallway.
-            int32 Next = Points.Num() - 1;
+            while (Stops.IsValidIndex(StopIndex) && Stops[StopIndex] <= Anchor) ++StopIndex;
+            int32 Next = Stops.IsValidIndex(StopIndex) ? Stops[StopIndex] : Points.Num() - 1;
             while (Next > Anchor + 1 && !CanWalk(Points[Anchor], Points[Next]))
             {
                 --Next;
+            }
+            if (!Stops.IsEmpty() && Result.Num() >= 2)
+            {
+                const FVector& Before = Result[Result.Num() - 2];
+                const int32 Direction = GridDirection(Result.Last() - Before);
+                if (Direction != INDEX_NONE && Direction == GridDirection(Points[Next] - Result.Last())
+                    && CanWalk(Before, Points[Next]))
+                {
+                    Result.Last() = Points[Next];
+                    Anchor = Next;
+                    continue;
+                }
             }
             Result.Add(Points[Next]);
             Anchor = Next;
@@ -334,11 +384,18 @@ namespace
             {
                 return FMath::Lerp(Path[Index], Path[Index + 1], (Distance - Start) / Length) + FloorLift;
             };
-            const double First = FMath::Max(Start + ArrowTailLength, VisibleStart);
-            const double Phase = FMath::Fmod(AnimationDistance - First, ArrowSpacing);
-            const double Offset = Phase < 0.0 ? Phase + ArrowSpacing : Phase;
+            double First = FMath::Max(Start + ArrowTailLength, VisibleStart);
             const double Scale = FMath::Min(1.0, Length / (ArrowTipLength + ArrowTailLength));
             const double End = Start + Length - ArrowTipLength * Scale;
+            const double ExitArrow = Start + ArrowSpacing * 0.5;
+            if (Index > 0 && FMath::Abs(RouteBend(Path, Index)) >= 0.85
+                && First <= ExitArrow && ExitArrow + ArrowSpacing * 0.5 < End)
+            {
+                AddArrow(Lines, PointAt(ExitArrow), Direction, 1.0, 1.0f);
+                First = ExitArrow + ArrowSpacing * 0.5;
+            }
+            const double Phase = FMath::Fmod(AnimationDistance - First, ArrowSpacing);
+            const double Offset = Phase < 0.0 ? Phase + ArrowSpacing : Phase;
             for (double Distance = First + Offset; Distance < End - ArrowSpacing * 0.5; Distance += ArrowSpacing)
             {
                 const double FadeIn = FMath::Clamp((Distance - VisibleStart) / 65.0, 0.0, 1.0);
@@ -615,11 +672,12 @@ bool UPFTRoutes::BuildPath(const ACharacter& Character, const FRouteTarget& Targ
     }
     for (int32 Index = Reversed.Num() - 1; Index >= 0; --Index) GridPath.Add(Nodes.FindChecked(Reversed[Index]).Floor);
     if (Target.RoomStop.IsSet()) GridPath.Add(Target.RoomStop.GetValue());
+    const auto CornerStops = HallwayCornerStops(GridPath);
     Points = StraightenPath(GridPath, [&](const FVector& Start, const FVector& End)
     {
         // Leave any necessary seating or doorway approaches on the checked legs.
         return IsMappedSegment(Start, End, true) && CanWalk(CapsuleCenter(Character, Start), CapsuleCenter(Character, End), 7.0);
-    });
+    }, CornerStops);
     return true;
 }
 
@@ -930,7 +988,7 @@ bool FPFTRouteStepsTest::RunTest(const FString& Parameters)
     const TArray<FVector> Zigzag = {{0, 0, 0}, {60, 0, 0}, {60, 60, 0}, {120, 60, 0}, {120, 120, 0},
         {180, 120, 0}, {180, 180, 0}};
     const auto Clear = [](const FVector&, const FVector&) { return true; };
-    const auto Straight = StraightenPath(Zigzag, Clear);
+    const auto Straight = StraightenPath(Zigzag, Clear, HallwayCornerStops(Zigzag));
     TestTrue(TEXT("A grid staircase in a clear corridor becomes one straight leg"),
         Straight == TArray<FVector>{Zigzag[0], Zigzag.Last()} && FindRouteTurns(Straight).IsEmpty());
     TestEqual(TEXT("Directions use the length of the straight leg"),
@@ -967,6 +1025,12 @@ bool FPFTRouteStepsTest::RunTest(const FString& Parameters)
         CrossesWalkableCells(ShortRoute[0], ShortRoute[2], 60, WalkwayLinks));
     TestFalse(TEXT("A diagonal cannot cross even a short section of unmapped floor"),
         CrossesWalkableCells(FVector(0, 6, 0), ShortRoute[2], 60, WalkwayLinks));
+    TArray<FVector> Junction;
+    for (int32 Index = 0; Index <= 6; ++Index) Junction.Emplace(Index * 60, 0, 0);
+    for (int32 Index = 1; Index <= 6; ++Index) Junction.Emplace(360, Index * 60, 0);
+    const auto Square = StraightenPath(Junction, Clear, HallwayCornerStops(Junction));
+    TestTrue(TEXT("A clear diagonal cannot cut across a hallway intersection"),
+        Square == TArray<FVector>{Junction[0], Junction[6], Junction.Last()});
     const auto OpenFloor = [](const FIntPoint&) { return 15; };
     TestTrue(TEXT("Open walkable squares allow a straight leg"),
         CrossesWalkableCells(FVector(3000, 0, 0), FVector(-3000, -3000, 0), 60, OpenFloor));
@@ -1007,6 +1071,17 @@ bool FPFTRouteArrowsTest::RunTest(const FString& Parameters)
     DrawRouteArrows(Lines, Path, Distances, 2, Distances.Last() - 1.0, 42.0);
     TestTrue(TEXT("The final arrow stays visible on the last step"),
         Lines.Num() == 4 && FVector::Dist2D(Lines.Last().Start, Path.Last()) < 0.01);
+    const TArray<FVector> Junction = {{0, 0, 0}, {600, 0, 0}, {600, 600, 0}};
+    Lines.Reset();
+    DrawRouteArrows(Lines, Junction, MeasurePath(Junction), 0, 0.0, 42.0);
+    bool bSawExitArrow = false;
+    for (int32 Index = 0; Index < Lines.Num(); Index += 4)
+    {
+        const auto& Arm = Lines[Index];
+        if (!FMath::IsNearlyEqual(Arm.End.X, 600.0) || !FMath::IsNearlyEqual(Arm.End.Y, ArrowSpacing * 0.5 + ArrowTipLength)) continue;
+        bSawExitArrow = Arm.Start.Y > 0.0 && Arm.Start.Y < Arm.End.Y;
+    }
+    TestTrue(TEXT("A steady arrow points straight along the outgoing hallway after a right-angle turn"), bSawExitArrow);
     return true;
 }
 

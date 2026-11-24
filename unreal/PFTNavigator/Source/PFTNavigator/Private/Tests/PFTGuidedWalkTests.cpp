@@ -250,6 +250,21 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
             if (bCheckGrayFloor)
             {
                 CheckArrowFloor(*this, *Character, *Trail);
+                const auto Path = Routes->GetRemainingPath();
+                bool bSquareTurn = false;
+                for (int32 Index = 1; Index + 1 < Path.Num(); ++Index)
+                {
+                    const FVector In = Path[Index] - Path[Index - 1];
+                    const FVector Out = Path[Index + 1] - Path[Index];
+                    if (FVector::Dist2D(Path[0], Path[Index]) > 1400.0) break;
+                    if (In.Size2D() >= 125.0 && Out.Size2D() >= 125.0
+                        && FMath::IsNearlyZero(FVector::DotProduct(In.GetSafeNormal2D(), Out.GetSafeNormal2D()), 0.01))
+                    {
+                        bSquareTurn = true;
+                        break;
+                    }
+                }
+                TestTrue(TEXT("The Commons route keeps the Zone 1200 corner square"), bSquareTurn);
             }
             const bool bNamesZoneTurn = Routes->GetRemainingSteps().ToString().Contains(TEXT("near Zone 1200 sign"));
             const TArray<FBatchedLine> InitialArrows = Trail->BatchedLines;
