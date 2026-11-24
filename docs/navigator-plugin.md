@@ -40,8 +40,8 @@ The closer view fits the updated route when guidance reroutes from a new hallway
 Choose **Show steps** in either map view to read upcoming turns, nearby landmarks,
 and the distance for each leg. During guidance, the list updates as you walk or reroute.
 Choose **Walk there** and follow the gold arrows with WASD.
-Routes favor open space in the walkway. At a corner, the arrows point toward the
-turn until you reach it. The Navigator confirms arrival at the destination. Choose **Stop route**
+Routes follow the mapped walkway around corners. The gold arrows cover the rest
+of the route and stay visible until the Navigator confirms arrival. Choose **Stop route**
 or **Clear** to end guidance. Room previews and free camera are available from
 the same panel.
 No original twin source or building assets are included in the GitHub plugin.

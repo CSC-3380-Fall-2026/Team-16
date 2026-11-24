@@ -216,15 +216,22 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
             auto* Trail = FindObject<ULineBatchComponent>(Routes, TEXT("PFTWalkingTrail"));
             if (!TestNotNull(TEXT("The route creates a trail component"), Trail)) return true;
             if (!TestTrue(TEXT("The trail draws multiple arrows"), Trail->BatchedLines.Num() >= 8)) return true;
+            const FVector Destination = Routes->GetRemainingPath().Last();
+            TestTrue(TEXT("The destination arrow is already drawn at the start of the Commons walk"),
+                FVector::Dist2D(Trail->BatchedLines.Last().Start, Destination) < 0.1);
             const TArray<FBatchedLine> InitialArrows = Trail->BatchedLines;
-            auto StationaryTip = MakeShared<FVector>();
+            auto StationaryTips = MakeShared<TArray<FVector>>();
             ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.4f));
             ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Routes, Trail, InitialArrows]()
             {
                 if (!TestTrue(TEXT("Arrows stay visible while standing still"), Trail->BatchedLines.Num() >= 8)) return true;
                 const auto& Arrow = Trail->BatchedLines[2];
-                TestTrue(TEXT("The arrows move while the player is stationary"),
-                    !InitialArrows[2].End.Equals(Arrow.End, 2.0));
+                bool bMoved = InitialArrows.Num() != Trail->BatchedLines.Num();
+                for (int32 Index = 0; !bMoved && Index < InitialArrows.Num(); Index += 4)
+                {
+                    bMoved = !InitialArrows[Index].End.Equals(Trail->BatchedLines[Index].End, 2.0);
+                }
+                TestTrue(TEXT("The arrows move while the player is stationary"), bMoved);
                 TestTrue(TEXT("The two arms meet at the arrow tip"), Arrow.End.Equals(Trail->BatchedLines[3].Start));
                 Routes->SetReducedMotion(true);
                 return true;
@@ -237,16 +244,23 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
                 return true;
             }));
             ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.2f));
-            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Trail, StationaryTip]()
+            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([Trail, StationaryTips]()
             {
-                if (Trail->BatchedLines.IsValidIndex(2)) *StationaryTip = Trail->BatchedLines[2].End;
+                for (int32 Index = 0; Index < Trail->BatchedLines.Num(); Index += 4)
+                {
+                    StationaryTips->Add(Trail->BatchedLines[Index].End);
+                }
                 return true;
             }));
             ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
-            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Routes, Trail, StationaryTip]()
+            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Routes, Trail, StationaryTips]()
             {
-                TestTrue(TEXT("Reduced motion keeps the arrows still"),
-                    Trail->BatchedLines.IsValidIndex(2) && Trail->BatchedLines[2].End.Equals(*StationaryTip));
+                bool bStill = !StationaryTips->IsEmpty() && Trail->BatchedLines.Num() == StationaryTips->Num() * 4;
+                for (int32 Index = 0; bStill && Index < StationaryTips->Num(); ++Index)
+                {
+                    bStill = Trail->BatchedLines[Index * 4].End.Equals((*StationaryTips)[Index]);
+                }
+                TestTrue(TEXT("Reduced motion keeps the arrows still"), bStill);
                 Routes->SetReducedMotion(false);
                 return true;
             }));
@@ -331,7 +345,7 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
                 ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.2f));
             }
 
-            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Navigator, Player, Character, Routes, Tree, Trail, bProfileGuidance,
+            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Navigator, Player, Character, Routes, Tree, Trail, bProfileGuidance, Destination,
                 SawZoneSign = MakeShared<bool>(false), StepCounts = MakeShared<FIntPoint>(0, 0), Deadline = FPlatformTime::Seconds() + 65.0]()
             {
                 const FVector Position = Character->GetActorLocation();
@@ -473,7 +487,8 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
                     }));
                     return true;
                 }
-                if (!Routes->IsGuiding() || Trail->BatchedLines.IsEmpty() || Position.Z < 65 || FPlatformTime::Seconds() > Deadline)
+                if (!Routes->IsGuiding() || Trail->BatchedLines.IsEmpty() || Position.Z < 65 || FPlatformTime::Seconds() > Deadline
+                    || FVector::Dist2D(Trail->BatchedLines.Last().Start, Destination) >= 0.1)
                 {
                     if (bProfileGuidance) FinishGuidanceProfile();
                     AddError(FString::Printf(TEXT("Guided walk stopped at %s with next point %s. %s"),
