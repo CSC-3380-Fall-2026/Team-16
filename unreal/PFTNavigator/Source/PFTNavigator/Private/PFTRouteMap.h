@@ -18,6 +18,7 @@ public:
     bool ToggleFullFloor();
 #if WITH_DEV_AUTOMATION_TESTS
     const FBox2D& GetFocusBoundsForTests() const { return FocusBounds; }
+    const UObject* GetFloorTextureForTests() const { return FloorBrush.GetResourceObject(); }
 #endif
 
 protected:

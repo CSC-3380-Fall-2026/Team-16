@@ -38,10 +38,19 @@ bool FPFTRefocusAfterRerouteTest::RunTest(const FString& Parameters)
         auto* Navigator = CastChecked<UPFTNavigatorWidget>(Widgets[0]);
         Navigator->ChooseRoom(TEXT("PFT_COMMONS"));
         auto* Tree = Navigator->WidgetTree.Get();
+        CastChecked<UButton>(Tree->FindWidget(TEXT("RoutePreviewButton")))->OnClicked.Broadcast();
+        const UPFTRouteMap* Preview = nullptr;
+        UWidgetTree::ForWidgetAndChildren(Tree->FindWidget(TEXT("RoutePreviewMap")), [&Preview](UWidget* Widget)
+        {
+            if (const auto* Map = Cast<UPFTRouteMap>(Widget)) Preview = Map;
+        });
+        const auto* FloorTexture = Preview ? Preview->GetFloorTextureForTests() : nullptr;
+        if (!TestNotNull(TEXT("Previewing a route creates the floor texture"), FloorTexture)) return true;
         CastChecked<UButton>(Tree->FindWidget(TEXT("RouteButton")))->OnClicked.Broadcast();
         if (!TestTrue(TEXT("The Commons route starts"), Routes->IsGuiding() && !Routes->GetRemainingPath().IsEmpty())) return true;
         CastChecked<UButton>(Tree->FindWidget(TEXT("RouteOverviewButton")))->OnClicked.Broadcast();
         auto* Map = CastChecked<UPFTRouteMap>(Tree->FindWidget(TEXT("WalkingRouteMap")));
+        TestTrue(TEXT("Preview and walking maps reuse the same floor texture"), Map->GetFloorTextureForTests() == FloorTexture);
         auto* Overview = Tree->FindWidget(TEXT("RouteOverview"));
         const FVector Destination = Routes->GetRemainingPath().Last();
         ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));

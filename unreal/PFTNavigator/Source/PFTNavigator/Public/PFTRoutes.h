@@ -6,6 +6,7 @@
 
 class ACharacter;
 class ULineBatchComponent;
+class UTexture2D;
 class UTextRenderComponent;
 
 UCLASS()
@@ -38,7 +39,7 @@ public:
     FText DescribeSteps(const FVector& Position, TArrayView<const FVector> Points) const;
     FText GetRemainingSteps() const;
     const TPair<FString, FVector2D>* GetRouteLandmark(TArrayView<const FVector> Points) const;
-    int32 CopyWalkableCells(TArray<FIntPoint>& Cells) const;
+    UTexture2D* GetFloorMap(FBox2D& Bounds);
 
 private:
     struct FNode
@@ -73,6 +74,8 @@ private:
     TArray<int32> TurnPoints;
     UPROPERTY() TObjectPtr<ULineBatchComponent> Trail;
     UPROPERTY() TObjectPtr<UTextRenderComponent> ArrivalLabel;
+    UPROPERTY(Transient) TObjectPtr<UTexture2D> FloorMap;
+    FBox2D FloorMapBounds{ForceInit};
     TWeakObjectPtr<ACharacter> Walker;
     FString Destination;
     FRouteTarget Goal;

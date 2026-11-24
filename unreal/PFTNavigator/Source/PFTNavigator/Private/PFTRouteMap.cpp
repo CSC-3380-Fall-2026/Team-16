@@ -1,7 +1,6 @@
 #include "PFTRouteMap.h"
 #include "PFTPalette.h"
 #include "PFTRoutes.h"
-#include "Algo/AnyOf.h"
 #include "Engine/Texture2D.h"
 #include "Fonts/FontMeasure.h"
 #include "Framework/Application/SlateApplication.h"
@@ -60,9 +59,14 @@ namespace
                 const FVector2f Candidate = Pin + Offset;
                 const FVector2f Start(FMath::Clamp(Candidate.X, Inset, Area.X - Size.X - Inset),
                     FMath::Clamp(Candidate.Y, Inset, Area.Y - Size.Y - Inset));
-                const FBox2f Margin(Start - FVector2f(8, 8), Start + Size + FVector2f(8, 8));
-                if (Margin.IsInsideOrOn(Pin)
-                    || Algo::AnyOf(Route, [&Margin](const FVector2f& Point) { return Margin.IsInsideOrOn(Point); })) continue;
+                const FBox2D Margin(FVector2D(Start - FVector2f(8, 8)), FVector2D(Start + Size + FVector2f(8, 8)));
+                if (Margin.IsInsideOrOn(FVector2D(Pin))) continue;
+                bool bOverlapsRoute = false;
+                for (int32 Index = 1; Index < Route.Num() && !bOverlapsRoute; ++Index)
+                {
+                    bOverlapsRoute = FMath::LineBoxIntersection2D(Margin, FVector2D(Route[Index - 1]), FVector2D(Route[Index]));
+                }
+                if (bOverlapsRoute) continue;
                 Corner = Start;
                 return true;
             }
@@ -111,41 +115,10 @@ bool UPFTRouteMap::Load(UPFTRoutes& InRoutes, APlayerController& InPlayer)
     bFullFloor = false;
     FocusBounds = FBox2D(ForceInit);
     LandmarkPathCount = INDEX_NONE;
-    if (FloorBrush.GetResourceObject()) return true;
-
-    TArray<FIntPoint> Cells;
-    const int32 Step = InRoutes.CopyWalkableCells(Cells);
-    if (Cells.IsEmpty() || Step <= 0) return false;
-
-    FIntPoint Min = Cells[0];
-    FIntPoint Max = Cells[0];
-    for (const FIntPoint& Cell : Cells)
-    {
-        Min = Min.ComponentMin(Cell);
-        Max = Max.ComponentMax(Cell);
-    }
-    const FIntPoint Span = Max - Min + FIntPoint(1, 1);
-    const int32 CellsPerPixel = FMath::DivideAndRoundUp(FMath::Max(Span.X, Span.Y), 512);
-    const int32 Width = FMath::DivideAndRoundUp(Span.X, CellsPerPixel);
-    const int32 Height = FMath::DivideAndRoundUp(Span.Y, CellsPerPixel);
-    TArray<FColor> Pixels;
-    Pixels.Init(FColor(245, 243, 249), Width * Height);
-    for (const FIntPoint& Cell : Cells)
-    {
-        const FIntPoint Pixel = (Cell - Min) / CellsPerPixel;
-        Pixels[(Height - 1 - Pixel.Y) * Width + Pixel.X] = FColor(206, 198, 222);
-    }
-
-    const TConstArrayView64<uint8> Image(reinterpret_cast<const uint8*>(Pixels.GetData()), Pixels.Num() * sizeof(FColor));
-    auto* Floor = UTexture2D::CreateTransient(Width, Height, PF_B8G8R8A8, NAME_None, Image);
-    if (!Floor) return false;
-    Floor->Filter = TF_Bilinear;
-    Floor->UpdateResource();
     FloorBrush.DrawAs = ESlateBrushDrawType::Image;
+    auto* Floor = InRoutes.GetFloorMap(FloorBounds);
     FloorBrush.SetResourceObject(Floor);
-    const FVector2D WorldMin = FVector2D(Min) * Step - FVector2D(Step * 0.5);
-    FloorBounds = FBox2D(WorldMin, WorldMin + FVector2D(Width, Height) * (Step * CellsPerPixel));
-    return true;
+    return Floor != nullptr;
 }
 
 void UPFTRouteMap::SetPreview(const FVector& Origin, TArray<FVector> Points)
@@ -274,6 +247,12 @@ bool FPFTRouteMapProjectionTest::RunTest(const FString& Parameters)
         const FBox2f Label(LabelCorner, LabelCorner + LabelSize);
         TestFalse(TEXT("The label leaves the player marker visible"), Label.IsInsideOrOn(ScreenRoute[0]));
         TestFalse(TEXT("The label leaves the destination marker visible"), Label.IsInsideOrOn(ScreenRoute.Last()));
+    }
+    const TArray<FVector2f> LongLeg = {{12, 77}, {286, 77}};
+    if (TestTrue(TEXT("A landmark label can fit beside a long leg"),
+        PlaceLandmarkLabel({150, 108}, LabelSize, {300, 150}, LongLeg, LabelCorner)))
+    {
+        TestTrue(TEXT("The label clears the full route line between waypoints"), LabelCorner.Y > 77);
     }
     return true;
 }
