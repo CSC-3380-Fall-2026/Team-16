@@ -169,8 +169,16 @@ namespace
 
     struct FRouteVisit
     {
-        double Seconds;
-        FIntVector Previous;
+        double Seconds = TNumericLimits<double>::Max();
+        FIntVector Previous = FIntVector::ZeroValue;
+    };
+
+    struct FRouteCellVisits
+    {
+        double Penalty;
+        uint8 Links;
+        // Index zero is the starting state with no arrival heading.
+        FRouteVisit Headings[UE_ARRAY_COUNT(Directions) + 1];
     };
 
     struct FRouteCandidate
@@ -216,42 +224,52 @@ namespace
             return (FMath::Abs(Cell.X - Target.X) + FMath::Abs(Cell.Y - Target.Y)) * SecondsPerStep;
         };
         TArray<FRouteCandidate> Open;
-        TMap<FIntVector, FRouteVisit> Visits;
+        TMap<FIntPoint, FRouteCellVisits> Visits;
+        const auto VisitCell = [&](const FIntPoint& Cell) -> FRouteCellVisits&
+        {
+            if (auto* Visit = Visits.Find(Cell)) return *Visit;
+            return Visits.Add(Cell, {GetPenalty(Cell), GetLinks(Cell), {}});
+        };
         for (const FRouteEntry& Entry : Entries)
         {
             const FIntVector State(Entry.Cell.X, Entry.Cell.Y, Entry.Heading);
-            Visits.Add(State, {Entry.Seconds, State});
+            VisitCell(Entry.Cell).Headings[Entry.Heading + 1] = {Entry.Seconds, State};
             Open.HeapPush({State, Entry.Seconds, Entry.Seconds + RemainingTime(Entry.Cell)});
         }
         while (!Open.IsEmpty())
         {
             FRouteCandidate Current;
             Open.HeapPop(Current, EAllowShrinking::No);
-            if (Current.Seconds > Visits.FindChecked(Current.State).Seconds) continue;
             const FIntPoint Cell(Current.State.X, Current.State.Y);
+            const auto& CellVisits = Visits.FindChecked(Cell);
+            if (Current.Seconds > CellVisits.Headings[Current.State.Z + 1].Seconds) continue;
             if (Cell == Target)
             {
                 TArray<FIntPoint> Reversed = {Cell};
                 FIntVector State = Current.State;
-                while (Visits.FindChecked(State).Previous != State)
+                while (true)
                 {
-                    State = Visits.FindChecked(State).Previous;
+                    const FIntPoint Step(State.X, State.Y);
+                    const FIntVector Parent = Visits.FindChecked(Step).Headings[State.Z + 1].Previous;
+                    if (Parent == State) break;
+                    State = Parent;
                     Reversed.Emplace(State.X, State.Y);
                 }
                 return Reversed;
             }
-            const uint8 Links = GetLinks(Cell);
+            const uint8 Links = CellVisits.Links;
             for (int32 Direction = 0; Direction < UE_ARRAY_COUNT(Directions); ++Direction)
             {
                 if (!(Links & (1 << Direction))) continue;
                 const FIntPoint Next = Cell + Directions[Direction];
                 const FIntVector State(Next.X, Next.Y, Direction);
+                auto& NextVisits = VisitCell(Next);
                 const int32 Difference = FMath::Abs(Current.State.Z - Direction);
                 const int32 Turns = Current.State.Z == INDEX_NONE ? 0 : FMath::Min(Difference, 4 - Difference);
-                const double Seconds = Current.Seconds + SecondsPerStep * (1.0 + GetPenalty(Next)) + Turns * TurnCost;
-                const auto* Previous = Visits.Find(State);
-                if (Previous && Previous->Seconds <= Seconds) continue;
-                Visits.Add(State, {Seconds, Current.State});
+                const double Seconds = Current.Seconds + SecondsPerStep * (1.0 + NextVisits.Penalty) + Turns * TurnCost;
+                auto& Visit = NextVisits.Headings[Direction + 1];
+                if (Visit.Seconds <= Seconds) continue;
+                Visit = {Seconds, Current.State};
                 Open.HeapPush({State, Seconds, Seconds + RemainingTime(Next)});
             }
         }
