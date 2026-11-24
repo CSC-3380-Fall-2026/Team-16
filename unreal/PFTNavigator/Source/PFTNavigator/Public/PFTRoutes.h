@@ -81,6 +81,7 @@ private:
     int32 Step = 0;
     int32 NextIndex = 0;
     uint32 PlanRevision = 0;
+    double WalkwayYaw = 0.0;
     double NextTrailUpdate = 0.0;
     float UpdateTime = 0;
     bool bArrived = false;

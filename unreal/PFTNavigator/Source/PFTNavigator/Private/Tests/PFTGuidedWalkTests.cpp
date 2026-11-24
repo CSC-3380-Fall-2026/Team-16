@@ -251,6 +251,8 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
             {
                 CheckArrowFloor(*this, *Character, *Trail);
                 const auto Path = Routes->GetRemainingPath();
+                AddInfo(FString::Printf(TEXT("The Commons guide uses %d straight legs."), Path.Num() - 1));
+                TestTrue(TEXT("The Commons guide removes the grid zigzags"), Path.Num() <= 8);
                 bool bSquareTurn = false;
                 for (int32 Index = 1; Index + 1 < Path.Num(); ++Index)
                 {
@@ -266,6 +268,8 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
                 }
                 TestTrue(TEXT("The Commons route keeps the Zone 1200 corner square"), bSquareTurn);
             }
+            if (FParse::Param(FCommandLine::Get(), TEXT("PFTQAScreenshots")))
+                FScreenshotRequest::RequestScreenshot(TEXT("PFTQA-StraightGuide"), true, true, false);
             const bool bNamesZoneTurn = Routes->GetRemainingSteps().ToString().Contains(TEXT("near Zone 1200 sign"));
             const TArray<FBatchedLine> InitialArrows = Trail->BatchedLines;
             auto StationaryTips = MakeShared<TArray<FVector>>();
@@ -395,7 +399,8 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
             }
 
             ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Navigator, Player, Character, Routes, Tree, Trail, bProfileGuidance, Destination, bNamesZoneTurn,
-                SawZoneSign = MakeShared<bool>(false), StepCounts = MakeShared<FIntPoint>(0, 0), Deadline = FPlatformTime::Seconds() + 65.0]()
+                SawZoneSign = MakeShared<bool>(false), SawLongLeg = MakeShared<bool>(false),
+                StepCounts = MakeShared<FIntPoint>(0, 0), Deadline = FPlatformTime::Seconds() + 65.0]()
             {
                 const FVector Position = Character->GetActorLocation();
                 if (!bProfileGuidance && Routes->IsGuiding() && !Routes->IsReplanning())
@@ -547,6 +552,12 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
                 const FVector Delta = Routes->NextPoint() - Position;
                 const FVector Direction = Delta.GetSafeNormal2D();
                 Player->SetControlRotation(Direction.Rotation());
+                if (!*SawLongLeg && Delta.Size2D() > 1800
+                    && FParse::Param(FCommandLine::Get(), TEXT("PFTQAScreenshots")))
+                {
+                    *SawLongLeg = true;
+                    FScreenshotRequest::RequestScreenshot(TEXT("PFTQA-StraightHallway"), true, true, false);
+                }
                 Character->AddMovementInput(Direction, FMath::Clamp(Delta.Size2D() / 95.0, 0.16, 0.8));
                 return false;
             }));
