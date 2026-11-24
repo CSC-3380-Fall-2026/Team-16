@@ -696,6 +696,10 @@ void UPFTRoutes::DrawPath(const FVector& Position)
         Trail->RegisterComponentWithWorld(GetWorld());
         Trail->SetComponentTickEnabled(false);
     }
+    // Stationary arrows only change with the player's position or the active route.
+    const FStationaryTrail Current{FVector2D(Position), PlanRevision, NextIndex};
+    if (bReducedMotion && LastStationaryTrail.IsSet() && LastStationaryTrail.GetValue() == Current) return;
+
     const int32 FirstIndex = FMath::Max(0, NextIndex - 1);
     const double Progress = FMath::Clamp(SegmentProgress(Position, Path[FirstIndex], Path[NextIndex]), 0.0, 1.0);
     const double VisibleStart = FMath::Lerp(PathDistances[FirstIndex], PathDistances[NextIndex], Progress);
@@ -729,6 +733,11 @@ void UPFTRoutes::DrawPath(const FVector& Position)
         AddArrow(Lines, Path[NextIndex] + FloorLift, Direction.IsNearlyZero() ? FVector::ForwardVector : Direction, 1.0f);
     }
     Trail->MarkRenderStateDirty();
+    if (bReducedMotion) LastStationaryTrail = Current;
+    else LastStationaryTrail.Reset();
+#if WITH_DEV_AUTOMATION_TESTS
+    ++TrailDrawCount;
+#endif
 }
 
 void UPFTRoutes::ShowArrival(const FVector& Position)
@@ -749,6 +758,7 @@ void UPFTRoutes::ShowArrival(const FVector& Position)
 void UPFTRoutes::EndGuidance(const FText& NewMessage)
 {
     if (Trail) Trail->Flush();
+    LastStationaryTrail.Reset();
     Walker.Reset();
     Path.Reset();
     PathDistances.Reset();

@@ -36,6 +36,7 @@ bool FPFTRefocusAfterRerouteTest::RunTest(const FString& Parameters)
         if (Widgets.IsEmpty() && FPlatformTime::Seconds() < ReadyBy) return false;
         if (!TestEqual(TEXT("The Navigator opens after the welcome screen"), Widgets.Num(), 1)) return true;
         auto* Navigator = CastChecked<UPFTNavigatorWidget>(Widgets[0]);
+        Routes->SetReducedMotion(true);
         Navigator->ChooseRoom(TEXT("PFT_COMMONS"));
         auto* Tree = Navigator->WidgetTree.Get();
         CastChecked<UButton>(Tree->FindWidget(TEXT("RouteButton")))->OnClicked.Broadcast();
@@ -58,15 +59,20 @@ bool FPFTRefocusAfterRerouteTest::RunTest(const FString& Parameters)
             Character->GetCharacterMovement()->StopMovementImmediately();
             Character->GetCharacterMovement()->SetMovementMode(MOVE_Walking);
             ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Player, Routes, Map, Overview, Hallway, Destination, Tree,
-                OriginalPlan, OriginalSteps, SawUpdate = MakeShared<bool>(false), Deadline = FPlatformTime::Seconds() + 5.0]()
+                OriginalPlan, OriginalSteps, SawUpdate = MakeShared<bool>(false), Deadline = FPlatformTime::Seconds() + 5.0,
+                DrawCountBeforeReplan = Routes->GetTrailDrawCountForTests()]() mutable
             {
                 if (Routes->IsReplanning())
+                {
                     *SawUpdate = Routes->GetRemainingSteps().ToString() == TEXT("Updating route…");
+                    DrawCountBeforeReplan = Routes->GetTrailDrawCountForTests();
+                }
                 const auto& Bounds = Map->GetFocusBoundsForTests();
                 const bool bRerouted = Routes->GetPlanRevision() != OriginalPlan && !Routes->GetRemainingPath().IsEmpty();
                 const bool bRefocused = Bounds.bIsValid && Bounds.IsInside(FVector2D(Hallway));
                 if ((!bRerouted || !bRefocused) && FPlatformTime::Seconds() < Deadline) return false;
                 if (!TestTrue(TEXT("Guidance reroutes automatically from C1007"), bRerouted)) return true;
+                TestTrue(TEXT("Stationary arrows refresh after a reroute"), Routes->GetTrailDrawCountForTests() > DrawCountBeforeReplan);
                 TestTrue(TEXT("The map refocuses to include the new hallway and destination"),
                     bRefocused && Bounds.IsInside(FVector2D(Destination)));
                 TestTrue(TEXT("The reroute keeps the Commons destination"), Routes->GetRemainingPath().Last().Equals(Destination));
@@ -85,6 +91,7 @@ bool FPFTRefocusAfterRerouteTest::RunTest(const FString& Parameters)
                     CastChecked<UButton>(Tree->FindWidget(TEXT("StopRouteButton")))->OnClicked.Broadcast();
                     const auto* Trail = FindObject<ULineBatchComponent>(Routes, TEXT("PFTWalkingTrail"));
                     TestTrue(TEXT("Stopping the route clears the arrows"), !Routes->IsGuiding() && Trail && Trail->BatchedLines.IsEmpty());
+                    Routes->SetReducedMotion(false);
                     return true;
                 }));
                 return true;

@@ -21,6 +21,10 @@ public:
     TStatId GetStatId() const override;
     void Deinitialize() override;
 
+#if WITH_DEV_AUTOMATION_TESTS
+    uint32 GetTrailDrawCountForTests() const { return TrailDrawCount; }
+#endif
+
     bool HasDestination(const FString& RoomId) const { return Destinations.Contains(RoomId); }
     bool Preview(const ACharacter& Character, const FString& RoomId, TArray<FVector>& Points, FString& Estimate) const;
     bool Start(ACharacter& Character, const FString& RoomId, const FString& RoomName);
@@ -54,6 +58,15 @@ private:
         TOptional<FVector> RoomStop;
     };
 
+    struct FStationaryTrail
+    {
+        FVector2D Position;
+        uint32 Revision;
+        int32 Waypoint;
+
+        bool operator==(const FStationaryTrail& Other) const = default;
+    };
+
     void LoadGraph(const FString& Map);
     void MeasureClearance();
     bool Plan(const ACharacter& Character, const FRouteTarget& Target);
@@ -71,6 +84,7 @@ private:
     TArray<FVector> Path;
     TArray<double> PathDistances;
     TArray<int32> TurnPoints;
+    TOptional<FStationaryTrail> LastStationaryTrail;
     UPROPERTY() TObjectPtr<ULineBatchComponent> Trail;
     UPROPERTY() TObjectPtr<UTextRenderComponent> ArrivalLabel;
     TWeakObjectPtr<ACharacter> Walker;
@@ -85,4 +99,7 @@ private:
     bool bCanRetry = false;
     bool bReplanning = false;
     bool bReducedMotion = false;
+#if WITH_DEV_AUTOMATION_TESTS
+    uint32 TrailDrawCount = 0;
+#endif
 };
