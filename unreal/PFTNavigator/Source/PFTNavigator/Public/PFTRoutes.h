@@ -25,6 +25,9 @@ public:
     bool Preview(const ACharacter& Character, const FString& RoomId, TArray<FVector>& Points, FString& Estimate) const;
     bool Start(ACharacter& Character, const FString& RoomId, const FString& RoomName);
     void Stop();
+#if WITH_DEV_AUTOMATION_TESTS
+    uint32 GetPathBuildCountForTests() const { return PathBuildCount; }
+#endif
 
     bool IsGuiding() const { return Walker.IsValid(); }
     bool HasArrived() const { return bArrived; }
@@ -41,6 +44,15 @@ public:
     int32 CopyWalkableCells(TArray<FIntPoint>& Cells) const;
 
 private:
+    struct FPreviewRoute
+    {
+        TWeakObjectPtr<const ACharacter> Character;
+        FString RoomId;
+        FVector Position;
+        float WalkSpeed;
+        TArray<FVector> Points;
+    };
+
     struct FNode
     {
         FVector Floor;
@@ -56,9 +68,12 @@ private:
 
     void LoadGraph(const FString& Map);
     void MeasureClearance();
-    bool Plan(const ACharacter& Character, const FRouteTarget& Target);
+    bool Plan(const ACharacter& Character, const FRouteTarget& Target, const FString* PreviewRoomId = nullptr);
+    bool UsePreview(const ACharacter& Character, const FString& RoomId);
     bool BuildPath(const ACharacter& Character, const FRouteTarget& Target, TArray<FVector>& Points) const;
     bool CanCross(const ACharacter& Character, const FVector& Start, const FVector& End) const;
+    bool CanWalkSegment(const ACharacter& Character, const FVector& Start, const FVector& End,
+        double HeightTolerance, bool bCheckEnd = false) const;
     void AdvanceWaypoints(const ACharacter& Character, const FVector& Position);
     void DrawPath(const FVector& Position);
     void ShowArrival(const FVector& Position);
@@ -68,6 +83,10 @@ private:
     TMap<FIntPoint, FNode> Nodes;
     TMap<FString, FRouteTarget> Destinations;
     TMap<FString, FVector2D> Landmarks;
+    mutable TOptional<FPreviewRoute> LastPreview;
+#if WITH_DEV_AUTOMATION_TESTS
+    mutable uint32 PathBuildCount = 0;
+#endif
     TArray<FVector> Path;
     TArray<double> PathDistances;
     TArray<int32> TurnPoints;
