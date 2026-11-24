@@ -18,13 +18,15 @@ if /i "%DemoPreset%"=="compact" (
     set "DemoRenderScale=100"
 )
 set "DemoArgs=-d3d11 -windowed -ResX=%DemoWidth% -ResY=%DemoHeight% -nosplash -ini:Engine:[ConsoleVariables]:r.ScreenPercentage=%DemoRenderScale%"
-set "DemoSettings=r.SetRes %DemoWidth%x%DemoHeight%w,r.VSync 0,sg.ShadowQuality 1,sg.GlobalIlluminationQuality 0,sg.ReflectionQuality 0,sg.PostProcessQuality 1,sg.EffectsQuality 1,r.LightMaxDrawDistanceScale 0.5,r.AntiAliasingMethod 2,r.TemporalAA.Upsampling 1,r.MaxAnisotropy 8,r.Tonemapper.Sharpen 0.30"
+set "DemoSettings=r.SetRes %DemoWidth%x%DemoHeight%w,r.VSync 0,sg.ShadowQuality 1,sg.GlobalIlluminationQuality 0,sg.ReflectionQuality 0,sg.PostProcessQuality 1,sg.EffectsQuality 1,r.AntiAliasingMethod 2,r.TemporalAA.Upsampling 1,r.MaxAnisotropy 8,r.Tonemapper.Sharpen 0.30"
 set "DemoFPS=30"
 set "DemoHttp=-ini:Engine:[HTTP]:bEnableHttp=False"
 if /i "%~1"=="smooth" set "DemoFPS=45"
 if /i "%~1"=="profile" if /i "%~2"=="smooth" set "DemoFPS=45"
 if /i "%~1"=="profileguided" if /i "%~2"=="smooth" set "DemoFPS=45"
-set "DemoSettings=%DemoSettings%,t.MaxFPS %DemoFPS%"
+set "DemoLightDistance=0.5"
+if "%DemoFPS%"=="45" set "DemoLightDistance=0.35"
+set "DemoSettings=%DemoSettings%,r.LightMaxDrawDistanceScale %DemoLightDistance%,t.MaxFPS %DemoFPS%"
 if /i "%~1"=="walkthrough" goto checks
 if /i "%~1"=="verify" goto verify
 if /i "%~1"=="verifyextended" goto verify
