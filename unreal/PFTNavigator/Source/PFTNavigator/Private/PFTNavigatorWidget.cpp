@@ -8,6 +8,7 @@
 #include "PFTRoutes.h"
 #include "Blueprint/WidgetTree.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
+#include "Brushes/SlateRoundedBoxBrush.h"
 #include "Components/Border.h"
 #include "Components/ButtonSlot.h"
 #include "Components/CheckBox.h"
@@ -15,6 +16,7 @@
 #include "Components/HorizontalBox.h"
 #include "Components/HorizontalBoxSlot.h"
 #include "Components/ScrollBox.h"
+#include "Components/ScrollBoxSlot.h"
 #include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
@@ -33,6 +35,17 @@ namespace
     constexpr int32 RoomsPerPage = 50;
     const TCHAR* ClassDayCodes = TEXT("MTWRFSU");
     const TCHAR* SettingsSection = TEXT("PFTNavigator");
+
+    const FButtonStyle& NavigatorButtonStyle()
+    {
+        static const FButtonStyle Style = FButtonStyle()
+            .SetNormal(FSlateRoundedBoxBrush(FLinearColor::White, 5.0f))
+            .SetHovered(FSlateRoundedBoxBrush(FLinearColor(0.9f, 0.9f, 0.9f), 5.0f))
+            .SetPressed(FSlateRoundedBoxBrush(FLinearColor(0.8f, 0.8f, 0.8f), 5.0f))
+            .SetNormalPadding(FMargin(9, 4))
+            .SetPressedPadding(FMargin(9, 4));
+        return Style;
+    }
 
     void SavePreference(const TCHAR* Name, bool bEnabled)
     {
@@ -72,11 +85,14 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     if (WidgetTree->RootWidget) return ScalePanel(Super::RebuildWidget());
     auto* Border = WidgetTree->ConstructWidget<UBorder>();
     Border->SetPadding(FMargin(14));
-    // Light background so the ink text and purple buttons from the LSU palette are easy to read
-    Border->SetBrushColor(FLinearColor(FColor(255, 255, 255, 245)));
+    Border->SetBrush(FSlateRoundedBoxBrush(FLinearColor(PFTPalette::Panel), 12.0f,
+        FLinearColor(PFTPalette::Outline), 1.0f));
     WidgetTree->RootWidget = Border;
     auto* Content = WidgetTree->ConstructWidget<UVerticalBox>();
     Border->SetContent(Content);
+    auto* Heading = WidgetTree->ConstructWidget<UBorder>();
+    Content->AddChildToVerticalBox(Heading)->SetPadding(FMargin(0, 0, 0, 8));
+    BrowserHeading = Heading;
     Browser = WidgetTree->ConstructWidget<UScrollBox>(UScrollBox::StaticClass(), TEXT("RoomBrowser"));
     Content->AddChildToVerticalBox(Browser)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
     auto* Column = WidgetTree->ConstructWidget<UVerticalBox>();
@@ -141,10 +157,12 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
         Views->AddChild(StepsArea);
         return Map;
     };
-    // The heading is purple like the rest of the controls in Claire's design
-    auto* Title = AddText(TEXT("PFT Navigator"));
+    Heading->SetBrush(FSlateRoundedBoxBrush(FLinearColor(PFTPalette::Purple), 7.0f));
+    Heading->SetPadding(FMargin(10, 6));
+    auto* Title = MakeText(TEXT("PFT Navigator"));
     Title->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), 20));
-    Title->SetColorAndOpacity(FSlateColor(FLinearColor(PFTPalette::Purple)));
+    Title->SetColorAndOpacity(FSlateColor(FLinearColor::White));
+    Heading->SetContent(Title);
     Search = WidgetTree->ConstructWidget<UEditableTextBox>(UEditableTextBox::StaticClass(), TEXT("RoomSearch"));
     auto Style = Search->GetWidgetStyle();
     Style.TextStyle.SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Regular"), 16));
@@ -176,7 +194,11 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     RoutePreviewMapBox = WidgetTree->ConstructWidget<UVerticalBox>(UVerticalBox::StaticClass(), TEXT("RoutePreviewMap"));
     RoutePreview->AddChild(RoutePreviewMapBox);
     PreviewMap = AddRouteViews(RoutePreviewMapBox, 230, TEXT("PreviewRouteSteps"), PreviewRouteViews, PreviewSteps);
-    AddText(TEXT("Floor"));
+    auto* FloorRow = WidgetTree->ConstructWidget<UHorizontalBox>();
+    Column->AddChild(FloorRow);
+    auto* FloorLabel = FloorRow->AddChildToHorizontalBox(MakeText(TEXT("Floor")));
+    FloorLabel->SetVerticalAlignment(VAlign_Center);
+    FloorLabel->SetPadding(FMargin(0, 0, 10, 0));
     Floors = WidgetTree->ConstructWidget<UComboBoxString>(UComboBoxString::StaticClass(), TEXT("FloorFilter"));
     Floors->AddOption(TEXT("All floors"));
     TArray<int32> FloorNumbers;
@@ -186,7 +208,7 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     for (int32 Floor : FloorNumbers) Floors->AddOption(FString::FromInt(Floor));
     Floors->SetSelectedOption(TEXT("All floors"));
     Floors->OnSelectionChanged.AddDynamic(this, &UPFTNavigatorWidget::FloorChanged);
-    Column->AddChild(Floors);
+    FloorRow->AddChildToHorizontalBox(Floors)->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
     ClassesOnly = WidgetTree->ConstructWidget<UCheckBox>(UCheckBox::StaticClass(), TEXT("ClassSearchFilter"));
     ClassesOnly->SetContent(MakeText(TEXT("Find a class by instructor or time")));
     ClassesOnly->OnCheckStateChanged.AddDynamic(this, &UPFTNavigatorWidget::ClassFilterChanged);
@@ -230,15 +252,17 @@ TSharedRef<SWidget> UPFTNavigatorWidget::RebuildWidget()
     PreviewOnly->SetContent(MakeText(TEXT("Previewable rooms only")));
     PreviewOnly->OnCheckStateChanged.AddDynamic(this, &UPFTNavigatorWidget::PreviewFilterChanged);
     Column->AddChild(PreviewOnly);
+    Status = AddText(FString());
+    Status->SetColorAndOpacity(FSlateColor(FLinearColor(PFTPalette::MutedInk)));
     auto* ListSize = WidgetTree->ConstructWidget<USizeBox>();
     ListSize->SetMaxDesiredHeight(180);
     Results = WidgetTree->ConstructWidget<UScrollBox>();
     ListSize->SetContent(Results);
     Column->AddChild(ListSize);
-    Status = AddText(TEXT("Select a result to mark its room."));
     auto AddButton = [&](UHorizontalBox* Row, const FString& Text, UTextBlock*& Label)
     {
         auto* Button = WidgetTree->ConstructWidget<UButton>();
+        Button->SetStyle(NavigatorButtonStyle());
         Label = WidgetTree->ConstructWidget<UTextBlock>();
         Label->SetText(FText::FromString(Text));
         Label->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Regular"), 14));
@@ -550,13 +574,14 @@ void UPFTNavigatorWidget::AddResultPage()
                 : TEXT("Press Enter in search to see room details.");
         }
         Button->Label = Label;
+        Button->SetStyle(NavigatorButtonStyle());
         Label->SetText(FText::FromString(Button->ResultText));
         Label->SetAutoWrapText(true);
         Label->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Regular"), 14));
         Label->SetColorAndOpacity(FSlateColor(FLinearColor(PFTPalette::Ink)));
         Button->SetContent(Label);
         Button->OnClicked.AddDynamic(Button, &UPFTSearchButton::SelectRoom);
-        Results->AddChild(Button);
+        CastChecked<UScrollBoxSlot>(Results->AddChild(Button))->SetPadding(FMargin(0, 0, 4, 3));
     }
     UpdateSelectedTags();
     if (!Directory->Error.IsEmpty()) Message = Directory->Error;
@@ -648,7 +673,7 @@ void UPFTNavigatorWidget::UpdateSelectedTags()
             && (Button->CourseId.IsEmpty() || Button->CourseId == SelectedCourseId);
         const FString Text = bSelected ? TEXT("Selected | ") + Button->ResultText : Button->ResultText;
         Button->Label->SetText(FText::FromString(Text));
-        Button->SetBackgroundColor(bSelected ? FLinearColor(PFTPalette::Gold) : FLinearColor::White);
+        Button->SetBackgroundColor(FLinearColor(bSelected ? PFTPalette::Gold : PFTPalette::Result));
     }
 }
 
@@ -766,6 +791,7 @@ void UPFTNavigatorWidget::SetCompactDirections(bool bCompact)
 {
     if (bCompactDirections == bCompact) return;
     bCompactDirections = bCompact;
+    BrowserHeading->SetVisibility(bCompact ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
     Browser->SetVisibility(bCompact ? ESlateVisibility::Collapsed : ESlateVisibility::Visible);
     Directions->SetVisibility(bCompact ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
     CompactHeight = 0.0f;
@@ -1040,11 +1066,12 @@ void UPFTNavigatorWidget::RefreshMyClasses()
         Label->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Regular"), 14));
         Label->SetColorAndOpacity(FSlateColor(FLinearColor(PFTPalette::Ink)));
         Button->Label = Label;
+        Button->SetStyle(NavigatorButtonStyle());
         Button->SetContent(Label);
         // The next class is gold like a selected result so it stands out from the rest of the day
-        Button->SetBackgroundColor(Index == Next ? FLinearColor(PFTPalette::Gold) : FLinearColor::White);
+        Button->SetBackgroundColor(FLinearColor(Index == Next ? PFTPalette::Gold : PFTPalette::Result));
         Button->OnClicked.AddDynamic(Button, &UPFTSearchButton::SelectRoom);
-        MyClassesList->AddChild(Button);
+        MyClassesList->AddChildToVerticalBox(Button)->SetPadding(FMargin(0, 0, 0, 3));
     }
 }
 

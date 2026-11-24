@@ -117,6 +117,7 @@ private:
     UPROPERTY() TObjectPtr<UTextBlock> RouteHint;
     UPROPERTY() TObjectPtr<UTextBlock> RouteTime;
     UPROPERTY() TObjectPtr<UScrollBox> Browser;
+    UPROPERTY() TObjectPtr<UWidget> BrowserHeading;
     UPROPERTY() TObjectPtr<UVerticalBox> Directions;
     UPROPERTY() TObjectPtr<UVerticalBox> Settings;
     UPROPERTY() TObjectPtr<UButton> StopRouteButton;
