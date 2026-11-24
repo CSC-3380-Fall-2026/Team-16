@@ -31,12 +31,23 @@ bool FPFTDestinationTest::RunTest(const FString& Parameters)
     auto* Duplicate = World->SpawnActor<APFTRoomMarker>();
     Duplicate->RoomId = First->RoomId;
     TestFalse(TEXT("Ambiguous markers rejected"), Destinations->SelectRoom(First->RoomId));
+    TestFalse(TEXT("Ambiguous room is unavailable"), Destinations->HasLocation(First->RoomId));
     const FString Path = FPaths::CreateTempFilename(*FPaths::ProjectSavedDir(), TEXT("PFTBindings"), TEXT(".json"));
-    const FString Json = FString::Printf(TEXT("[{\"RoomId\":\"PFT_1120\",\"Map\":\"%s\",\"Location\":{\"X\":10,\"Y\":20,\"Z\":30}}]"), *Package->GetName());
+    const FString Json = FString::Printf(TEXT("["
+        "{\"RoomId\":\"PFT_1120\",\"Map\":\"%s\",\"Location\":{\"X\":10,\"Y\":20,\"Z\":30}},"
+        "{\"RoomId\":\"PFT_1200\",\"Map\":\"%s\",\"Location\":{\"X\":50,\"Y\":60,\"Z\":70}},"
+        "{\"RoomId\":\"PFT_9999\",\"Map\":\"/Game/OtherMap\",\"Location\":{\"X\":0,\"Y\":0,\"Z\":0}}]"),
+        *Package->GetName(), *Package->GetName());
     FFileHelper::SaveStringToFile(Json, *Path);
     TestFalse(TEXT("No location before bindings load"), Destinations->HasLocation(TEXT("PFT_1120")));
     TestTrue(TEXT("Load bindings"), Destinations->LoadBindings(Path));
     TestTrue(TEXT("Bound room has a location"), Destinations->HasLocation(TEXT("PFT_1120")));
+    TestFalse(TEXT("Another map's binding is unavailable"), Destinations->HasLocation(TEXT("PFT_9999")));
+    TestFalse(TEXT("Duplicate markers override a binding"), Destinations->GetAvailableRoomIds().Contains(First->RoomId));
+    Duplicate->Destroy();
+    TestTrue(TEXT("A room is available after its duplicate is removed"), Destinations->GetAvailableRoomIds().Contains(First->RoomId));
+    TestTrue(TEXT("Select a placed marker over a binding"), Destinations->SelectRoom(First->RoomId));
+    TestTrue(TEXT("Placed marker takes precedence"), Destinations->ActiveMarker == First);
     TestTrue(TEXT("Create bound marker"), Destinations->SelectRoom(TEXT("PFT_1120")));
     if (Destinations->ActiveMarker) TestEqual(TEXT("Bound location"), Destinations->ActiveMarker->GetActorLocation(), FVector(10, 20, 30));
     FFileHelper::SaveStringToFile(TEXT("[]"), *Path);

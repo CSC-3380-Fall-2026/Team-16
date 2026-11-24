@@ -25,6 +25,7 @@ public:
     UFUNCTION(BlueprintCallable) bool LoadBindings(const FString& Path);
     UFUNCTION(BlueprintCallable) bool SelectRoom(const FString& RoomId);
     UFUNCTION(BlueprintCallable) bool HasLocation(const FString& RoomId) const;
+    TSet<FString> GetAvailableRoomIds() const;
     UFUNCTION(BlueprintCallable) void ClearSelection();
     void SetRoomPreviewActive(bool bActive);
     bool IsRoomPreviewActive() const { return bRoomPreviewActive; }
