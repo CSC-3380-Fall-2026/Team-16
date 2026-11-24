@@ -66,6 +66,7 @@ private:
     void EndGuidance(const FText& NewMessage);
 
     TMap<FIntPoint, FNode> Nodes;
+    TSet<FIntPoint> SeatingCells;
     TMap<FString, FRouteTarget> Destinations;
     TMap<FString, FVector2D> Landmarks;
     TArray<FVector> Path;

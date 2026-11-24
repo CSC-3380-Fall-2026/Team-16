@@ -16,6 +16,8 @@ HALF_HEIGHT = 92
 EDGES = ((1, 0), (0, 1), (-1, 0), (0, -1))
 COMMONS = (14900, -5160)
 LANDMARK_ACTORS = {"SM_Zone1200SouthWest3": "Zone 1200 sign"}
+SEATING_MESH_PREFIX = "Floors_Floor_CPT-3_-_CARPET_TILE_-_24__x_24_"
+SEATING_MATERIAL = "MI_GrayCarpet_Dark_WS"
 
 
 def hallway_distances(links, hallway):
@@ -29,6 +31,38 @@ def hallway_distances(links, hallway):
                 distances[neighbor] = distances[x, y] + 1
                 pending.append(neighbor)
     return distances
+
+
+def seating_cells(world, hallway, step):
+    """Find the seating carpet that interrupts the gray hallway floor."""
+    samples = {}
+
+    def on_carpet(x, y):
+        key = x, y
+        if key in samples:
+            return samples[key]
+        hit = unreal.SystemLibrary.line_trace_single_by_profile(
+            world, unreal.Vector(x, y, 65), unreal.Vector(x, y, -22),
+            "Pawn", True, [], unreal.DrawDebugTrace.NONE, False,
+        )
+        samples[key] = False
+        if hit is None:
+            return False
+        result = hit.to_dict()
+        component = result["hit_component"]
+        if not isinstance(component, unreal.StaticMeshComponent) or result["face_index"] < 0:
+            return False
+        mesh = component.get_editor_property("static_mesh")
+        if mesh is None or not mesh.get_name().startswith(SEATING_MESH_PREFIX):
+            return False
+        material, _ = component.get_material_from_collision_face_index(result["face_index"])
+        samples[key] = material is not None and material.get_name() == SEATING_MATERIAL
+        return samples[key]
+
+    # Check the cell edges as well as its center to leave room for the arrow arms.
+    offsets = (0, -step / 2, step / 2)
+    return [cell for cell in sorted(hallway)
+            if any(on_carpet(cell[0] * step + dx, cell[1] * step + dy) for dx in offsets for dy in offsets)]
 
 
 def bake(map_path, output):
@@ -116,6 +150,7 @@ def bake(map_path, output):
                     yield node
 
     hallway = {node for label, room in rooms.items() if label.startswith("Hallway") for node in volume_cells(room)}
+    seating = seating_cells(world, hallway, STEP)
     from_hallway = hallway_distances(links, hallway)
     doors = []
     for actor in actors:
@@ -209,8 +244,10 @@ def bake(map_path, output):
                 landmarks[label] = [round(center.x), round(center.y)]
     nodes = (json.dumps([x, y, round(positions[x, y].z - HALF_HEIGHT - 4, 2), links[x, y]], separators=(",", ":"))
              for x, y in sorted(links))
-    text = json.dumps({"Map": map_path, "Step": STEP, "Destinations": destinations, "RoomStops": stops, "Landmarks": landmarks},
-                      separators=(",", ":"))
+    graph = {"Map": map_path, "Step": STEP, "Destinations": destinations, "RoomStops": stops, "Landmarks": landmarks}
+    if seating:
+        graph["SeatingCells"] = seating
+    text = json.dumps(graph, separators=(",", ":"))
     output.write_text(text[:-1] + ',"Nodes":[\n' + ",\n".join(nodes) + "\n]}\n", encoding="utf-8")
     unreal.log(f"PFT routes: {len(links)} connected points, {len(destinations)} destinations: {', '.join(destinations)}")
 

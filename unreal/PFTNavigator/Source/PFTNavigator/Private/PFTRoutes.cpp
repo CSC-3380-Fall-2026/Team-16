@@ -23,6 +23,7 @@ namespace
     constexpr double CornerRadius = 16.0;
     constexpr double PreferredClearance = 150.0;
     constexpr double TurnCostInGridSteps = 2.0;
+    constexpr double SeatingCostInGridSteps = 12.0;
     constexpr double ArrivalRadius = 65.0;
     constexpr double FloorTolerance = 45.0;
     constexpr int32 StartSearchCells = 3;
@@ -436,6 +437,19 @@ void UPFTRoutes::LoadGraph(const FString& Map)
     }
     Step = GridStep;
     Nodes = MoveTemp(GraphNodes);
+    const TArray<TSharedPtr<FJsonValue>>* Seats;
+    if (Graph->TryGetArrayField(TEXT("SeatingCells"), Seats))
+    {
+        for (const auto& Seat : *Seats)
+        {
+            const TArray<TSharedPtr<FJsonValue>>* Cell;
+            double X, Y;
+            if (!Seat->TryGetArray(Cell) || Cell->Num() != 2 || !(*Cell)[0]->TryGetNumber(X) || !(*Cell)[1]->TryGetNumber(Y)
+                || !FMath::IsFinite(X) || !FMath::IsFinite(Y) || FMath::Abs(X) > 10000 || FMath::Abs(Y) > 10000) continue;
+            const FIntPoint Point(static_cast<int32>(X), static_cast<int32>(Y));
+            if (Point.X == X && Point.Y == Y && Nodes.Contains(Point)) SeatingCells.Add(Point);
+        }
+    }
     MeasureClearance();
     const TSharedPtr<FJsonObject>* GraphLandmarks;
     if (Graph->TryGetObjectField(TEXT("Landmarks"), GraphLandmarks))
@@ -510,12 +524,14 @@ bool UPFTRoutes::BuildPath(const ACharacter& Character, const FRouteTarget& Targ
     const FName Profile = Character.GetCapsuleComponent()->GetCollisionProfileName();
     const double HalfHeight = Character.GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
     const bool bStartsOnGrid = Nodes.Contains(Near);
-    const auto IsOnWalkway = [&](const FVector& Start, const FVector& End)
+    const bool bPreferWalkway = !SeatingCells.IsEmpty() && !SeatingCells.Contains(Target.Cell);
+    const bool bStartsOnWalkway = bStartsOnGrid && !SeatingCells.Contains(Near);
+    const auto IsMappedSegment = [&](const FVector& Start, const FVector& End, bool bAvoidSeating = false)
     {
-        return CrossesWalkableCells(Start, End, Step, [this](const FIntPoint& Cell)
+        return CrossesWalkableCells(Start, End, Step, [this, bAvoidSeating](const FIntPoint& Cell)
         {
             const auto* Node = Nodes.Find(Cell);
-            return Node ? static_cast<int32>(Node->Links) : INDEX_NONE;
+            return Node && (!bAvoidSeating || !SeatingCells.Contains(Cell)) ? static_cast<int32>(Node->Links) : INDEX_NONE;
         });
     };
     const auto CanWalk = [&](const FVector& Start, const FVector& End, double HeightTolerance)
@@ -546,6 +562,7 @@ bool UPFTRoutes::BuildPath(const ACharacter& Character, const FRouteTarget& Targ
         const FVector Approach = CapsuleCenter(Character, Nodes.FindChecked(Target.Cell).Floor);
         if (!CanWalk(Approach, End, 7.0)) return false;
     }
+    TArray<FRouteEntry> WalkwayEntries;
     for (int32 X = -StartSearchCells; X <= StartSearchCells; ++X)
     {
         for (int32 Y = -StartSearchCells; Y <= StartSearchCells; ++Y)
@@ -556,13 +573,19 @@ bool UPFTRoutes::BuildPath(const ACharacter& Character, const FRouteTarget& Targ
             const FVector Center = CapsuleCenter(Character, Node->Floor);
             const double Distance = FVector::Dist2D(Position, Center);
             if (Distance > EntryRange || FMath::Abs(Center.Z - RaisedPosition.Z) > FloorTolerance
-                || (bStartsOnGrid && !IsOnWalkway(Position, Center))
+                || (bStartsOnGrid && !IsMappedSegment(Position, Center))
                 || !CanWalk(RaisedPosition, Center, FloorTolerance)) continue;
             const FVector Approach = Center - Position;
             const int32 Heading = Distance < 1.0 ? INDEX_NONE
                 : (FMath::RoundToInt(Approach.Rotation().Yaw / 90.0) + 4) % 4;
-            const double ApproachSeconds = Distance / Speed * (1.0 + ClearancePenalty(Node->StepsFromBoundary, Step));
+            const double SeatingCost = SeatingCells.Contains(Cell) ? SeatingCostInGridSteps * Step / Speed : 0.0;
+            const double ApproachSeconds = Distance / Speed * (1.0 + ClearancePenalty(Node->StepsFromBoundary, Step)) + SeatingCost;
             Entries.Add({Cell, ApproachSeconds, Heading});
+            if (bPreferWalkway && !SeatingCells.Contains(Cell)
+                && (!bStartsOnWalkway || IsMappedSegment(Position, Center, true)))
+            {
+                WalkwayEntries.Add(Entries.Last());
+            }
         }
     }
     if (Entries.IsEmpty()) return false;
@@ -570,13 +593,19 @@ bool UPFTRoutes::BuildPath(const ACharacter& Character, const FRouteTarget& Targ
     const double SecondsPerStep = Step / Speed;
     // Prefer staying in the walkway over zigzagging between individual high-clearance cells.
     const double TurnCost = SecondsPerQuarterTurn + SecondsPerStep * TurnCostInGridSteps;
-    const auto Reversed = FindFastestPath(Entries, Target.Cell, SecondsPerStep, [this](const FIntPoint& Cell)
+    const auto FindRoute = [&](const TArray<FRouteEntry>& Starts, bool bAvoidSeating)
     {
-        return Nodes.FindChecked(Cell).Links;
-    }, [this](const FIntPoint& Cell)
-    {
-        return ClearancePenalty(Nodes.FindChecked(Cell).StepsFromBoundary, Step);
-    }, TurnCost);
+        return FindFastestPath(Starts, Target.Cell, SecondsPerStep, [this, bAvoidSeating](const FIntPoint& Cell) -> uint8
+        {
+            return bAvoidSeating && SeatingCells.Contains(Cell) ? 0 : Nodes.FindChecked(Cell).Links;
+        }, [this](const FIntPoint& Cell)
+        {
+            const double SeatingCost = SeatingCells.Contains(Cell) ? SeatingCostInGridSteps : 0.0;
+            return ClearancePenalty(Nodes.FindChecked(Cell).StepsFromBoundary, Step) + SeatingCost;
+        }, TurnCost);
+    };
+    auto Reversed = WalkwayEntries.IsEmpty() ? TArray<FIntPoint>() : FindRoute(WalkwayEntries, true);
+    if (Reversed.IsEmpty()) Reversed = FindRoute(Entries, false);
     if (Reversed.IsEmpty()) return false;
     TArray<FVector> GridPath;
     GridPath.Reserve(Reversed.Num() + 1);
@@ -588,8 +617,8 @@ bool UPFTRoutes::BuildPath(const ACharacter& Character, const FRouteTarget& Targ
     if (Target.RoomStop.IsSet()) GridPath.Add(Target.RoomStop.GetValue());
     Points = StraightenPath(GridPath, [&](const FVector& Start, const FVector& End)
     {
-        // Keep the checked entry and doorway legs when they extend beyond the baked grid.
-        return IsOnWalkway(Start, End) && CanWalk(CapsuleCenter(Character, Start), CapsuleCenter(Character, End), 7.0);
+        // Leave any necessary seating or doorway approaches on the checked legs.
+        return IsMappedSegment(Start, End, true) && CanWalk(CapsuleCenter(Character, Start), CapsuleCenter(Character, End), 7.0);
     });
     return true;
 }
