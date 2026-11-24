@@ -23,13 +23,18 @@ namespace
     constexpr double CornerRadius = 16.0;
     constexpr double PreferredClearance = 150.0;
     constexpr double TurnCostInGridSteps = 2.0;
+    constexpr int32 HallwayCornerRunCells = 5;
+    constexpr int32 CornerLeadCells = 3;
+    constexpr double SeatingCostInGridSteps = 12.0;
     constexpr double ArrivalRadius = 65.0;
     constexpr double FloorTolerance = 45.0;
     constexpr int32 StartSearchCells = 3;
     constexpr int32 DoorApproachCells = 4;
     constexpr double ArrowSpacing = 125.0;
     constexpr double ArrowSpeed = 85.0;
-    constexpr double TrailLength = 1600.0;
+    constexpr double ArrowTipLength = 17.0;
+    constexpr double ArrowTailLength = 15.0;
+    constexpr double TrailUpdateInterval = 1.0 / 30.0;
     constexpr double SecondsPerQuarterTurn = 0.25;
 
     double SegmentProgress(const FVector& Position, const FVector& Start, const FVector& End)
@@ -39,19 +44,109 @@ namespace
         return SquaredLength > UE_SMALL_NUMBER ? FVector2D::DotProduct(FVector2D(Position - Start), Edge) / SquaredLength : 0.0;
     }
 
+    bool CrossesWalkableCells(const FVector& Start, const FVector& End, int32 Step,
+        TFunctionRef<int32(const FIntPoint&)> GetLinks)
+    {
+        // Grid nodes are at the centers of the squares drawn on the floor map.
+        const FVector2D From = FVector2D(Start) / Step + FVector2D(0.5);
+        const FVector2D To = FVector2D(End) / Step + FVector2D(0.5);
+        FIntPoint Cell(FMath::FloorToInt(From.X), FMath::FloorToInt(From.Y));
+        const FIntPoint Goal(FMath::FloorToInt(To.X), FMath::FloorToInt(To.Y));
+        if (GetLinks(Cell) == INDEX_NONE || GetLinks(Goal) == INDEX_NONE) return false;
+
+        const FVector2D Delta = To - From;
+        const int32 XDirection = Delta.X >= 0 ? 0 : 2;
+        const int32 YDirection = Delta.Y >= 0 ? 1 : 3;
+        const auto CanStep = [&](const FIntPoint& Point, int32 Direction)
+        {
+            const int32 Links = GetLinks(Point);
+            return Links != INDEX_NONE && (Links & (1 << Direction)) != 0;
+        };
+        while (Cell != Goal)
+        {
+            const double X = Cell.X == Goal.X ? TNumericLimits<double>::Max()
+                : (Cell.X + (XDirection == 0 ? 1 : 0) - From.X) / Delta.X;
+            const double Y = Cell.Y == Goal.Y ? TNumericLimits<double>::Max()
+                : (Cell.Y + (YDirection == 1 ? 1 : 0) - From.Y) / Delta.Y;
+            if (FMath::IsNearlyEqual(X, Y, UE_DOUBLE_SMALL_NUMBER))
+            {
+                // At a grid corner, leave room on both sides of the diagonal.
+                if (!CanStep(Cell, XDirection) || !CanStep(Cell, YDirection)
+                    || !CanStep(Cell + Directions[XDirection], YDirection)
+                    || !CanStep(Cell + Directions[YDirection], XDirection)) return false;
+                Cell += Directions[XDirection] + Directions[YDirection];
+            }
+            else
+            {
+                const int32 Direction = X < Y ? XDirection : YDirection;
+                if (!CanStep(Cell, Direction)) return false;
+                Cell += Directions[Direction];
+            }
+        }
+        return true;
+    }
+
+    int32 GridDirection(const FVector& Delta)
+    {
+        if (FMath::IsNearlyZero(Delta.Y) && !FMath::IsNearlyZero(Delta.X)) return Delta.X > 0.0 ? 0 : 2;
+        if (FMath::IsNearlyZero(Delta.X) && !FMath::IsNearlyZero(Delta.Y)) return Delta.Y > 0.0 ? 1 : 3;
+        return INDEX_NONE;
+    }
+
+    TArray<int32> HallwayCornerStops(TArrayView<const FVector> Points)
+    {
+        TArray<int32> Stops;
+        int32 PreviousStart = 0;
+        int32 PreviousDirection = INDEX_NONE;
+        int32 Start = 0;
+        while (Start + 1 < Points.Num())
+        {
+            const int32 Direction = GridDirection(Points[Start + 1] - Points[Start]);
+            int32 End = Start + 1;
+            while (End + 1 < Points.Num() && GridDirection(Points[End + 1] - Points[End]) == Direction) ++End;
+            if (Direction != INDEX_NONE && PreviousDirection != INDEX_NONE && (Direction % 2) != (PreviousDirection % 2)
+                && Start - PreviousStart >= HallwayCornerRunCells && End - Start >= HallwayCornerRunCells)
+            {
+                // Keep a straight approach and exit at a hallway turn. Small grid jogs can still be smoothed.
+                Stops.AddUnique(Start - CornerLeadCells);
+                Stops.AddUnique(Start);
+                Stops.AddUnique(Start + CornerLeadCells);
+            }
+            PreviousStart = Start;
+            PreviousDirection = Direction;
+            Start = End;
+        }
+        Stops.Sort();
+        return Stops;
+    }
+
     TArray<FVector> StraightenPath(TArrayView<const FVector> Points,
-        TFunctionRef<bool(const FVector&, const FVector&)> CanWalk)
+        TFunctionRef<bool(const FVector&, const FVector&)> CanWalk, TArrayView<const int32> Stops = {})
     {
         if (Points.IsEmpty()) return {};
         TArray<FVector> Result = {Points[0]};
         int32 Anchor = 0;
+        int32 StopIndex = 0;
         while (Anchor + 1 < Points.Num())
         {
             // Use the longest clear leg ahead. A grid path may move sideways even in an open hallway.
-            int32 Next = Points.Num() - 1;
+            while (Stops.IsValidIndex(StopIndex) && Stops[StopIndex] <= Anchor) ++StopIndex;
+            int32 Next = Stops.IsValidIndex(StopIndex) ? Stops[StopIndex] : Points.Num() - 1;
             while (Next > Anchor + 1 && !CanWalk(Points[Anchor], Points[Next]))
             {
                 --Next;
+            }
+            if (!Stops.IsEmpty() && Result.Num() >= 2)
+            {
+                const FVector& Before = Result[Result.Num() - 2];
+                const int32 Direction = GridDirection(Result.Last() - Before);
+                if (Direction != INDEX_NONE && Direction == GridDirection(Points[Next] - Result.Last())
+                    && CanWalk(Before, Points[Next]))
+                {
+                    Result.Last() = Points[Next];
+                    Anchor = Next;
+                    continue;
+                }
             }
             Result.Add(Points[Next]);
             Anchor = Next;
@@ -258,13 +353,13 @@ namespace
         return {};
     }
 
-    void AddArrow(TArray<FBatchedLine>& Lines, const FVector& Center, const FVector& Forward, float Opacity)
+    void AddArrow(TArray<FBatchedLine>& Lines, const FVector& Center, const FVector& Forward, double Scale, float Opacity)
     {
         const FVector Side(-Forward.Y, Forward.X, 0);
-        const FVector Tip = Center + Forward * 17;
-        const FVector Back = Center - Forward * 15;
-        const FVector Left = Back - Side * 17;
-        const FVector Right = Back + Side * 17;
+        const FVector Tip = Center + Forward * (ArrowTipLength * Scale);
+        const FVector Back = Center - Forward * (ArrowTailLength * Scale);
+        const FVector Left = Back - Side * (ArrowTipLength * Scale);
+        const FVector Right = Back + Side * (ArrowTipLength * Scale);
         const FLinearColor Outline(0.045f, 0.02f, 0.055f, Opacity);
         FLinearColor Gold(PFTPalette::Gold);
         Gold.A = Opacity;
@@ -273,6 +368,42 @@ namespace
         Lines.Emplace(Tip, Right, Outline, -1, 10, SDPG_World);
         Lines.Emplace(Left + Lift, Tip + Lift, Gold, -1, 6, SDPG_World);
         Lines.Emplace(Tip + Lift, Right + Lift, Gold, -1, 6, SDPG_World);
+    }
+
+    void DrawRouteArrows(TArray<FBatchedLine>& Lines, TArrayView<const FVector> Path, TArrayView<const double> Distances,
+        int32 FirstIndex, double VisibleStart, double AnimationDistance)
+    {
+        const FVector FloorLift(0, 0, 8);
+        for (int32 Index = FirstIndex; Index + 1 < Path.Num(); ++Index)
+        {
+            const double Start = Distances[Index];
+            const double Length = Distances[Index + 1] - Start;
+            if (Length <= UE_SMALL_NUMBER) continue;
+            const FVector Direction = (Path[Index + 1] - Path[Index]).GetSafeNormal2D();
+            const auto PointAt = [&](double Distance)
+            {
+                return FMath::Lerp(Path[Index], Path[Index + 1], (Distance - Start) / Length) + FloorLift;
+            };
+            double First = FMath::Max(Start + ArrowTailLength, VisibleStart);
+            const double Scale = FMath::Min(1.0, Length / (ArrowTipLength + ArrowTailLength));
+            const double End = Start + Length - ArrowTipLength * Scale;
+            const double ExitArrow = Start + ArrowSpacing * 0.5;
+            if (Index > 0 && FMath::Abs(RouteBend(Path, Index)) >= 0.85
+                && First <= ExitArrow && ExitArrow + ArrowSpacing * 0.5 < End)
+            {
+                AddArrow(Lines, PointAt(ExitArrow), Direction, 1.0, 1.0f);
+                First = ExitArrow + ArrowSpacing * 0.5;
+            }
+            const double Phase = FMath::Fmod(AnimationDistance - First, ArrowSpacing);
+            const double Offset = Phase < 0.0 ? Phase + ArrowSpacing : Phase;
+            for (double Distance = First + Offset; Distance < End - ArrowSpacing * 0.5; Distance += ArrowSpacing)
+            {
+                const double FadeIn = FMath::Clamp((Distance - VisibleStart) / 65.0, 0.0, 1.0);
+                AddArrow(Lines, PointAt(Distance), Direction, 1.0, static_cast<float>(FMath::Lerp(0.45, 1.0, FadeIn)));
+            }
+            // Keep the tip on the leg and leave a steady arrow at bends and at the destination.
+            AddArrow(Lines, PointAt(End), Direction, Scale, 1.0f);
+        }
     }
 
     FVector CapsuleCenter(const ACharacter& Character, const FVector& Floor)
@@ -363,6 +494,19 @@ void UPFTRoutes::LoadGraph(const FString& Map)
     }
     Step = GridStep;
     Nodes = MoveTemp(GraphNodes);
+    const TArray<TSharedPtr<FJsonValue>>* Seats;
+    if (Graph->TryGetArrayField(TEXT("SeatingCells"), Seats))
+    {
+        for (const auto& Seat : *Seats)
+        {
+            const TArray<TSharedPtr<FJsonValue>>* Cell;
+            double X, Y;
+            if (!Seat->TryGetArray(Cell) || Cell->Num() != 2 || !(*Cell)[0]->TryGetNumber(X) || !(*Cell)[1]->TryGetNumber(Y)
+                || !FMath::IsFinite(X) || !FMath::IsFinite(Y) || FMath::Abs(X) > 10000 || FMath::Abs(Y) > 10000) continue;
+            const FIntPoint Point(static_cast<int32>(X), static_cast<int32>(Y));
+            if (Point.X == X && Point.Y == Y && Nodes.Contains(Point)) SeatingCells.Add(Point);
+        }
+    }
     MeasureClearance();
     const TSharedPtr<FJsonObject>* GraphLandmarks;
     if (Graph->TryGetObjectField(TEXT("Landmarks"), GraphLandmarks))
@@ -436,6 +580,17 @@ bool UPFTRoutes::BuildPath(const ACharacter& Character, const FRouteTarget& Targ
     FCollisionQueryParams FloorQuery(SCENE_QUERY_STAT(PFTWalkingEntry), false, &Character);
     const FName Profile = Character.GetCapsuleComponent()->GetCollisionProfileName();
     const double HalfHeight = Character.GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+    const bool bStartsOnGrid = Nodes.Contains(Near);
+    const bool bPreferWalkway = !SeatingCells.IsEmpty() && !SeatingCells.Contains(Target.Cell);
+    const bool bStartsOnWalkway = bStartsOnGrid && !SeatingCells.Contains(Near);
+    const auto IsMappedSegment = [&](const FVector& Start, const FVector& End, bool bAvoidSeating = false)
+    {
+        return CrossesWalkableCells(Start, End, Step, [this, bAvoidSeating](const FIntPoint& Cell)
+        {
+            const auto* Node = Nodes.Find(Cell);
+            return Node && (!bAvoidSeating || !SeatingCells.Contains(Cell)) ? static_cast<int32>(Node->Links) : INDEX_NONE;
+        });
+    };
     const auto CanWalk = [&](const FVector& Start, const FVector& End, double HeightTolerance)
     {
         if (!CanCross(Character, Start, End)) return false;
@@ -464,6 +619,7 @@ bool UPFTRoutes::BuildPath(const ACharacter& Character, const FRouteTarget& Targ
         const FVector Approach = CapsuleCenter(Character, Nodes.FindChecked(Target.Cell).Floor);
         if (!CanWalk(Approach, End, 7.0)) return false;
     }
+    TArray<FRouteEntry> WalkwayEntries;
     for (int32 X = -StartSearchCells; X <= StartSearchCells; ++X)
     {
         for (int32 Y = -StartSearchCells; Y <= StartSearchCells; ++Y)
@@ -474,12 +630,19 @@ bool UPFTRoutes::BuildPath(const ACharacter& Character, const FRouteTarget& Targ
             const FVector Center = CapsuleCenter(Character, Node->Floor);
             const double Distance = FVector::Dist2D(Position, Center);
             if (Distance > EntryRange || FMath::Abs(Center.Z - RaisedPosition.Z) > FloorTolerance
+                || (bStartsOnGrid && !IsMappedSegment(Position, Center))
                 || !CanWalk(RaisedPosition, Center, FloorTolerance)) continue;
             const FVector Approach = Center - Position;
             const int32 Heading = Distance < 1.0 ? INDEX_NONE
                 : (FMath::RoundToInt(Approach.Rotation().Yaw / 90.0) + 4) % 4;
-            const double ApproachSeconds = Distance / Speed * (1.0 + ClearancePenalty(Node->StepsFromBoundary, Step));
+            const double SeatingCost = SeatingCells.Contains(Cell) ? SeatingCostInGridSteps * Step / Speed : 0.0;
+            const double ApproachSeconds = Distance / Speed * (1.0 + ClearancePenalty(Node->StepsFromBoundary, Step)) + SeatingCost;
             Entries.Add({Cell, ApproachSeconds, Heading});
+            if (bPreferWalkway && !SeatingCells.Contains(Cell)
+                && (!bStartsOnWalkway || IsMappedSegment(Position, Center, true)))
+            {
+                WalkwayEntries.Add(Entries.Last());
+            }
         }
     }
     if (Entries.IsEmpty()) return false;
@@ -487,13 +650,19 @@ bool UPFTRoutes::BuildPath(const ACharacter& Character, const FRouteTarget& Targ
     const double SecondsPerStep = Step / Speed;
     // Prefer staying in the walkway over zigzagging between individual high-clearance cells.
     const double TurnCost = SecondsPerQuarterTurn + SecondsPerStep * TurnCostInGridSteps;
-    const auto Reversed = FindFastestPath(Entries, Target.Cell, SecondsPerStep, [this](const FIntPoint& Cell)
+    const auto FindRoute = [&](const TArray<FRouteEntry>& Starts, bool bAvoidSeating)
     {
-        return Nodes.FindChecked(Cell).Links;
-    }, [this](const FIntPoint& Cell)
-    {
-        return ClearancePenalty(Nodes.FindChecked(Cell).StepsFromBoundary, Step);
-    }, TurnCost);
+        return FindFastestPath(Starts, Target.Cell, SecondsPerStep, [this, bAvoidSeating](const FIntPoint& Cell) -> uint8
+        {
+            return bAvoidSeating && SeatingCells.Contains(Cell) ? 0 : Nodes.FindChecked(Cell).Links;
+        }, [this](const FIntPoint& Cell)
+        {
+            const double SeatingCost = SeatingCells.Contains(Cell) ? SeatingCostInGridSteps : 0.0;
+            return ClearancePenalty(Nodes.FindChecked(Cell).StepsFromBoundary, Step) + SeatingCost;
+        }, TurnCost);
+    };
+    auto Reversed = WalkwayEntries.IsEmpty() ? TArray<FIntPoint>() : FindRoute(WalkwayEntries, true);
+    if (Reversed.IsEmpty()) Reversed = FindRoute(Entries, false);
     if (Reversed.IsEmpty()) return false;
     TArray<FVector> GridPath;
     GridPath.Reserve(Reversed.Num() + 1);
@@ -503,10 +672,12 @@ bool UPFTRoutes::BuildPath(const ACharacter& Character, const FRouteTarget& Targ
     }
     for (int32 Index = Reversed.Num() - 1; Index >= 0; --Index) GridPath.Add(Nodes.FindChecked(Reversed[Index]).Floor);
     if (Target.RoomStop.IsSet()) GridPath.Add(Target.RoomStop.GetValue());
+    const auto CornerStops = HallwayCornerStops(GridPath);
     Points = StraightenPath(GridPath, [&](const FVector& Start, const FVector& End)
     {
-        return CanWalk(CapsuleCenter(Character, Start), CapsuleCenter(Character, End), 7.0);
-    });
+        // Leave any necessary seating or doorway approaches on the checked legs.
+        return IsMappedSegment(Start, End, true) && CanWalk(CapsuleCenter(Character, Start), CapsuleCenter(Character, End), 7.0);
+    }, CornerStops);
     return true;
 }
 
@@ -516,6 +687,7 @@ bool UPFTRoutes::Plan(const ACharacter& Character, const FRouteTarget& Target)
     PathDistances = MeasurePath(Path);
     NextIndex = FMath::Min(1, Path.Num() - 1);
     TurnPoints = FindRouteTurns(Path);
+    NextTrailUpdate = 0.0;
     ++PlanRevision;
     return true;
 }
@@ -689,6 +861,9 @@ void UPFTRoutes::UpdateDirections(const FVector& Position, const FRotator& View,
 
 void UPFTRoutes::DrawPath(const FVector& Position)
 {
+    const double Now = GetWorld()->GetTimeSeconds();
+    if (Now < NextTrailUpdate) return;
+    NextTrailUpdate = Now + TrailUpdateInterval;
     if (!Trail)
     {
         Trail = NewObject<ULineBatchComponent>(this, TEXT("PFTWalkingTrail"));
@@ -699,34 +874,17 @@ void UPFTRoutes::DrawPath(const FVector& Position)
     const int32 FirstIndex = FMath::Max(0, NextIndex - 1);
     const double Progress = FMath::Clamp(SegmentProgress(Position, Path[FirstIndex], Path[NextIndex]), 0.0, 1.0);
     const double VisibleStart = FMath::Lerp(PathDistances[FirstIndex], PathDistances[NextIndex], Progress);
-    const double VisibleEnd = FMath::Min(VisibleStart + TrailLength, PathDistances.Last());
-
-    const double AnimationDistance = bReducedMotion ? ArrowSpacing * 0.5 : GetWorld()->GetTimeSeconds() * ArrowSpeed;
-    const double Phase = AnimationDistance - VisibleStart;
-    double ArrowDistance = VisibleStart + FMath::Fmod(FMath::Fmod(Phase, ArrowSpacing) + ArrowSpacing, ArrowSpacing);
+    const double AnimationDistance = bReducedMotion ? ArrowSpacing * 0.5 : Now * ArrowSpeed;
     // This component owns only the current trail. Reuse its buffer as the arrows move.
     TArray<FBatchedLine>& Lines = Trail->BatchedLines;
-    Lines.Reset(56);
-    const FVector FloorLift(0, 0, 8);
-    for (int32 Index = FirstIndex; Index + 1 < Path.Num() && ArrowDistance < VisibleEnd; ++Index)
-    {
-        const double EdgeStart = PathDistances[Index];
-        const double EdgeEnd = PathDistances[Index + 1];
-        const FVector Direction = (Path[Index + 1] - Path[Index]).GetSafeNormal2D();
-        while (ArrowDistance < EdgeEnd && ArrowDistance < VisibleEnd)
-        {
-            const double FadeIn = FMath::Clamp((ArrowDistance - VisibleStart) / 65.0, 0.0, 1.0);
-            const double FadeOut = FMath::Clamp((VisibleEnd - ArrowDistance) / 100.0, 0.0, 1.0);
-            const FVector Center = FMath::Lerp(Path[Index], Path[Index + 1], (ArrowDistance - EdgeStart) / (EdgeEnd - EdgeStart));
-            AddArrow(Lines, Center + FloorLift, Direction, static_cast<float>(FMath::Lerp(0.45, 1.0, FadeIn * FadeOut)));
-            ArrowDistance += ArrowSpacing;
-        }
-    }
+    Lines.Reset();
+    DrawRouteArrows(Lines, Path, PathDistances, FirstIndex, VisibleStart, AnimationDistance);
     if (Lines.IsEmpty())
     {
         const FVector Start = Path.Num() > 1 ? Path[FirstIndex] : Position;
         const FVector Direction = (Path[NextIndex] - Start).GetSafeNormal2D();
-        AddArrow(Lines, Path[NextIndex] + FloorLift, Direction.IsNearlyZero() ? FVector::ForwardVector : Direction, 1.0f);
+        AddArrow(Lines, Path[NextIndex] + FVector(0, 0, 8),
+            Direction.IsNearlyZero() ? FVector::ForwardVector : Direction, 1.0, 1.0f);
     }
     Trail->MarkRenderStateDirty();
 }
@@ -769,7 +927,7 @@ void UPFTRoutes::Stop()
 TArrayView<const FVector> UPFTRoutes::GetRemainingPath() const
 {
     if (!IsGuiding() || bReplanning || !Path.IsValidIndex(NextIndex)) return {};
-    return MakeArrayView(Path).RightChop(NextIndex);
+    return MakeArrayView(Path).RightChop(FMath::Max(0, NextIndex - 1));
 }
 
 FText UPFTRoutes::DescribeSteps(const FVector& Position, TArrayView<const FVector> Points) const
@@ -830,7 +988,7 @@ bool FPFTRouteStepsTest::RunTest(const FString& Parameters)
     const TArray<FVector> Zigzag = {{0, 0, 0}, {60, 0, 0}, {60, 60, 0}, {120, 60, 0}, {120, 120, 0},
         {180, 120, 0}, {180, 180, 0}};
     const auto Clear = [](const FVector&, const FVector&) { return true; };
-    const auto Straight = StraightenPath(Zigzag, Clear);
+    const auto Straight = StraightenPath(Zigzag, Clear, HallwayCornerStops(Zigzag));
     TestTrue(TEXT("A grid staircase in a clear corridor becomes one straight leg"),
         Straight == TArray<FVector>{Zigzag[0], Zigzag.Last()} && FindRouteTurns(Straight).IsEmpty());
     TestEqual(TEXT("Directions use the length of the straight leg"),
@@ -849,11 +1007,81 @@ bool FPFTRouteStepsTest::RunTest(const FString& Parameters)
     const TArray<FVector> ShortRoute = {{0, 0, 0}, {60, 0, 0}, {60, 60, 0}};
     const auto Blocked = [](const FVector&, const FVector&) { return false; };
     TestTrue(TEXT("A blocked shortcut keeps the corner"), StraightenPath(ShortRoute, Blocked) == ShortRoute);
+    const TSet<FIntPoint> Walkway = {{0, 0}, {1, 0}, {1, 1}};
+    const auto WalkwayLinks = [&](const FIntPoint& Cell) -> int32
+    {
+        if (!Walkway.Contains(Cell)) return INDEX_NONE;
+        int32 Links = 0;
+        for (int32 Direction = 0; Direction < UE_ARRAY_COUNT(Directions); ++Direction)
+        {
+            if (Walkway.Contains(Cell + Directions[Direction])) Links |= 1 << Direction;
+        }
+        return Links;
+    };
+    TestTrue(TEXT("A shortcut can follow each leg of the mapped walkway"),
+        CrossesWalkableCells(ShortRoute[0], ShortRoute[1], 60, WalkwayLinks)
+        && CrossesWalkableCells(ShortRoute[1], ShortRoute[2], 60, WalkwayLinks));
+    TestFalse(TEXT("A diagonal cannot cut through an inside grid corner"),
+        CrossesWalkableCells(ShortRoute[0], ShortRoute[2], 60, WalkwayLinks));
+    TestFalse(TEXT("A diagonal cannot cross even a short section of unmapped floor"),
+        CrossesWalkableCells(FVector(0, 6, 0), ShortRoute[2], 60, WalkwayLinks));
+    TArray<FVector> Junction;
+    for (int32 Index = 0; Index <= 6; ++Index) Junction.Emplace(Index * 60, 0, 0);
+    for (int32 Index = 1; Index <= 6; ++Index) Junction.Emplace(360, Index * 60, 0);
+    const auto Square = StraightenPath(Junction, Clear, HallwayCornerStops(Junction));
+    TestTrue(TEXT("A clear diagonal cannot cut across a hallway intersection"),
+        Square == TArray<FVector>{Junction[0], Junction[6], Junction.Last()});
+    const auto OpenFloor = [](const FIntPoint&) { return 15; };
+    TestTrue(TEXT("Open walkable squares allow a straight leg"),
+        CrossesWalkableCells(FVector(3000, 0, 0), FVector(-3000, -3000, 0), 60, OpenFloor));
     TestTrue(TEXT("A short route can still have a turn"), FindRouteTurns(ShortRoute) == TArray<int32>{1});
     TestEqual(TEXT("The final waypoint alone shows the destination"),
         FormatRouteSteps(Path.Last(), Path, Distances, Turns, Path.Num() - 1, Signs).ToString(),
         FString(TEXT("Destination ahead")));
     TestTrue(TEXT("An empty route has no steps"), FormatRouteSteps({}, {}, {}, {}, 0, {}).IsEmpty());
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPFTRouteArrowsTest, "PFTNavigator.Routes.FullArrowTrail",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPFTRouteArrowsTest::RunTest(const FString& Parameters)
+{
+    const TArray<FVector> Path = {{0, 0, 0}, {1800, 0, 0}, {1800, 24, 0}, {3400, 24, 0}};
+    const auto Distances = MeasurePath(Path);
+    TArray<FBatchedLine> Lines;
+    DrawRouteArrows(Lines, Path, Distances, 0, 0.0, 42.0);
+    if (!TestTrue(TEXT("The trail covers a route longer than sixteen metres"), Lines.Num() > 16 * 4)) return false;
+    TestTrue(TEXT("The last arrow points to the destination from the start"),
+        FVector::Dist2D(Lines.Last().Start, Path.Last()) < 0.01);
+    bool bSawTurnArrow = false;
+    for (int32 Index = 0; Index < Lines.Num(); Index += 4)
+    {
+        const auto& Arm = Lines[Index];
+        if (FVector::Dist2D(Arm.End, Path[1]) >= 0.01) continue;
+        bSawTurnArrow = true;
+        TestTrue(TEXT("The arrow reaching the turn stays on the incoming leg"), Arm.Start.X < Path[1].X);
+    }
+    TestTrue(TEXT("The bend has a steady arrow at its waypoint"), bSawTurnArrow);
+    Lines.Reset();
+    DrawRouteArrows(Lines, Path, Distances, 1, Distances[1], 42.0);
+    TestTrue(TEXT("An arrow fits inside a leg shorter than its normal length"),
+        !Lines.IsEmpty() && Lines[0].Start.Y >= Path[1].Y && FMath::IsNearlyEqual(Lines[0].End.Y, Path[2].Y));
+    Lines.Reset();
+    DrawRouteArrows(Lines, Path, Distances, 2, Distances.Last() - 1.0, 42.0);
+    TestTrue(TEXT("The final arrow stays visible on the last step"),
+        Lines.Num() == 4 && FVector::Dist2D(Lines.Last().Start, Path.Last()) < 0.01);
+    const TArray<FVector> Junction = {{0, 0, 0}, {600, 0, 0}, {600, 600, 0}};
+    Lines.Reset();
+    DrawRouteArrows(Lines, Junction, MeasurePath(Junction), 0, 0.0, 42.0);
+    bool bSawExitArrow = false;
+    for (int32 Index = 0; Index < Lines.Num(); Index += 4)
+    {
+        const auto& Arm = Lines[Index];
+        if (!FMath::IsNearlyEqual(Arm.End.X, 600.0) || !FMath::IsNearlyEqual(Arm.End.Y, ArrowSpacing * 0.5 + ArrowTipLength)) continue;
+        bSawExitArrow = Arm.Start.Y > 0.0 && Arm.Start.Y < Arm.End.Y;
+    }
+    TestTrue(TEXT("A steady arrow points straight along the outgoing hallway after a right-angle turn"), bSawExitArrow);
     return true;
 }
 

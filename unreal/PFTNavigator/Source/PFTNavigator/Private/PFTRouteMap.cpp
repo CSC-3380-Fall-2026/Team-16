@@ -13,6 +13,17 @@
 
 namespace
 {
+    FVector2D StartOnRoute(const FVector2D& Position, TArrayView<const FVector> Path)
+    {
+        const FVector2D Start(Path[0]);
+        if (Path.Num() == 1) return Start;
+        const FVector2D Edge = FVector2D(Path[1]) - Start;
+        const double LengthSquared = Edge.SizeSquared();
+        if (LengthSquared <= UE_SMALL_NUMBER) return Start;
+        const double Progress = FVector2D::DotProduct(Position - Start, Edge) / LengthSquared;
+        return Start + Edge * FMath::Clamp(Progress, 0.0, 1.0);
+    }
+
     FBox2D FitRouteBounds(const FVector2D& Origin, TArrayView<const FVector> Path)
     {
         if (Path.IsEmpty()) return FBox2D(ForceInit);
@@ -200,9 +211,10 @@ int32 UPFTRouteMap::NativePaint(const FPaintArgs& Args, const FGeometry& Geometr
     if (!Path.IsEmpty())
     {
         TArray<FVector2f> Line;
-        Line.Reserve(Path.Num() + 1);
-        Line.Add(Here);
-        for (const FVector& Point : Path) Line.Add(Projection.Point(FVector2D(Point)));
+        Line.Reserve(Path.Num());
+        // The player marker can leave the route. Trim the checked leg instead of drawing a shortcut from the marker.
+        Line.Add(Projection.Point(StartOnRoute(Position, Path)));
+        for (const FVector& Point : Path.RightChop(1)) Line.Add(Projection.Point(FVector2D(Point)));
         const FVector2f Goal = Line.Last();
         // The remaining landmarks change when the player advances a waypoint or gets a new route.
         if (LandmarkPlanRevision != PlanRevision || LandmarkPathCount != Path.Num())
@@ -260,6 +272,10 @@ bool FPFTRouteMapProjectionTest::RunTest(const FString& Parameters)
     TestEqual(TEXT("A world point stays aligned with the floor"), Projection.Point(FVector2D(0, -50)), FVector2f(120, 100));
     const FVector2D Start(0, 0);
     const TArray<FVector> Path = {FVector(3000, 0, 0), FVector(3000, -1000, 0)};
+    TestEqual(TEXT("An off-route marker cannot pull the route across a corner"),
+        StartOnRoute({2800, -200}, Path), FVector2D(3000, -200));
+    TestEqual(TEXT("The route starts at the end of a completed leg"),
+        StartOnRoute({2800, -1100}, Path), FVector2D(3000, -1000));
     const FBox2D Bounds = FitRouteBounds(Start, Path);
     TestTrue(TEXT("The route frame includes the start and destination with padding"),
         Bounds.IsInside(Start) && Bounds.IsInside(FVector2D(Path.Last())));

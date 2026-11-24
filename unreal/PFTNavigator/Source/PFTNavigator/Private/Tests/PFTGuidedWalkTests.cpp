@@ -20,6 +20,7 @@
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
 #include "Interfaces/IPluginManager.h"
+#include "Materials/MaterialInterface.h"
 #include "Misc/CommandLine.h"
 #include "Misc/ConfigCacheIni.h"
 #include "Misc/FileHelper.h"
@@ -31,6 +32,32 @@
 
 namespace
 {
+    void CheckArrowFloor(FAutomationTestBase& Test, const ACharacter& Character, const ULineBatchComponent& Trail)
+    {
+        FCollisionQueryParams Query(SCENE_QUERY_STAT(PFTArrowFloor), true, &Character);
+        Query.bReturnFaceIndex = true;
+        const FName Profile = Character.GetCapsuleComponent()->GetCollisionProfileName();
+        const FName GrayTerrazzo(TEXT("MI_TerrazoWS"));
+        for (const FBatchedLine& Arm : Trail.BatchedLines)
+        {
+            for (const FVector& Point : {Arm.Start, (Arm.Start + Arm.End) * 0.5, Arm.End})
+            {
+                FHitResult Hit;
+                Character.GetWorld()->LineTraceSingleByProfile(Hit, Point + FVector(0, 0, 35),
+                    Point - FVector(0, 0, 35), Profile, Query);
+                int32 Section;
+                const auto* Component = Hit.GetComponent();
+                const auto* Material = Component && Hit.FaceIndex >= 0
+                    ? Component->GetMaterialFromCollisionFaceIndex(Hit.FaceIndex, Section) : nullptr;
+                if (Material && Material->GetFName() == GrayTerrazzo) continue;
+                Test.AddError(FString::Printf(TEXT("A Commons arrow leaves the gray terrazzo at %s (%s)."),
+                    *Point.ToCompactString(), *GetNameSafe(Material)));
+                return;
+            }
+        }
+        Test.AddInfo(FString::Printf(TEXT("Checked the gray floor under %d arrows."), Trail.BatchedLines.Num() / 4));
+    }
+
     UPFTSearchButton* FindDuncanClass(FAutomationTestBase& Test, UWidgetTree* Tree)
     {
         TArray<UPFTSearchButton*> Results;
@@ -216,16 +243,45 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
             auto* Trail = FindObject<ULineBatchComponent>(Routes, TEXT("PFTWalkingTrail"));
             if (!TestNotNull(TEXT("The route creates a trail component"), Trail)) return true;
             if (!TestTrue(TEXT("The trail draws multiple arrows"), Trail->BatchedLines.Num() >= 8)) return true;
+            const FVector Destination = Routes->GetRemainingPath().Last();
+            TestTrue(TEXT("The destination arrow is already drawn at the start of the Commons walk"),
+                FVector::Dist2D(Trail->BatchedLines.Last().Start, Destination) < 0.1);
+            const bool bCheckGrayFloor = Character->GetWorld()->GetPackage()->GetName() == TEXT("/Game/Level/PFTFirstFloorComplete");
+            if (bCheckGrayFloor)
+            {
+                CheckArrowFloor(*this, *Character, *Trail);
+                const auto Path = Routes->GetRemainingPath();
+                bool bSquareTurn = false;
+                for (int32 Index = 1; Index + 1 < Path.Num(); ++Index)
+                {
+                    const FVector In = Path[Index] - Path[Index - 1];
+                    const FVector Out = Path[Index + 1] - Path[Index];
+                    if (FVector::Dist2D(Path[0], Path[Index]) > 1400.0) break;
+                    if (In.Size2D() >= 125.0 && Out.Size2D() >= 125.0
+                        && FMath::IsNearlyZero(FVector::DotProduct(In.GetSafeNormal2D(), Out.GetSafeNormal2D()), 0.01))
+                    {
+                        bSquareTurn = true;
+                        break;
+                    }
+                }
+                TestTrue(TEXT("The Commons route keeps the Zone 1200 corner square"), bSquareTurn);
+            }
+            const bool bNamesZoneTurn = Routes->GetRemainingSteps().ToString().Contains(TEXT("near Zone 1200 sign"));
             const TArray<FBatchedLine> InitialArrows = Trail->BatchedLines;
-            auto StationaryTip = MakeShared<FVector>();
+            auto StationaryTips = MakeShared<TArray<FVector>>();
             ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.4f));
-            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Routes, Trail, InitialArrows]()
+            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Routes, Trail, InitialArrows, Character, bCheckGrayFloor]()
             {
                 if (!TestTrue(TEXT("Arrows stay visible while standing still"), Trail->BatchedLines.Num() >= 8)) return true;
                 const auto& Arrow = Trail->BatchedLines[2];
-                TestTrue(TEXT("The arrows move while the player is stationary"),
-                    !InitialArrows[2].End.Equals(Arrow.End, 2.0));
+                bool bMoved = InitialArrows.Num() != Trail->BatchedLines.Num();
+                for (int32 Index = 0; !bMoved && Index < InitialArrows.Num(); Index += 4)
+                {
+                    bMoved = !InitialArrows[Index].End.Equals(Trail->BatchedLines[Index].End, 2.0);
+                }
+                TestTrue(TEXT("The arrows move while the player is stationary"), bMoved);
                 TestTrue(TEXT("The two arms meet at the arrow tip"), Arrow.End.Equals(Trail->BatchedLines[3].Start));
+                if (bCheckGrayFloor) CheckArrowFloor(*this, *Character, *Trail);
                 Routes->SetReducedMotion(true);
                 return true;
             }));
@@ -237,16 +293,23 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
                 return true;
             }));
             ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.2f));
-            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Trail, StationaryTip]()
+            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([Trail, StationaryTips]()
             {
-                if (Trail->BatchedLines.IsValidIndex(2)) *StationaryTip = Trail->BatchedLines[2].End;
+                for (int32 Index = 0; Index < Trail->BatchedLines.Num(); Index += 4)
+                {
+                    StationaryTips->Add(Trail->BatchedLines[Index].End);
+                }
                 return true;
             }));
             ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.3f));
-            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Routes, Trail, StationaryTip]()
+            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Routes, Trail, StationaryTips]()
             {
-                TestTrue(TEXT("Reduced motion keeps the arrows still"),
-                    Trail->BatchedLines.IsValidIndex(2) && Trail->BatchedLines[2].End.Equals(*StationaryTip));
+                bool bStill = !StationaryTips->IsEmpty() && Trail->BatchedLines.Num() == StationaryTips->Num() * 4;
+                for (int32 Index = 0; bStill && Index < StationaryTips->Num(); ++Index)
+                {
+                    bStill = Trail->BatchedLines[Index * 4].End.Equals((*StationaryTips)[Index]);
+                }
+                TestTrue(TEXT("Reduced motion keeps the arrows still"), bStill);
                 Routes->SetReducedMotion(false);
                 return true;
             }));
@@ -331,7 +394,7 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
                 ADD_LATENT_AUTOMATION_COMMAND(FWaitLatentCommand(0.2f));
             }
 
-            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Navigator, Player, Character, Routes, Tree, Trail, bProfileGuidance,
+            ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, Navigator, Player, Character, Routes, Tree, Trail, bProfileGuidance, Destination, bNamesZoneTurn,
                 SawZoneSign = MakeShared<bool>(false), StepCounts = MakeShared<FIntPoint>(0, 0), Deadline = FPlatformTime::Seconds() + 65.0]()
             {
                 const FVector Position = Character->GetActorLocation();
@@ -356,7 +419,7 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
                 }
                 if (Routes->HasArrived())
                 {
-                    if (FParse::Param(FCommandLine::Get(), TEXT("PFTVerifyLandmarks")))
+                    if (bNamesZoneTurn && FParse::Param(FCommandLine::Get(), TEXT("PFTVerifyLandmarks")))
                     {
                         TestTrue(TEXT("The Commons route names the Zone 1200 sign before a nearby turn"), *SawZoneSign);
                     }
@@ -473,7 +536,8 @@ bool FPFTGuidedWalkTest::RunTest(const FString& Parameters)
                     }));
                     return true;
                 }
-                if (!Routes->IsGuiding() || Trail->BatchedLines.IsEmpty() || Position.Z < 65 || FPlatformTime::Seconds() > Deadline)
+                if (!Routes->IsGuiding() || Trail->BatchedLines.IsEmpty() || Position.Z < 65 || FPlatformTime::Seconds() > Deadline
+                    || FVector::Dist2D(Trail->BatchedLines.Last().Start, Destination) >= 0.1)
                 {
                     if (bProfileGuidance) FinishGuidanceProfile();
                     AddError(FString::Printf(TEXT("Guided walk stopped at %s with next point %s. %s"),

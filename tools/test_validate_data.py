@@ -71,7 +71,8 @@ class TestValidateData(unittest.TestCase):
         self.write_files()
         self.assertEqual(validate_data.validate(self.folder), [])
         self.data["first_floor_routes.json"] = {
-            **graph, "Landmarks": {"Zone 1200 sign": [25, -60]}, "RoomStops": {"PFT_1200": [160.5, 0, 0]}
+            **graph, "Landmarks": {"Zone 1200 sign": [25, -60]}, "RoomStops": {"PFT_1200": [160.5, 0, 0]},
+            "SeatingCells": [[0, 0]],
         }
         self.write_files()
         self.assertEqual(validate_data.validate(self.folder), [])
@@ -90,6 +91,9 @@ class TestValidateData(unittest.TestCase):
             ({"RoomStops": {"PFT_1200": [1, 2]}}, "invalid room stop"),
             ({"RoomStops": {"PFT_3325": [160, 0, 0]}}, "invalid room stop"),
             ({"RoomStops": {"PFT_1200": [301, 0, 0]}}, "too far from its walking node"),
+            ({"SeatingCells": {}}, "SeatingCells must be an array"),
+            ({"SeatingCells": [[2, 0]]}, "does not point to a walking node"),
+            ({"SeatingCells": [[0, 0], [0, 0]]}, "duplicate seating cell"),
         ]
         for overrides, message in cases:
             with self.subTest(message=message):

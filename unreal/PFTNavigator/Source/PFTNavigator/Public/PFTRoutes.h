@@ -66,6 +66,7 @@ private:
     void EndGuidance(const FText& NewMessage);
 
     TMap<FIntPoint, FNode> Nodes;
+    TSet<FIntPoint> SeatingCells;
     TMap<FString, FRouteTarget> Destinations;
     TMap<FString, FVector2D> Landmarks;
     TArray<FVector> Path;
@@ -80,6 +81,7 @@ private:
     int32 Step = 0;
     int32 NextIndex = 0;
     uint32 PlanRevision = 0;
+    double NextTrailUpdate = 0.0;
     float UpdateTime = 0;
     bool bArrived = false;
     bool bCanRetry = false;

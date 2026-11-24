@@ -276,6 +276,17 @@ def check_walking_graph(graph, room_ids):
             return [f"{prefix} duplicate node {(x, y)}"]
         nodes[x, y] = height, links
 
+    seating_cells = graph.get("SeatingCells", [])
+    if not isinstance(seating_cells, list):
+        return [f"{prefix} SeatingCells must be an array"]
+    seen_seating_cells = set()
+    for cell in seating_cells:
+        if not isinstance(cell, list) or not is_grid_cell(cell) or tuple(cell) not in nodes:
+            return [f"{prefix} seating cell {cell!r} does not point to a walking node"]
+        if tuple(cell) in seen_seating_cells:
+            return [f"{prefix} duplicate seating cell {cell!r}"]
+        seen_seating_cells.add(tuple(cell))
+
     for room, cell in destinations.items():
         if room not in room_ids:
             return [f"{prefix} {room} is not a first-floor directory room"]
