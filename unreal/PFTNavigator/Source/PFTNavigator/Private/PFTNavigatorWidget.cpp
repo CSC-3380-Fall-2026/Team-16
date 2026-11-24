@@ -580,6 +580,7 @@ void UPFTNavigatorWidget::AddResultPage()
         Label->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Regular"), 14));
         Label->SetColorAndOpacity(FSlateColor(FLinearColor(PFTPalette::Ink)));
         Button->SetContent(Label);
+        CastChecked<UButtonSlot>(Label->Slot)->SetHorizontalAlignment(HAlign_Fill);
         Button->OnClicked.AddDynamic(Button, &UPFTSearchButton::SelectRoom);
         CastChecked<UScrollBoxSlot>(Results->AddChild(Button))->SetPadding(FMargin(0, 0, 4, 3));
     }
@@ -1068,6 +1069,7 @@ void UPFTNavigatorWidget::RefreshMyClasses()
         Button->Label = Label;
         Button->SetStyle(NavigatorButtonStyle());
         Button->SetContent(Label);
+        CastChecked<UButtonSlot>(Label->Slot)->SetHorizontalAlignment(HAlign_Fill);
         // The next class is gold like a selected result so it stands out from the rest of the day
         Button->SetBackgroundColor(FLinearColor(Index == Next ? PFTPalette::Gold : PFTPalette::Result));
         Button->OnClicked.AddDynamic(Button, &UPFTSearchButton::SelectRoom);
