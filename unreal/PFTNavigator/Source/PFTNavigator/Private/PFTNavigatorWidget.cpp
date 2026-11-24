@@ -512,11 +512,12 @@ void UPFTNavigatorWidget::AddResultPage()
     }
     else Entries = Directory->BrowseRooms(Query, Floor);
     const bool bPreviewOnly = PreviewOnly->IsChecked();
+    const TSet<FString> AvailableRooms = Entries.IsEmpty() ? TSet<FString>() : Destinations->GetAvailableRoomIds();
     if (bPreviewOnly)
     {
-        Entries.RemoveAll([Destinations](const FPFTSearchResult& Entry)
+        Entries.RemoveAll([&AvailableRooms](const FPFTSearchResult& Entry)
         {
-            return !Destinations->HasLocation(Entry.RoomId);
+            return !AvailableRooms.Contains(Entry.RoomId);
         });
     }
     const int32 FirstResult = Results->GetChildrenCount();
@@ -541,7 +542,7 @@ void UPFTNavigatorWidget::AddResultPage()
         Button->Panel = this;
         auto* Label = WidgetTree->ConstructWidget<UTextBlock>();
         const auto* Room = Directory->FindRoom(Entries[Index].RoomId);
-        const bool bHasPreview = bPreviewOnly || Destinations->HasLocation(Button->RoomId);
+        const bool bHasPreview = AvailableRooms.Contains(Button->RoomId);
         const TCHAR* Availability = bHasPreview ? TEXT("Preview") : TEXT("Details only");
         Button->ResultText = FString::Printf(TEXT("%s | Floor %d | %s"), *Entries[Index].Label, Room->Floor, Availability);
         if (Entries.Num() == 1 && !bClassSearch)

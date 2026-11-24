@@ -64,18 +64,30 @@ void UPFTDestinations::SetRoomPreviewActive(bool bActive)
     if (IsValid(ActiveMarker)) ActiveMarker->SetSelected(!bRoomPreviewActive);
 }
 
-// Checks if we know where a room is on the map, either from a marker placed in the level or from room_bindings.json.
-// The panel uses this to tell "we just don't have this room's location yet" apart from a real error
-// Params: RoomId - the room to check
-// Result: true if the room can get a marker, false if it isn't on the map yet
 bool UPFTDestinations::HasLocation(const FString& RoomId) const
 {
+    return !RoomId.IsEmpty() && GetAvailableRoomIds().Contains(RoomId);
+}
+
+TSet<FString> UPFTDestinations::GetAvailableRoomIds() const
+{
+    TSet<FString> Available;
+    TSet<FString> Placed;
+    const FString Map = UWorld::RemovePIEPrefix(GetWorld()->GetPackage()->GetName());
+    for (const auto& Binding : Bindings)
+    {
+        if (Binding.Map == Map) Available.Add(Binding.RoomId);
+    }
     for (TActorIterator<APFTRoomMarker> Marker(GetWorld()); Marker; ++Marker)
     {
-        if (Marker->RoomId == RoomId) return true;
+        const FString& RoomId = Marker->RoomId;
+        if (RoomId.IsEmpty()) continue;
+        // Duplicate markers prevent selection even when a JSON binding exists.
+        if (Placed.Contains(RoomId)) Available.Remove(RoomId);
+        else Available.Add(RoomId);
+        Placed.Add(RoomId);
     }
-    const FString Map = UWorld::RemovePIEPrefix(GetWorld()->GetPackage()->GetName());
-    return Bindings.ContainsByPredicate([&](const FPFTRoomBinding& Binding) { return Binding.RoomId == RoomId && Binding.Map == Map; });
+    return Available;
 }
 
 bool UPFTDestinations::SelectRoom(const FString& RoomId)
